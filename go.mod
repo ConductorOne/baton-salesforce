@@ -3,7 +3,7 @@ module github.com/conductorone/baton-salesforce
 go 1.22.5
 
 require (
-	github.com/conductorone/baton-sdk v0.2.8
+	github.com/conductorone/baton-sdk v0.2.12
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	go.uber.org/zap v1.27.0
 )

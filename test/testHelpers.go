@@ -67,8 +67,8 @@ func seedDB() (*sql.DB, error) {
 }
 
 func query(db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
-	hackString := strings.Replace(queryString, ".Name", "", -1)
-	hackString = strings.Replace(hackString, "Fields(standard)", "Id,*", -1)
+	hackString := strings.ReplaceAll(queryString, ".Name", "")
+	hackString = strings.ReplaceAll(hackString, "Fields(standard)", "Id,*")
 
 	rows, err := db.Query(hackString)
 	if err != nil {
@@ -128,7 +128,8 @@ func FixturesServer() (*httptest.Server, error) {
 
 				path := request.URL.Path
 				var output []byte
-				if strings.Contains(path, "sobjects") {
+				switch {
+				case strings.Contains(path, "sobjects"):
 					switch request.Method {
 					case http.MethodGet:
 						output, err = handleShow(db, request)
@@ -139,9 +140,9 @@ func FixturesServer() (*httptest.Server, error) {
 					case http.MethodDelete:
 						err = handleDelete(db, request)
 					}
-				} else if request.Method == http.MethodGet {
+				case request.Method == http.MethodGet:
 					output, err = handleQuery(db, request)
-				} else {
+				default:
 					err = fmt.Errorf(
 						"unsupported method/route: %s %s",
 						request.Method,
@@ -188,14 +189,7 @@ func getBody(request *http.Request) (map[string]interface{}, error) {
 
 func handleDelete(db *sql.DB, request *http.Request) error {
 	tablename, id := parsePath(request)
-
-	sqlString := fmt.Sprintf(
-		"DELETE FROM %s WHERE Id = '%s'",
-		tablename,
-		id,
-	)
-
-	_, err := db.Exec(sqlString)
+	_, err := db.Exec("DELETE FROM %s WHERE Id = '%s'", tablename, id)
 	return err
 }
 
@@ -230,13 +224,12 @@ func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
 	}
 
 	conditionsString := strings.Join(conditions, ",")
-	sqlString := fmt.Sprintf(
+	_, err = db.Exec(
 		"UPDATE %s SET %s WHERE Id = '%s'",
 		tablename,
 		conditionsString,
 		id,
 	)
-	_, err = db.Exec(sqlString)
 	if err != nil {
 		return nil, err
 	}
@@ -273,14 +266,12 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	columnsString := "('" + strings.Join(columns, "','") + "')"
 	valuesString := "(" + strings.Join(values, ",") + ")"
 
-	sqlString := fmt.Sprintf(
+	_, err = db.Exec(
 		"INSERT INTO %s %s VALUES %s",
 		tablename,
 		columnsString,
 		valuesString,
 	)
-
-	_, err = db.Exec(sqlString)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +321,7 @@ func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
 		return nil, err
 	}
 	if len(rows) != 1 {
-		return nil, fmt.Errorf("Expected 1 row, got %s", len(rows))
+		return nil, fmt.Errorf("expected 1 row, got %d", len(rows))
 	}
 
 	return json.Marshal(rows[0])
@@ -344,9 +335,18 @@ func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
 	if queryString == "" {
 		queryString = request.URL.Query().Get("next")
 		totalSize, err = strconv.Atoi(request.URL.Query().Get("total"))
+		if err != nil {
+			return nil, err
+		}
 		offset, err = strconv.Atoi(request.URL.Query().Get("offset"))
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		totalSize, err = getTotalSize(db, queryString)
+		if err != nil {
+			return nil, err
+		}
 		offset = 0
 	}
 	rows, err := query(db, queryString)

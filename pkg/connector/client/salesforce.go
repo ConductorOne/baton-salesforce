@@ -18,8 +18,8 @@ const (
 	InfoPath           = "/services/data/v24.0/chatter/users/me"
 	PageSizeDefault    = 100
 	SalesforceClientID = "ConductorOne"
-	groupIDPrefix      = "00G"
-	userIDPrefix       = "005"
+	GroupIDPrefix      = "00G"
+	UserIDPrefix       = "005"
 )
 
 type SalesforceClient struct {
@@ -457,10 +457,10 @@ func (c *SalesforceClient) GetPermissionSetAssignments(
 
 func getIsGroup(record simpleforce.SObject) (bool, error) {
 	principalID := record.StringField("UserOrGroupId")
-	if strings.HasPrefix(principalID, groupIDPrefix) {
+	if strings.HasPrefix(principalID, GroupIDPrefix) {
 		return true, nil
 	}
-	if strings.HasPrefix(principalID, userIDPrefix) {
+	if strings.HasPrefix(principalID, UserIDPrefix) {
 		return false, nil
 	}
 	return false, fmt.Errorf("invalid principal id %s", principalID)

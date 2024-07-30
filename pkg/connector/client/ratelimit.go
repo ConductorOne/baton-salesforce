@@ -9,21 +9,25 @@ import (
 )
 
 const (
-	rateLimitHeaderKey = "Sforce-Limit-Info"
-	rateLimitFmt       = "api-usage=%d/%d"
+	RateLimitHeaderKey = "Sforce-Limit-Info"
+	RateLimitFmt       = "api-usage=%d/%d"
 )
 
-// RoundTrip TODO MARCOS DESCRIBE
+// RoundTrip - the simpleforce interface doesn't expose HTTP headers to us, but
+// we can still reach them if we create a wrapper to the `.RoundTrip()` method.
+// This just calls the original `httpClient.RoundTrip()` and caches the header
+// value that Salesforce uses to communicate remaining API call counts.
 func (t *salesforceHttpTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	t.rateLimit = nil // clear previous
 	response, err := t.base.RoundTrip(request)
 	if err != nil {
 		return response, err
 	}
-	if rateLimitInfo, ok := response.Header[rateLimitHeaderKey]; ok && len(rateLimitInfo) == 1 {
+
+	if rateLimitInfo, ok := response.Header[RateLimitHeaderKey]; ok && len(rateLimitInfo) == 1 {
 		var remaining int64
 		var limit int64
-		if found, err := fmt.Sscanf(rateLimitInfo[0], rateLimitFmt, &remaining, &limit); err == nil && found == 2 {
+		if found, err := fmt.Sscanf(rateLimitInfo[0], RateLimitFmt, &remaining, &limit); err == nil && found == 2 {
 			t.rateLimit = &v2.RateLimitDescription{
 				Status:    v2.RateLimitDescription_STATUS_OK,
 				Limit:     limit,

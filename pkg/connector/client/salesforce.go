@@ -69,16 +69,18 @@ func NewSalesforceClient(
 		)
 		return nil, err
 	}
+	interceptedTransport := salesforceHttpTransport{
+		base:      httpClient.Transport,
+		rateLimit: &v2.RateLimitDescription{},
+	}
+	httpClient.Transport = &interceptedTransport
 	simpleClient.SetHttpClient(httpClient)
 	simpleClient.SetSidLoc(accessToken, baseUrl)
 
 	return &SalesforceClient{
 		client: simpleClient,
 		// Get a pointer to the transport layer.
-		salesforceTransport: &salesforceHttpTransport{
-			base:      httpClient.Transport,
-			rateLimit: &v2.RateLimitDescription{},
-		},
+		salesforceTransport: &interceptedTransport,
 	}, nil
 }
 

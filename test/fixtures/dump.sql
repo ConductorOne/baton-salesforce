@@ -1,99 +1,115 @@
 CREATE TABLE GroupMember (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     GroupId TEXT,
     UserOrGroupId TEXT
 );
 
 CREATE TABLE "Group" (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     Name TEXT,
     RelatedId TEXT,
     DeveloperName TEXT,
     Type TEXT,
-    "Related.Name" TEXT
+    "Related" TEXT
 );
 
 CREATE TABLE PermissionSetAssignment (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     PermissionSetId TEXT,
     AssigneeId TEXT,
     IsActive INTEGER
 );
 
 CREATE TABLE PermissionSet (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     Name TEXT,
     Label TEXT,
     Type TEXT,
     ProfileId TEXT,
-    "Profile.Name" TEXT
+    "Profile" TEXT
 );
 
 CREATE TABLE Profile (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     Name TEXT
 );
 
 CREATE TABLE UserRole (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     Name TEXT
 );
 
 CREATE TABLE User (
-    Id BIGSERIAL PRIMARY KEY,
+    Id TEXT PRIMARY KEY,
     FirstName TEXT,
     LastName TEXT,
     Email TEXT,
     Username TEXT,
     IsActive INT,
-    UserType TEXT
+    UserType TEXT,
+    ProfileId TEXT,
+    UserRoleId TEXT
 );
 
-
 INSERT INTO User (
+    Id,
     FirstName,
     LastName,
     Email,
     Username,
     IsActive,
-    UserType
+    UserType,
+    ProfileId,
+    UserRoleId
 ) VALUES (
+    '0051X',
     'FirstName',
     'LastName',
     'Email',
     'Username',
     1,
-    'UserType'
+    'UserType',
+    '',
+    ''
 ), (
+    '0052X',
     'FirstName',
     'LastName',
     'Email',
     'Username',
     1,
-    'UserType'
+    'UserType',
+    '',
+    ''
 ), (
+    '0053X',
     'FirstName',
     'LastName',
     'Email',
     'Username',
     1,
-    'UserType'
+    'UserType',
+    '',
+    ''
  );
 
 INSERT INTO Group (
+    Id,
     Name,
     RelatedId,
     DeveloperName,
     Type,
-    "Related.Name"
+    "Related"
 )
 VALUES (
+    '00G1X',
     'name',
     '1',
     'developer name',
     'type',
-    'related name'
+    '{"Name": "related name"}'
 ), (
+    '00G2X',
     '',
     '',
     'AllInternalUsers',
@@ -101,8 +117,8 @@ VALUES (
     ''
 );
 
-INSERT INTO GroupMember (GroupId, UserOrGroupId) VALUES ('1','1');
-INSERT INTO PermissionSet (Name, Label, Type, ProfileId, "Profile.Name") VALUES ('name', 'label', 'type', '1', 'profile name');
-INSERT INTO PermissionSetAssignment (PermissionSetId, AssigneeId, IsActive) VALUES ('1', '1', 1);
-INSERT INTO Profile (Name) VALUES ('name');
-INSERT INTO UserRole (Name) VALUES ('name');
+INSERT INTO GroupMember (Id, GroupId, UserOrGroupId) VALUES ('1X', '00G1X','0051X');
+INSERT INTO PermissionSet (Id, Name, Label, Type, ProfileId, "Profile") VALUES ('345X', 'name', 'label', 'type', '1', '{"Name": "profile name"}');
+INSERT INTO PermissionSetAssignment (Id, PermissionSetId, AssigneeId, IsActive) VALUES ('1X', '345X', '0051X', 1);
+INSERT INTO Profile (Id, Name) VALUES ('198X', 'name'), ('298X', 'name');
+INSERT INTO UserRole (Id, Name) VALUES ('199X', 'name'), ('299X', 'name');

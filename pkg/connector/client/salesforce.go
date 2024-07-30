@@ -53,7 +53,6 @@ func NewSalesforceClient(
 		SalesforceClientID,
 		simpleforce.DefaultAPIVersion,
 	)
-
 	// Inject my own HTTP Client.
 	httpClient, err := uhttp.NewClient(
 		ctx,
@@ -451,7 +450,9 @@ func (c *SalesforceClient) GetPermissionSetAssignments(
 			ID:              record.ID(),
 			PermissionSetID: record.StringField("PermissionSetId"),
 			UserID:          record.StringField("AssigneeId"),
-			IsActive:        record.StringField("AssigneeId") == "true",
+			// TODO(marcos): Is this a sane way to decide if the permission set
+			//  assignment is still active? Should we be using `IsActive`?
+			IsActive: record.StringField("AssigneeId") == "true",
 		})
 	}
 	return assignments, paginationUrl, ratelimitData, nil

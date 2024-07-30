@@ -4,18 +4,22 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
+	client "github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/google/uuid"
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/simpleforce/simpleforce"
 )
@@ -49,7 +53,7 @@ func AssertNoRatelimitAnnotations(
 func seedDB() (*sql.DB, error) {
 	data0, _ := os.ReadFile("../../test/fixtures/dump.sql")
 
-	db, err := sql.Open("ramsql", "TestLoadUserAddresses")
+	db, err := sql.Open("ramsql", "dump")
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +67,10 @@ func seedDB() (*sql.DB, error) {
 }
 
 func query(db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
-	rows, err := db.Query(queryString)
+	hackString := strings.Replace(queryString, ".Name", "", -1)
+	hackString = strings.Replace(hackString, "Fields(standard)", "Id,*", -1)
+
+	rows, err := db.Query(hackString)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +80,6 @@ func query(db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
 	}
 
 	output := make([]simpleforce.SObject, 0)
-
 	for rows.Next() {
 		// Create a slice of interface{}'s to represent each column,
 		// and a second slice to contain pointers to each item in the columns slice.
@@ -119,64 +125,40 @@ func FixturesServer() (*httptest.Server, error) {
 		http.HandlerFunc(
 			func(writer http.ResponseWriter, request *http.Request) {
 				writer.Header().Set(uhttp.ContentType, "application/json")
-				writer.WriteHeader(http.StatusOK)
 
-				queryString := request.URL.Query().Get("q")
-				var offset int
-				var totalSize int
-				var rows []simpleforce.SObject
-				if queryString == "" {
-					queryString = request.URL.Query().Get("next")
-					totalSize, err = strconv.Atoi(request.URL.Query().Get("total"))
-					offset, err = strconv.Atoi(request.URL.Query().Get("offset"))
-					rows, err = query(db, queryString)
-					if err != nil {
-						writer.WriteHeader(http.StatusInternalServerError)
-						return
+				path := request.URL.Path
+				var output []byte
+				if strings.Contains(path, "sobjects") {
+					switch request.Method {
+					case http.MethodGet:
+						output, err = handleShow(db, request)
+					case http.MethodPatch:
+						output, err = handlePatch(db, request)
+					case http.MethodPost:
+						output, err = handleInsert(db, request)
+					case http.MethodDelete:
+						err = handleDelete(db, request)
 					}
+				} else if request.Method == http.MethodGet {
+					output, err = handleQuery(db, request)
 				} else {
-					tablename := "User"
-					parts := strings.Split(queryString, " ")
-					for i, part := range parts {
-						if part == "FROM" {
-							tablename = parts[i+1]
-						}
-					}
-
-					rows, err = query(db, fmt.Sprintf("select * from %s", tablename))
-					if err != nil {
-						writer.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-					totalSize = len(rows)
-					offset = 0
-
-					// First one is always empty.
-					rows = rows[0:0]
+					err = fmt.Errorf(
+						"unsupported method/route: %s %s",
+						request.Method,
+						path,
+					)
 				}
 
-				done := len(rows)+offset >= totalSize
-
-				nextRecordsURL := fmt.Sprintf(
-					"/services/data?next=%s&total=%d&offset=%d",
-					url.QueryEscape(queryString),
-					totalSize,
-					offset+len(rows),
-				)
-				if done {
-					nextRecordsURL = ""
-				}
-
-				output, err := json.Marshal(QueryResult{
-					TotalSize:      totalSize,
-					Done:           done,
-					NextRecordsURL: nextRecordsURL,
-					Records:        rows,
-				})
 				if err != nil {
 					writer.WriteHeader(http.StatusInternalServerError)
 					return
 				}
+
+				limit := 100
+				remaining := 100
+				writer.Header().Set(client.RateLimitHeaderKey, fmt.Sprintf(client.RateLimitFmt, limit, remaining))
+				writer.WriteHeader(http.StatusOK)
+
 				_, err = writer.Write(output)
 				if err != nil {
 					writer.WriteHeader(http.StatusInternalServerError)
@@ -185,4 +167,212 @@ func FixturesServer() (*httptest.Server, error) {
 			},
 		),
 	), nil
+}
+
+func parsePath(request *http.Request) (string, string) {
+	re := regexp.MustCompile(`/services/data/([v0-9.]*)/sobjects/([^//]*)/(.*)`)
+	matches := re.FindSubmatch([]byte(request.URL.Path))
+	return string(matches[2]), string(matches[3])
+}
+
+func getBody(request *http.Request) (map[string]interface{}, error) {
+	body, err := io.ReadAll(request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var requestBody map[string]interface{}
+	err = json.Unmarshal(body, &requestBody)
+	return requestBody, err
+}
+
+func handleDelete(db *sql.DB, request *http.Request) error {
+	tablename, id := parsePath(request)
+
+	sqlString := fmt.Sprintf(
+		"DELETE FROM %s WHERE Id = '%s'",
+		tablename,
+		id,
+	)
+
+	_, err := db.Exec(sqlString)
+	return err
+}
+
+func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
+	tablename, id := parsePath(request)
+	body, err := getBody(request)
+	if err != nil {
+		return nil, err
+	}
+	conditions := make([]string, 0)
+	for key, value := range body {
+		var valueString string
+		switch typedValue := value.(type) {
+		case string:
+			valueString = typedValue
+		case int:
+			valueString = strconv.Itoa(typedValue)
+		case float64:
+			valueString = strconv.FormatFloat(typedValue, 'f', 0, 64)
+		default:
+			return nil, fmt.Errorf("unknown type: %T", value)
+		}
+
+		conditions = append(
+			conditions,
+			fmt.Sprintf(
+				`"%s" = '%s'`,
+				strings.ToLower(key),
+				valueString,
+			),
+		)
+	}
+
+	conditionsString := strings.Join(conditions, ",")
+	sqlString := fmt.Sprintf(
+		"UPDATE %s SET %s WHERE Id = '%s'",
+		tablename,
+		conditionsString,
+		id,
+	)
+	_, err = db.Exec(sqlString)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(body)
+}
+
+func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
+	nextId, err := uuid.NewUUID()
+	if err != nil {
+		return nil, err
+	}
+	tablename, _ := parsePath(request)
+	body, err := getBody(request)
+	if err != nil {
+		return nil, err
+	}
+
+	columns := []string{"Id"}
+	values := []string{fmt.Sprintf(`"%s"`, nextId.String())}
+	for key, value := range body {
+		columns = append(columns, key)
+		switch typedValue := value.(type) {
+		case string:
+			values = append(values, fmt.Sprintf(`"%s"`, typedValue))
+		case int:
+			values = append(values, strconv.Itoa(typedValue))
+		case float64:
+			values = append(values, strconv.FormatFloat(typedValue, 'f', 0, 64))
+		default:
+			return nil, fmt.Errorf("unknown type: %T", value)
+		}
+	}
+
+	columnsString := "('" + strings.Join(columns, "','") + "')"
+	valuesString := "(" + strings.Join(values, ",") + ")"
+
+	sqlString := fmt.Sprintf(
+		"INSERT INTO %s %s VALUES %s",
+		tablename,
+		columnsString,
+		valuesString,
+	)
+
+	_, err = db.Exec(sqlString)
+	if err != nil {
+		return nil, err
+	}
+
+	type salesforceResponse struct {
+		Id      string `json:"id"`
+		Success bool   `json:"success"`
+	}
+
+	return json.Marshal(
+		salesforceResponse{
+			Id:      nextId.String(),
+			Success: true,
+		},
+	)
+}
+
+func getTotalSize(db *sql.DB, queryString string) (int, error) {
+	parts := strings.Split(queryString, " ")
+	for i, part := range parts {
+		// get rid of limit and offset if they exist.
+		if part == "LIMIT" || part == "OFFSET" {
+			parts[i] = ""
+			parts[i+1] = ""
+		}
+	}
+	countQuery := strings.Join(parts, " ")
+	rows, err := query(db, countQuery)
+	if err != nil {
+		return 0, err
+	}
+	return len(rows), nil
+}
+
+func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
+	tablename, id := parsePath(request)
+	selectors := strings.Join(client.TableNamesToFieldsMapping[tablename], ",")
+	sqlString := fmt.Sprintf(
+		"SELECT Id,%s FROM %s WHERE Id = '%s'",
+		selectors,
+		tablename,
+		id,
+	)
+
+	rows, err := query(db, sqlString)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) != 1 {
+		return nil, fmt.Errorf("Expected 1 row, got %s", len(rows))
+	}
+
+	return json.Marshal(rows[0])
+}
+
+func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
+	queryString := request.URL.Query().Get("q")
+	var offset int
+	var totalSize int
+	var err error
+	if queryString == "" {
+		queryString = request.URL.Query().Get("next")
+		totalSize, err = strconv.Atoi(request.URL.Query().Get("total"))
+		offset, err = strconv.Atoi(request.URL.Query().Get("offset"))
+	} else {
+		totalSize, err = getTotalSize(db, queryString)
+		offset = 0
+	}
+	rows, err := query(db, queryString)
+	if err != nil {
+		return nil, err
+	}
+
+	nextOffset := offset + len(rows)
+	done := nextOffset >= totalSize
+
+	nextRecordsURL := fmt.Sprintf(
+		"/services/data?next=%s&total=%d&offset=%d",
+		url.QueryEscape(queryString),
+		totalSize,
+		nextOffset,
+	)
+	if done {
+		nextRecordsURL = ""
+	}
+
+	return json.Marshal(
+		QueryResult{
+			TotalSize:      totalSize,
+			Done:           done,
+			NextRecordsURL: nextRecordsURL,
+			Records:        rows,
+		},
+	)
 }

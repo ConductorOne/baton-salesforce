@@ -134,7 +134,7 @@ func (o *roleBuilder) Grants(
 		return nil, "", outputAnnotations, err
 	}
 
-	var grants []*v2.Grant
+	grants := make([]*v2.Grant, 0)
 	for _, assignment := range assignments {
 		grants = append(grants, grant.NewGrant(
 			resource,
@@ -146,6 +146,33 @@ func (o *roleBuilder) Grants(
 		))
 	}
 	return grants, nextToken, outputAnnotations, nil
+}
+
+func (o *roleBuilder) Grant(
+	ctx context.Context,
+	principal *v2.Resource,
+	entitlement *v2.Entitlement,
+) (annotations.Annotations, error) {
+	ratelimitData, err := o.client.AddUserToRole(
+		ctx,
+		principal.Id.Resource,
+		entitlement.Resource.Id.Resource,
+	)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	return outputAnnotations, err
+}
+
+func (o *roleBuilder) Revoke(
+	ctx context.Context,
+	grant *v2.Grant,
+) (annotations.Annotations, error) {
+	ratelimitData, err := o.client.RemoveUserFromRole(
+		ctx,
+		grant.Principal.Id.Resource,
+		grant.Entitlement.Resource.Id.Resource,
+	)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	return outputAnnotations, err
 }
 
 func newRoleBuilder(client *client.SalesforceClient) *roleBuilder {

@@ -552,3 +552,231 @@ func (c *SalesforceClient) GetGroupMemberships(
 	}
 	return memberships, paginationUrl, ratelimitData, nil
 }
+
+func (c *SalesforceClient) getSObject(
+	ctx context.Context,
+	query *SalesforceQuery,
+) (
+	*simpleforce.SObject,
+	*v2.RateLimitDescription,
+	error,
+) {
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) != 1 {
+		return nil, ratelimitData, fmt.Errorf("expected 1 record, got %d", len(records))
+	}
+
+	return &records[0], ratelimitData, nil
+}
+
+func (c *SalesforceClient) getGroupMembership(
+	ctx context.Context,
+	userId string,
+	groupID string,
+) (
+	*simpleforce.SObject,
+	*v2.RateLimitDescription,
+	error,
+) {
+	return c.getSObject(
+		ctx,
+		NewQuery(TableNameGroupMemberships).
+			WhereEq("GroupId", groupID).
+			WhereEq("UserOrGroupId", userId),
+	)
+}
+
+func (c *SalesforceClient) getPermissionSetAssignment(
+	ctx context.Context,
+	userId string,
+	permissionSetId string,
+) (
+	*simpleforce.SObject,
+	*v2.RateLimitDescription,
+	error,
+) {
+	return c.getSObject(
+		ctx,
+		NewQuery(TableNamePermissionAssignments).
+			WhereEq("AssigneeId", userId).
+			WhereEq("PermissionSetId", permissionSetId),
+	)
+}
+
+func (c *SalesforceClient) AddUserToGroup(
+	ctx context.Context,
+	userId string,
+	groupId string,
+) (*v2.RateLimitDescription, error) {
+	logger := ctxzap.Extract(ctx)
+	logger.Debug(
+		"add-user-to-group",
+		zap.String("user_id", userId),
+		zap.String("group_id", groupId),
+	)
+	groupMembership := c.client.
+		SObject(TableNameGroupMemberships).
+		Set("GroupID", groupId).
+		Set("UserOrGroupId", userId).
+		Create()
+	ratelimitData := c.salesforceTransport.rateLimit
+	if groupMembership == nil {
+		return ratelimitData, fmt.Errorf("failed to create object")
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) RemoveUserFromGroup(
+	ctx context.Context,
+	userId string,
+	groupId string,
+) (*v2.RateLimitDescription, error) {
+	found, ratelimitData, err := c.getGroupMembership(ctx, userId, groupId)
+	if err != nil {
+		return ratelimitData, err
+	}
+	// TODO(marcos): There is a bug in simpleforce that prevents us from doing found.Delete().
+	err = c.client.
+		SObject(TableNameGroupMemberships).
+		Set("Id", found.ID()).
+		Delete()
+	ratelimitData = c.salesforceTransport.rateLimit
+	return ratelimitData, err
+}
+
+func (c *SalesforceClient) AddUserToPermissionSet(
+	ctx context.Context,
+	userId string,
+	permissionSetId string,
+) (*v2.RateLimitDescription, error) {
+	groupMembership := c.client.
+		SObject(TableNamePermissionAssignments).
+		Set("AssigneeId", userId).
+		Set("PermissionSetId", permissionSetId).
+		Set("IsActive", 1).
+		Create()
+	ratelimitData := c.salesforceTransport.rateLimit
+	if groupMembership == nil {
+		return ratelimitData, fmt.Errorf("failed to create permission set")
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) RemoveUserFromPermissionSet(
+	ctx context.Context,
+	userId string,
+	permissionSetId string,
+) (*v2.RateLimitDescription, error) {
+	found, ratelimitData, err := c.getPermissionSetAssignment(ctx, userId, permissionSetId)
+	if err != nil {
+		return ratelimitData, err
+	}
+	// TODO(marcos): There is a bug in simpleforce that prevents us from doing found.Delete().
+	err = c.client.
+		SObject(TableNamePermissionAssignments).
+		Set("Id", found.ID()).
+		Delete()
+	ratelimitData = c.salesforceTransport.rateLimit
+	return ratelimitData, err
+}
+
+func (c *SalesforceClient) setValue(
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user := c.client.
+		SObject(TableNameUsers).
+		Get(userId)
+
+	ratelimitData := c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("missing user %s", userId)
+	}
+
+	user = user.Set(fieldName, fieldValue).Update()
+	ratelimitData = c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("failed to update user")
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) AddUserToProfile(
+	ctx context.Context,
+	userId string,
+	profileId string,
+) (*v2.RateLimitDescription, error) {
+	user := c.client.
+		SObject(TableNameUsers).
+		Get(userId)
+
+	ratelimitData := c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("missing user %s", userId)
+	}
+
+	user = user.Set("ProfileId", profileId).Update()
+	ratelimitData = c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("failed to update object")
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) clearValue(
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user := c.client.
+		SObject(TableNameUsers).
+		Get(userId)
+	ratelimitData := c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("missing user %s", userId)
+	}
+	if user.StringField(fieldName) != fieldValue {
+		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
+	}
+
+	user = user.Set(fieldName, "").Update()
+	ratelimitData = c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("failed to update user")
+	}
+
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) RemoveUserFromProfile(
+	ctx context.Context,
+	userId string,
+	profileId string,
+) (*v2.RateLimitDescription, error) {
+	return c.clearValue(userId, "ProfileId", profileId)
+}
+
+func (c *SalesforceClient) AddUserToRole(
+	ctx context.Context,
+	userId string,
+	roleId string,
+) (*v2.RateLimitDescription, error) {
+	return c.setValue(userId, "UserRoleId", roleId)
+}
+
+func (c *SalesforceClient) RemoveUserFromRole(
+	ctx context.Context,
+	userId string,
+	roleId string,
+) (*v2.RateLimitDescription, error) {
+	return c.clearValue(userId, "UserRoleId", roleId)
+}

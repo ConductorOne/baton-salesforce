@@ -126,7 +126,7 @@ func (o *profileBuilder) Grants(
 		return nil, "", outputAnnotations, err
 	}
 
-	var grants []*v2.Grant
+	grants := make([]*v2.Grant, 0)
 	for _, assignment := range assignments {
 		grants = append(grants, grant.NewGrant(
 			resource,
@@ -138,6 +138,33 @@ func (o *profileBuilder) Grants(
 		))
 	}
 	return grants, nextToken, outputAnnotations, nil
+}
+
+func (o *profileBuilder) Grant(
+	ctx context.Context,
+	principal *v2.Resource,
+	entitlement *v2.Entitlement,
+) (annotations.Annotations, error) {
+	ratelimitData, err := o.client.AddUserToProfile(
+		ctx,
+		principal.Id.Resource,
+		entitlement.Resource.Id.Resource,
+	)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	return outputAnnotations, err
+}
+
+func (o *profileBuilder) Revoke(
+	ctx context.Context,
+	grant *v2.Grant,
+) (annotations.Annotations, error) {
+	ratelimitData, err := o.client.RemoveUserFromProfile(
+		ctx,
+		grant.Principal.Id.Resource,
+		grant.Entitlement.Resource.Id.Resource,
+	)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	return outputAnnotations, err
 }
 
 func newProfileBuilder(client *client.SalesforceClient) *profileBuilder {

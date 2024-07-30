@@ -141,7 +141,7 @@ func (o *groupBuilder) Grants(
 		return nil, "", outputAnnotations, err
 	}
 
-	var grants []*v2.Grant
+	grants := make([]*v2.Grant, 0)
 	for _, membership := range memberships {
 		var resourceType *v2.ResourceType
 		if membership.IsGroup {
@@ -161,6 +161,33 @@ func (o *groupBuilder) Grants(
 	}
 
 	return grants, nextToken, outputAnnotations, nil
+}
+
+func (o *groupBuilder) Grant(
+	ctx context.Context,
+	principal *v2.Resource,
+	entitlement *v2.Entitlement,
+) (annotations.Annotations, error) {
+	ratelimitData, err := o.client.AddUserToGroup(
+		ctx,
+		principal.Id.Resource,
+		entitlement.Resource.Id.Resource,
+	)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	return outputAnnotations, err
+}
+
+func (o *groupBuilder) Revoke(
+	ctx context.Context,
+	grant *v2.Grant,
+) (annotations.Annotations, error) {
+	ratelimitData, err := o.client.RemoveUserFromGroup(
+		ctx,
+		grant.Principal.Id.Resource,
+		grant.Entitlement.Resource.Id.Resource,
+	)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	return outputAnnotations, err
 }
 
 func newGroupBuilder(client *client.SalesforceClient) *groupBuilder {

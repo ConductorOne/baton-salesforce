@@ -17,6 +17,48 @@ const (
 	TableNameUsers                 = "User"
 )
 
+var TableNamesToFieldsMapping = map[string][]string{
+	TableNameUsers: {
+		"FirstName",
+		"LastName",
+		"Email",
+		"Username",
+		"IsActive",
+		"UserType",
+		"ProfileId",
+		"UserRoleId",
+	},
+	TableNameRoles: {
+		"Name",
+	},
+	TableNameProfiles: {
+		"Name",
+	},
+	TableNamePermissionAssignments: {
+		"PermissionSetId",
+		"AssigneeId",
+		"IsActive",
+	},
+	TableNameGroupMemberships: {
+		"GroupId",
+		"UserOrGroupId",
+	},
+	TableNamePermissionsSets: {
+		"Name",
+		"Label",
+		"Type",
+		"ProfileId",
+		"Profile.Name",
+	},
+	TableNameGroups: {
+		"Name",
+		"DeveloperName",
+		"Type",
+		"RelatedId",
+		"Related.Name",
+	},
+}
+
 type SalesforceQuery struct {
 	tableName    string
 	selectors    []string
@@ -26,6 +68,9 @@ type SalesforceQuery struct {
 }
 
 func NewQuery(tableName string, selectors ...string) *SalesforceQuery {
+	if len(selectors) == 0 {
+		selectors = TableNamesToFieldsMapping[tableName]
+	}
 	return &SalesforceQuery{
 		selectors: selectors,
 		where:     make([]string, 0),

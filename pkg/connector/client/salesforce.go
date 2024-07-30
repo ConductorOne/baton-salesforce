@@ -163,15 +163,7 @@ func (c *SalesforceClient) GetUsers(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNameUsers,
-		"FirstName",
-		"LastName",
-		"Email",
-		"Username",
-		"IsActive",
-		"UserType",
-	)
+	query := NewQuery(TableNameUsers)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -214,10 +206,7 @@ func (c *SalesforceClient) GetUserRoles(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNameRoles,
-		"Name",
-	)
+	query := NewQuery(TableNameRoles)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -263,14 +252,7 @@ func (c *SalesforceClient) GetGroups(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNameGroups,
-		"Name",
-		"DeveloperName",
-		"Type",
-		"RelatedId",
-		"Related.Name",
-	)
+	query := NewQuery(TableNameGroups)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -321,14 +303,7 @@ func (c *SalesforceClient) GetPermissionSets(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNamePermissionsSets,
-		"Name",
-		"Label",
-		"Type",
-		"ProfileId",
-		"Profile.Name",
-	)
+	query := NewQuery(TableNamePermissionsSets)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -364,10 +339,7 @@ func (c *SalesforceClient) GetProfiles(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNameProfiles,
-		"Name",
-	)
+	query := NewQuery(TableNameProfiles)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -400,11 +372,7 @@ func (c *SalesforceClient) getAssignments(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNameUsers,
-		conditionKey,
-	).WhereEq(conditionKey, conditionValue)
-
+	query := NewQuery(TableNameUsers).WhereEq(conditionKey, conditionValue)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -465,12 +433,7 @@ func (c *SalesforceClient) GetPermissionSetAssignments(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(
-		TableNamePermissionAssignments,
-		"PermissionSetId",
-		"AssigneeId",
-		"IsActive",
-	).WhereEq("PermissionSetId", permissionSetID)
+	query := NewQuery(TableNamePermissionAssignments).WhereEq("PermissionSetId", permissionSetID)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -516,11 +479,7 @@ func (c *SalesforceClient) GetGroupMemberships(
 	error,
 ) {
 	logger := ctxzap.Extract(ctx)
-	query := NewQuery(
-		TableNameGroupMemberships,
-		"GroupId",
-		"UserOrGroupId",
-	).WhereEq("GroupId", groupID)
+	query := NewQuery(TableNameGroupMemberships).WhereEq("GroupId", groupID)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,

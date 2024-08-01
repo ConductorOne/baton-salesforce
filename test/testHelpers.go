@@ -59,17 +59,20 @@ func AssertNoRatelimitAnnotations(
 	}
 }
 
-func TearDownDB(db *sql.DB) error {
+func TearDownDB(db *sql.DB) {
 	for key := range client.TableNamesToFieldsMapping {
 		_, err := db.Exec(
 			fmt.Sprintf("DROP TABLE %s", key),
 		)
 		if err != nil {
-			return err
+			panic(err)
 		}
 	}
 
-	return db.Close()
+	err := db.Close()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func seedDB() (*sql.DB, error) {

@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BATON_LOG_LEVEL: debug
-      BATON_INSTANCE_URL: 'http://localhost:8080'
+      BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
       BATON_SECURITY_TOKEN: ${{ secrets.SECURITY_TOKEN }}
       CONNECTOR_GRANT: 'group:00G8a000003XHtmEAG:member:user:0058a00000KGxQ8AAL'
       CONNECTOR_ENTITLEMENT: 'group:00G8a000003XHtmEAG:member'

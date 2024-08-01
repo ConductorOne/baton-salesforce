@@ -19,5 +19,5 @@ var (
 		InstanceUrlField,
 		UseUsernameForEmailField,
 	}
-	configuration = field.NewConfiguration(configurationFields)
+	Configuration = field.NewConfiguration(configurationFields)
 )

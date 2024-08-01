@@ -15,16 +15,17 @@ import (
 func TestGroupsList(t *testing.T) {
 	ctx := context.Background()
 
-	server, err := test.FixturesServer()
+	server, db, err := test.FixturesServer()
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer test.TearDownDB(db)
 	defer server.Close()
 
 	confluenceClient, err := client.NewSalesforceClient(
 		ctx,
+		test.MockTokenSource(),
 		server.URL,
-		"API Key",
 	)
 	if err != nil {
 		t.Fatal(err)

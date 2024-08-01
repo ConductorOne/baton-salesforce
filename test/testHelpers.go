@@ -15,14 +15,23 @@ import (
 	"strings"
 	"testing"
 
-	client "github.com/conductorone/baton-salesforce/pkg/connector/client"
+	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/google/uuid"
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/simpleforce/simpleforce"
+	"golang.org/x/oauth2"
 )
+
+func MockTokenSource() oauth2.TokenSource {
+	return oauth2.StaticTokenSource(
+		&oauth2.Token{
+			AccessToken: "mock-access-token",
+		},
+	)
+}
 
 func AssertNoRatelimitAnnotations(
 	t *testing.T,
@@ -50,15 +59,28 @@ func AssertNoRatelimitAnnotations(
 	}
 }
 
+func TearDownDB(db *sql.DB) error {
+	for key := range client.TableNamesToFieldsMapping {
+		_, err := db.Exec(
+			fmt.Sprintf("DROP TABLE %s", key),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	return db.Close()
+}
+
 func seedDB() (*sql.DB, error) {
-	data0, _ := os.ReadFile("../../test/fixtures/dump.sql")
+	data, _ := os.ReadFile("../../test/fixtures/dump.sql")
 
 	db, err := sql.Open("ramsql", "dump")
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = db.Exec(string(data0))
+	_, err = db.Exec(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("error in adding SQL data: %w", err)
 	}
@@ -115,13 +137,13 @@ type QueryResult struct {
 	Records        []simpleforce.SObject `json:"records"`
 }
 
-func FixturesServer() (*httptest.Server, error) {
+func FixturesServer() (*httptest.Server, *sql.DB, error) {
 	db, err := seedDB()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return httptest.NewServer(
+	server := httptest.NewServer(
 		http.HandlerFunc(
 			func(writer http.ResponseWriter, request *http.Request) {
 				writer.Header().Set(uhttp.ContentType, "application/json")
@@ -167,7 +189,8 @@ func FixturesServer() (*httptest.Server, error) {
 				}
 			},
 		),
-	), nil
+	)
+	return server, db, nil
 }
 
 func parsePath(request *http.Request) (string, string) {
@@ -188,11 +211,11 @@ func getBody(request *http.Request) (map[string]interface{}, error) {
 }
 
 func handleDelete(db *sql.DB, request *http.Request) error {
-	tablename, id := parsePath(request)
+	tableName, id := parsePath(request)
 	_, err := db.Exec(
 		fmt.Sprintf(
 			"DELETE FROM %s WHERE Id = '%s'",
-			tablename,
+			tableName,
 			id,
 		),
 	)
@@ -200,7 +223,7 @@ func handleDelete(db *sql.DB, request *http.Request) error {
 }
 
 func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
-	tablename, id := parsePath(request)
+	tableName, id := parsePath(request)
 	body, err := getBody(request)
 	if err != nil {
 		return nil, err
@@ -233,7 +256,7 @@ func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
 	_, err = db.Exec(
 		fmt.Sprintf(
 			"UPDATE %s SET %s WHERE Id = '%s'",
-			tablename,
+			tableName,
 			conditionsString,
 			id,
 		),
@@ -249,7 +272,7 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	tablename, _ := parsePath(request)
+	tableName, _ := parsePath(request)
 	body, err := getBody(request)
 	if err != nil {
 		return nil, err
@@ -277,7 +300,7 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	_, err = db.Exec(
 		fmt.Sprintf(
 			"INSERT INTO %s %s VALUES %s",
-			tablename,
+			tableName,
 			columnsString,
 			valuesString,
 		),
@@ -317,12 +340,12 @@ func getTotalSize(db *sql.DB, queryString string) (int, error) {
 }
 
 func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
-	tablename, id := parsePath(request)
-	selectors := strings.Join(client.TableNamesToFieldsMapping[tablename], ",")
+	tableName, id := parsePath(request)
+	selectors := strings.Join(client.TableNamesToFieldsMapping[tableName], ",")
 	sqlString := fmt.Sprintf(
 		"SELECT Id,%s FROM %s WHERE Id = '%s'",
 		selectors,
-		tablename,
+		tableName,
 		id,
 	)
 

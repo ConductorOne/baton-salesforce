@@ -15,16 +15,17 @@ func TestUsersList(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("should get users with pagination", func(t *testing.T) {
-		server, err := test.FixturesServer()
+		server, db, err := test.FixturesServer()
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer test.TearDownDB(db)
 		defer server.Close()
 
 		confluenceClient, err := client.NewSalesforceClient(
 			ctx,
+			test.MockTokenSource(),
 			server.URL,
-			"API Key",
 		)
 		if err != nil {
 			t.Fatal(err)

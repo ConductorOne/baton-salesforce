@@ -1,8 +1,7 @@
 package client
 
 import (
-	"fmt"
-	"strings"
+	"github.com/huandu/go-sqlbuilder"
 )
 
 const (
@@ -60,81 +59,61 @@ var TableNamesToFieldsMapping = map[string][]string{
 }
 
 type SalesforceQuery struct {
-	tableName    string
-	selectors    []string
-	where        []string
-	orderByField string
-	limit        int
+	sb *sqlbuilder.SelectBuilder
 }
 
 func NewQuery(tableName string, selectors ...string) *SalesforceQuery {
 	if len(selectors) == 0 {
 		selectors = TableNamesToFieldsMapping[tableName]
 	}
+	if len(selectors) == 1 && selectors[0] == "*" {
+		selectors[0] = allFieldsKeyword
+	} else {
+		selectors = append(selectors, SalesforcePK)
+	}
 	return &SalesforceQuery{
-		selectors: selectors,
-		where:     make([]string, 0),
-		tableName: tableName,
+		sb: sqlbuilder.
+			Select(selectors...).
+			From(tableName),
 	}
 }
 
 func (q *SalesforceQuery) WhereEq(field string, value string) *SalesforceQuery {
-	q.where = append(q.where, fmt.Sprintf("%s = '%s'", field, value))
+	q.sb.Where(q.sb.Equal(field, value))
 	return q
 }
 
 func (q *SalesforceQuery) WhereNotEq(field string, value string) *SalesforceQuery {
-	q.where = append(q.where, fmt.Sprintf("%s != '%s'", field, value))
+	q.sb.Where(q.sb.NE(field, value))
 	return q
 }
 
 func (q *SalesforceQuery) WhereGT(field string, value string) *SalesforceQuery {
-	q.where = append(q.where, fmt.Sprintf("%s < '%s'", field, value))
+	q.sb.Where(q.sb.GT(field, value))
 	return q
 }
 
 func (q *SalesforceQuery) WhereInSubQuery(field string, sq *SalesforceQuery) *SalesforceQuery {
-	q.where = append(q.where, fmt.Sprintf("%s IN (%s)", field, sq.String()))
+	q.sb.Where(q.sb.In(field, sq.String()))
 	return q
 }
 
 func (q *SalesforceQuery) OrderBy(field string) *SalesforceQuery {
-	q.orderByField = field
+	q.sb.OrderBy(field)
 	return q
 }
 
 func (q *SalesforceQuery) Limit(limit int) *SalesforceQuery {
-	q.limit = limit
+	q.sb.Limit(limit)
 	return q
 }
 
-func (q *SalesforceQuery) SelectorsString() string {
-	if q.selectors != nil && len(q.selectors) > 0 {
-		// Automatically include SalesforcePK.
-		selectors := q.selectors
-		selectors = append(selectors, SalesforcePK)
-		return strings.Join(selectors, ",")
-	} else {
-		return allFieldsKeyword
-	}
-}
-
 func (q *SalesforceQuery) String() string {
-	sb := strings.Builder{}
-	_, _ = sb.WriteString(fmt.Sprintf(
-		"SELECT %s FROM %s ",
-		q.SelectorsString(),
-		q.tableName,
-	))
-	if len(q.where) > 0 {
-		wheres := strings.Join(q.where, " AND ")
-		_, _ = sb.WriteString(fmt.Sprintf("WHERE %s ", wheres))
+	query, err := sqlbuilder.MySQL.Interpolate(
+		q.sb.Build(),
+	)
+	if err != nil {
+		return "invalid query"
 	}
-	if q.orderByField != "" {
-		_, _ = sb.WriteString(fmt.Sprintf("ORDER BY %s ", q.orderByField))
-	}
-	if q.limit > 0 {
-		_, _ = sb.WriteString(fmt.Sprintf("LIMIT %d", q.limit))
-	}
-	return sb.String()
+	return query
 }

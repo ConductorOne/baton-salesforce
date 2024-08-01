@@ -189,7 +189,13 @@ func getBody(request *http.Request) (map[string]interface{}, error) {
 
 func handleDelete(db *sql.DB, request *http.Request) error {
 	tablename, id := parsePath(request)
-	_, err := db.Exec("DELETE FROM %s WHERE Id = '%s'", tablename, id)
+	_, err := db.Exec(
+		fmt.Sprintf(
+			"DELETE FROM %s WHERE Id = '%s'",
+			tablename,
+			id,
+		),
+	)
 	return err
 }
 
@@ -225,10 +231,12 @@ func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
 
 	conditionsString := strings.Join(conditions, ",")
 	_, err = db.Exec(
-		"UPDATE %s SET %s WHERE Id = '%s'",
-		tablename,
-		conditionsString,
-		id,
+		fmt.Sprintf(
+			"UPDATE %s SET %s WHERE Id = '%s'",
+			tablename,
+			conditionsString,
+			id,
+		),
 	)
 	if err != nil {
 		return nil, err
@@ -267,10 +275,12 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	valuesString := "(" + strings.Join(values, ",") + ")"
 
 	_, err = db.Exec(
-		"INSERT INTO %s %s VALUES %s",
-		tablename,
-		columnsString,
-		valuesString,
+		fmt.Sprintf(
+			"INSERT INTO %s %s VALUES %s",
+			tablename,
+			columnsString,
+			valuesString,
+		),
 	)
 	if err != nil {
 		return nil, err
@@ -349,6 +359,7 @@ func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
 		}
 		offset = 0
 	}
+
 	rows, err := query(db, queryString)
 	if err != nil {
 		return nil, err

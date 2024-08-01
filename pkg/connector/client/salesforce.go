@@ -12,6 +12,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/simpleforce/simpleforce"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 
 type SalesforceClient struct {
 	client              *simpleforce.Client
+	tokenSource         oauth2.TokenSource
 	salesforceTransport *salesforceHttpTransport
 }
 
@@ -44,8 +46,8 @@ type salesforceHttpTransport struct {
 
 func NewSalesforceClient(
 	ctx context.Context,
+	source oauth2.TokenSource,
 	baseUrl string,
-	accessToken string,
 ) (*SalesforceClient, error) {
 	logger := ctxzap.Extract(ctx)
 	simpleClient := simpleforce.NewClient(
@@ -72,12 +74,17 @@ func NewSalesforceClient(
 		base:      httpClient.Transport,
 		rateLimit: &v2.RateLimitDescription{},
 	}
+	token, err := source.Token()
+	if err != nil {
+		return nil, err
+	}
 	httpClient.Transport = &interceptedTransport
 	simpleClient.SetHttpClient(httpClient)
-	simpleClient.SetSidLoc(accessToken, baseUrl)
+	simpleClient.SetSidLoc(token.AccessToken, baseUrl)
 
 	return &SalesforceClient{
-		client: simpleClient,
+		client:      simpleClient,
+		tokenSource: source,
 		// Get a pointer to the transport layer.
 		salesforceTransport: &interceptedTransport,
 	}, nil

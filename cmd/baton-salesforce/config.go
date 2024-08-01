@@ -14,15 +14,10 @@ var (
 		"user-username-for-email",
 		field.WithDescription("Use Salesforce usernames for email"),
 	)
-	TODOTokenField = field.StringField(
-		"todo-token",
-		field.WithDescription("TODO MARCOS FIRST OAUTH"),
-		field.WithRequired(true),
-	)
+
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
 		UseUsernameForEmailField,
-		TODOTokenField,
 	}
 	configuration = field.NewConfiguration(configurationFields)
 )

@@ -51,7 +51,6 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		ctx,
 		v.GetString(InstanceUrlField.FieldName),
 		v.GetBool(UseUsernameForEmailField.FieldName),
-		v.GetString(TODOTokenField.FieldName),
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))

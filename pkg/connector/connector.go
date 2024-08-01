@@ -10,6 +10,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"golang.org/x/oauth2"
 )
 
 func annotationsForUserResourceType() annotations.Annotations {
@@ -20,9 +21,9 @@ func annotationsForUserResourceType() annotations.Annotations {
 
 type Salesforce struct {
 	client                    *client.SalesforceClient
+	ctx                       context.Context
+	instanceURL               string
 	shouldUseUsernameForEmail bool
-	// TODO MARCOS 1.3
-	// tokenSource               oauth2.TokenSource
 }
 
 // fallBackToHTTPS checks to domain and tacks on "https://" if no scheme is
@@ -65,7 +66,7 @@ func (d *Salesforce) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.
 func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 	return &v2.ConnectorMetadata{
 		DisplayName: "Salesforce",
-		Description: "Connector syncing Salesforce users and TODO MARCOS",
+		Description: "Connector syncing Salesforce users",
 	}, nil
 }
 
@@ -77,30 +78,36 @@ func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, err
 	return outputAnnotations, err
 }
 
+// SetTokenSource this method makes Salesforce implement the OAuth2Connector
+// interface. When an OAuth2Connector is created, this method gets called.
+func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
+	client, err := client.NewSalesforceClient(
+		d.ctx,
+		tokenSource,
+		d.instanceURL,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("Unable to create new Salesforce client %s", err))
+	}
+	d.client = client
+}
+
 // New returns a new instance of the connector.
 func New(
 	ctx context.Context,
 	instanceURL string,
 	useUsernameForEmail bool,
-	todoToken string,
 ) (*Salesforce, error) {
 	instanceURL, err := fallBackToHTTPS(instanceURL)
 	if err != nil {
 		return nil, err
 	}
 
-	salesforceClient, err := client.NewSalesforceClient(
-		ctx,
-		instanceURL,
-		todoToken,
-	)
-	if err != nil {
-		return nil, err
-	}
-
+	// Instantiate without a client. Client is set when .SetTokenSource() is called.
 	salesforce := Salesforce{
-		client:                    salesforceClient,
+		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
+		instanceURL:               instanceURL,
 	}
 	return &salesforce, nil
 }

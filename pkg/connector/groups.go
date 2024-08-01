@@ -112,7 +112,7 @@ func (o *groupBuilder) Entitlements(
 				fmt.Sprintf("%s Group Member", resource.DisplayName),
 			),
 			entitlement.WithDescription(
-				fmt.Sprintf("Is member of the %s group in Salesforce", resource.DisplayName),
+				fmt.Sprintf("Member of %s Salesforce group", resource.DisplayName),
 			),
 		),
 	}

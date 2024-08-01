@@ -81,15 +81,23 @@ func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, err
 // SetTokenSource this method makes Salesforce implement the OAuth2Connector
 // interface. When an OAuth2Connector is created, this method gets called.
 func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
-	client, err := client.NewSalesforceClient(
+	// Short-circuit if there is already a client.
+	if d.client != nil {
+		return
+	}
+	token, err := tokenSource.Token()
+	if err != nil {
+		panic(fmt.Sprintf("Unable to create new Salesforce client %s", err))
+	}
+	salesforceClient, err := client.NewSalesforceClient(
 		d.ctx,
-		tokenSource,
 		d.instanceURL,
+		token.AccessToken,
 	)
 	if err != nil {
 		panic(fmt.Sprintf("Unable to create new Salesforce client %s", err))
 	}
-	d.client = client
+	d.client = salesforceClient
 }
 
 // New returns a new instance of the connector.
@@ -97,14 +105,29 @@ func New(
 	ctx context.Context,
 	instanceURL string,
 	useUsernameForEmail bool,
+	securityToken string,
 ) (*Salesforce, error) {
 	instanceURL, err := fallBackToHTTPS(instanceURL)
 	if err != nil {
 		return nil, err
 	}
 
-	// Instantiate without a client. Client is set when .SetTokenSource() is called.
+	// If no security token is passed in, then instantiate without a client.
+	// Client is later set when .SetTokenSource() is called.
+	var salesforceClient *client.SalesforceClient
+	if securityToken != "" {
+		salesforceClient, err = client.NewSalesforceClient(
+			ctx,
+			instanceURL,
+			securityToken,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	salesforce := Salesforce{
+		client:                    salesforceClient,
 		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,

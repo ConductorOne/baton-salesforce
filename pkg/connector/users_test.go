@@ -24,8 +24,8 @@ func TestUsersList(t *testing.T) {
 
 		confluenceClient, err := client.NewSalesforceClient(
 			ctx,
-			test.MockTokenSource(),
 			server.URL,
+			"mock-access-token",
 		)
 		if err != nil {
 			t.Fatal(err)

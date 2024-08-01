@@ -86,7 +86,6 @@ func (o *groupBuilder) List(
 	return rv, nextToken, outputAnnotations, nil
 }
 
-// Entitlements always returns an empty slice for users.
 func (o *groupBuilder) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
@@ -168,6 +167,16 @@ func (o *groupBuilder) Grant(
 	principal *v2.Resource,
 	entitlement *v2.Entitlement,
 ) (annotations.Annotations, error) {
+	logger := ctxzap.Extract(ctx)
+	if principal.Id.ResourceType != resourceTypeUser.Id {
+		logger.Warn(
+			"salesforce-connector: only users can be granted group membership",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("salesforce-connector: only users can be granted group membership")
+	}
+
 	ratelimitData, err := o.client.AddUserToGroup(
 		ctx,
 		principal.Id.Resource,

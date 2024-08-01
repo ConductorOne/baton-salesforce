@@ -145,6 +145,16 @@ func (o *profileBuilder) Grant(
 	principal *v2.Resource,
 	entitlement *v2.Entitlement,
 ) (annotations.Annotations, error) {
+	logger := ctxzap.Extract(ctx)
+	if principal.Id.ResourceType != resourceTypeUser.Id {
+		logger.Warn(
+			"salesforce-connector: only users can be granted a profile",
+			zap.String("principal_type", principal.Id.ResourceType),
+			zap.String("principal_id", principal.Id.Resource),
+		)
+		return nil, fmt.Errorf("salesforce-connector: only users can be granted a profile")
+	}
+
 	ratelimitData, err := o.client.AddUserToProfile(
 		ctx,
 		principal.Id.Resource,

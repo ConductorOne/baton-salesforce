@@ -14,15 +14,15 @@ var (
 		"user-username-for-email",
 		field.WithDescription("Use Salesforce usernames for email"),
 	)
-	SecurityTokenField = field.StringField(
-		"security-token",
-		field.WithDescription("Case-sensitive alphanumeric code that’s tied to your password"),
+	AccessTokenField = field.StringField(
+		"access-token",
+		field.WithDescription("Access token used to connect to the Salesforce REST API"),
 	)
 
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
 		UseUsernameForEmailField,
-		SecurityTokenField,
+		AccessTokenField,
 	}
 	Configuration = field.NewConfiguration(configurationFields)
 )

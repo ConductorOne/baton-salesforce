@@ -39,24 +39,13 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    # Define any services needed for the test suite (or delete this section)
-    # services:
-    #   postgres:
-    #     image: postgres:16
-    #     ports:
-    #       - "5432:5432"
-    #     env:
-    #       POSTGRES_PASSWORD: secretpassword
     env:
       BATON_LOG_LEVEL: debug
-      # Add any environment variables needed to run baton-salesforce
-      # BATON_BASE_URL: 'http://localhost:8080'
-      # BATON_ACCESS_TOKEN: 'secret_token'
-      # The following parameters are passed to grant/revoke commands
-      # Change these to the correct IDs for your test data
-      CONNECTOR_GRANT: 'grant:entitlement:group:1234:member:user:9876'
-      CONNECTOR_ENTITLEMENT: 'entitlement:group:1234:member'
-      CONNECTOR_PRINCIPAL: 'user:9876'
+      BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
+      BATON_SECURITY_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      CONNECTOR_GRANT: 'group:00G8a000003XHtmEAG:member:user:0058a00000KGxQ8AAL'
+      CONNECTOR_ENTITLEMENT: 'group:00G8a000003XHtmEAG:member'
+      CONNECTOR_PRINCIPAL: '0058a00000KGxQ8AAL'
       CONNECTOR_PRINCIPAL_TYPE: 'user'
     steps:
       - name: Install Go
@@ -65,14 +54,6 @@ jobs:
           go-version: 1.22.x
       - name: Checkout code
         uses: actions/checkout@v4
-      # Install any dependencies here (or delete this)
-      # - name: Install postgres client
-      #   run: sudo apt install postgresql-client
-      # Run any fixture setup here (or delete this)
-      # - name: Import sql into postgres
-      #   run: psql -h localhost --user postgres -f environment.sql
-      #   env:
-      #     PGPASSWORD: secretpassword
       - name: Build baton-salesforce
         run: go build ./cmd/baton-salesforce
       - name: Run baton-salesforce
@@ -86,7 +67,6 @@ jobs:
         run:
           baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status ".grants[].principal.id.resource == \"${{ env.CONNECTOR_PRINCIPAL }}\""
 
-
       - name: Revoke grants
         run: ./baton-salesforce --revoke-grant="${{ env.CONNECTOR_GRANT }}"
 
@@ -94,7 +74,6 @@ jobs:
         run: ./baton-salesforce && baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status "if .grants then .grants[]?.principal.id.resource != \"${{ env.CONNECTOR_PRINCIPAL }}\" else . end"
 
       - name: Grant entitlement
-        # Change the grant arguments to the correct IDs for your test data
         run: ./baton-salesforce --grant-entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --grant-principal="${{ env.CONNECTOR_PRINCIPAL }}" --grant-principal-type="${{ env.CONNECTOR_PRINCIPAL_TYPE }}"
 
       - name: Check grant was re-granted

@@ -1,17 +1,28 @@
 package main
 
 import (
-	"context"
-
-	"github.com/conductorone/baton-sdk/pkg/cli"
+	"github.com/conductorone/baton-sdk/pkg/field"
 )
 
-// config defines the external configuration required for the connector to run.
-type config struct {
-	cli.BaseConfig `mapstructure:",squash"` // Puts the base config options in the same place as the connector options
-}
+var (
+	InstanceUrlField = field.StringField(
+		"instance-url",
+		field.WithDescription("Your Salesforce domain, ex: acme.my.salesforce.com"),
+		field.WithRequired(true),
+	)
+	UseUsernameForEmailField = field.BoolField(
+		"user-username-for-email",
+		field.WithDescription("Use Salesforce usernames for email"),
+	)
+	AccessTokenField = field.StringField(
+		"access-token",
+		field.WithDescription("Access token used to connect to the Salesforce REST API"),
+	)
 
-// validateConfig is run after the configuration is loaded, and should return an error if it isn't valid.
-func validateConfig(ctx context.Context, cfg *config) error {
-	return nil
-}
+	configurationFields = []field.SchemaField{
+		InstanceUrlField,
+		UseUsernameForEmailField,
+		AccessTokenField,
+	}
+	Configuration = field.NewConfiguration(configurationFields)
+)

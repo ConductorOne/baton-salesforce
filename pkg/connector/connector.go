@@ -105,7 +105,7 @@ func New(
 	ctx context.Context,
 	instanceURL string,
 	useUsernameForEmail bool,
-	securityToken string,
+	accessToken string,
 ) (*Salesforce, error) {
 	instanceURL, err := fallBackToHTTPS(instanceURL)
 	if err != nil {
@@ -115,11 +115,11 @@ func New(
 	// If no security token is passed in, then instantiate without a client.
 	// Client is later set when .SetTokenSource() is called.
 	var salesforceClient *client.SalesforceClient
-	if securityToken != "" {
+	if accessToken != "" {
 		salesforceClient, err = client.NewSalesforceClient(
 			ctx,
 			instanceURL,
-			securityToken,
+			accessToken,
 		)
 		if err != nil {
 			return nil, err

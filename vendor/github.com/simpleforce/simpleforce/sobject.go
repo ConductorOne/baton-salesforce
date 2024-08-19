@@ -3,7 +3,7 @@ package simpleforce
 import (
 	"bytes"
 	"encoding/json"
-	//"log"
+	"log"
 	"net/http"
 	"strings"
 
@@ -90,20 +90,20 @@ func (obj *SObject) Get(id ...string) *SObject {
 		oid = id[0]
 	}
 	if oid == "" {
-		println(logPrefix, "object id not found.")
+		log.Println(logPrefix, "object id not found.")
 		return nil
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/" + oid)
 	data, err := obj.client().httpRequest(http.MethodGet, url, nil)
 	if err != nil {
-		println(logPrefix, "http request failed,", err)
+		log.Println(logPrefix, "http request failed,", err)
 		return nil
 	}
 
 	err = json.Unmarshal(data, obj)
 	if err != nil {
-		println(logPrefix, "json decode failed,", err)
+		log.Println(logPrefix, "json decode failed,", err)
 		return nil
 	}
 
@@ -124,21 +124,20 @@ func (obj *SObject) Create() *SObject {
 	reqObj := obj.makeCopy()
 	reqData, err := json.Marshal(reqObj)
 	if err != nil {
-		
-		println(logPrefix, "failed to convert sobject to json,", err)
+		log.Println(logPrefix, "failed to convert sobject to json,", err)
 		return nil
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/")
 	respData, err := obj.client().httpRequest(http.MethodPost, url, bytes.NewReader(reqData))
 	if err != nil {
-		println(logPrefix, "failed to process http request,", err)
+		log.Println(logPrefix, "failed to process http request,", err)
 		return nil
 	}
 
 	err = obj.setIDFromResponseData(respData)
 	if err != nil {
-		println(logPrefix, "failed to parse response,", err)
+		log.Println(logPrefix, "failed to parse response,", err)
 		return nil
 	}
 
@@ -157,7 +156,7 @@ func (obj *SObject) Update() *SObject {
 	reqObj := obj.makeCopy()
 	reqData, err := json.Marshal(reqObj)
 	if err != nil {
-		println(logPrefix, "failed to convert sobject to json,", err)
+		log.Println(logPrefix, "failed to convert sobject to json,", err)
 		return nil
 	}
 
@@ -168,10 +167,10 @@ func (obj *SObject) Update() *SObject {
 	url := obj.client().makeURL(queryBase + obj.Type() + "/" + obj.ID())
 	respData, err := obj.client().httpRequest(http.MethodPatch, url, bytes.NewReader(reqData))
 	if err != nil {
-		println(logPrefix, "failed to process http request,", err)
+		log.Println(logPrefix, "failed to process http request,", err)
 		return nil
 	}
-	println(string(respData))
+	log.Println(string(respData))
 
 	return obj
 }
@@ -179,12 +178,12 @@ func (obj *SObject) Update() *SObject {
 // Upsert creates SObject or updates existing SObject in place. Upon successful upsert, same SObject is returned for chained access.
 // ID, ExternalIDField and Type are required. ID is the value of the external ID in this case.
 func (obj *SObject) Upsert() *SObject {
-	println(logPrefix, "ExternalID:", obj.ExternalID())
-	println(logPrefix, "ExternalIDField:", obj.ExternalIDFieldName())
+	log.Println(logPrefix, "ExternalID:", obj.ExternalID())
+	log.Println(logPrefix, "ExternalIDField:", obj.ExternalIDFieldName())
 	if obj.Type() == "" || obj.client() == nil || obj.ExternalIDFieldName() == "" ||
 		obj.ExternalID() == "" {
 		// Sanity check.
-		println(logPrefix, "required fields are missing")
+		log.Println(logPrefix, "required fields are missing")
 		return nil
 	}
 
@@ -192,7 +191,7 @@ func (obj *SObject) Upsert() *SObject {
 	reqObj := obj.makeCopy()
 	reqData, err := json.Marshal(reqObj)
 	if err != nil {
-		println(logPrefix, "failed to convert sobject to json,", err)
+		log.Println(logPrefix, "failed to convert sobject to json,", err)
 		return nil
 	}
 
@@ -204,7 +203,7 @@ func (obj *SObject) Upsert() *SObject {
 		makeURL(queryBase + obj.Type() + "/" + obj.ExternalIDFieldName() + "/" + obj.ExternalID())
 	respData, err := obj.client().httpRequest(http.MethodPatch, url, bytes.NewReader(reqData))
 	if err != nil {
-		println(logPrefix, "failed to process http request,", err)
+		log.Println(logPrefix, "failed to process http request,", err)
 		return nil
 	}
 
@@ -213,7 +212,7 @@ func (obj *SObject) Upsert() *SObject {
 	if len(respData) > 0 {
 		err = obj.setIDFromResponseData(respData)
 		if err != nil {
-			println(logPrefix, "failed to parse response,", err)
+			log.Println(logPrefix, "failed to parse response,", err)
 			return nil
 		}
 	}
@@ -234,11 +233,11 @@ func (obj *SObject) Delete(id ...string) error {
 		oid = id[0]
 	}
 	if oid == "" {
-		println(logPrefix, "object id not found.")
 		return ErrFailure
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/" + obj.ID())
+	log.Println(url)
 	_, err := obj.client().httpRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
@@ -318,7 +317,7 @@ func (obj *SObject) SObjectField(typeName, key string) *SObject {
 	rIndex := strings.LastIndex(url, "/")
 	if rIndex == -1 || rIndex+1 == len(url) {
 		// hmm... this shouldn't happen, unless the URL is hand crafted.
-		println(logPrefix, "invalid url,", url)
+		log.Println(logPrefix, "invalid url,", url)
 		return nil
 	}
 	oid = url[rIndex+1:]
@@ -433,12 +432,12 @@ func (obj *SObject) setIDFromResponseData(respData []byte) error {
 	}
 	err := json.Unmarshal(respData, &respVal)
 	if err != nil {
-		println(logPrefix, "failed to process response data,", err)
+		log.Println(logPrefix, "failed to process response data,", err)
 		return err
 	}
 
 	if !respVal.Success || respVal.ID == "" {
-		println(logPrefix, "unsuccessful")
+		log.Println(logPrefix, "unsuccessful")
 		return errors.New("request was unsuccessful")
 	}
 

@@ -10,6 +10,8 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
 
@@ -81,13 +83,12 @@ func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, err
 // SetTokenSource this method makes Salesforce implement the OAuth2Connector
 // interface. When an OAuth2Connector is created, this method gets called.
 func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
-	// Short-circuit if there is already a client.
-	if d.client != nil {
-		return
-	}
+	logger := ctxzap.Extract(d.ctx)
+	logger.Debug("baton-salesforce: SetTokenSource start")
+
 	token, err := tokenSource.Token()
 	if err != nil {
-		panic(fmt.Sprintf("Unable to create new Salesforce client %s", err))
+		panic(fmt.Sprintf("baton-salesforce: tokenSource could not get a token %s", err.Error()))
 	}
 	salesforceClient, err := client.NewSalesforceClient(
 		d.ctx,
@@ -95,7 +96,7 @@ func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
 		token.AccessToken,
 	)
 	if err != nil {
-		panic(fmt.Sprintf("Unable to create new Salesforce client %s", err))
+		panic(fmt.Sprintf("baton-salesforce: could not create a client %s", err))
 	}
 	d.client = salesforceClient
 }
@@ -107,23 +108,28 @@ func New(
 	useUsernameForEmail bool,
 	accessToken string,
 ) (*Salesforce, error) {
+	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
 	if err != nil {
 		return nil, err
 	}
 
-	// If no security token is passed in, then instantiate without a client.
-	// Client is later set when .SetTokenSource() is called.
-	var salesforceClient *client.SalesforceClient
-	if accessToken != "" {
-		salesforceClient, err = client.NewSalesforceClient(
-			ctx,
-			instanceURL,
-			accessToken,
-		)
-		if err != nil {
-			return nil, err
-		}
+	logger.Debug(
+		"New Salesforce connector",
+		zap.String("instanceURL", instanceURL),
+		zap.String("accessToken", accessToken),
+		zap.Bool("useUsernameForEmail", useUsernameForEmail),
+	)
+
+	// If no security token is passed in (i.e. is ""), then instantiate with a
+	// broken  client. Client is later overwritten when .SetTokenSource() is called.
+	salesforceClient, err := client.NewSalesforceClient(
+		ctx,
+		instanceURL,
+		accessToken,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	salesforce := Salesforce{

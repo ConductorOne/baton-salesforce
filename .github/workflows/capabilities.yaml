@@ -8,6 +8,9 @@ on:
 jobs:
   calculate-capabilities:
     runs-on: ubuntu-latest
+    env:
+      BATON_LOG_LEVEL: debug
+      BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
 
     steps:
       - name: Checkout code

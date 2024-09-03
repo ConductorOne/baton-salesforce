@@ -3,16 +3,16 @@ module github.com/conductorone/baton-salesforce
 go 1.22.5
 
 require (
-	github.com/conductorone/baton-sdk v0.2.23
+	github.com/conductorone/baton-sdk v0.2.25
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/huandu/go-sqlbuilder v1.28.0
+	github.com/huandu/go-sqlbuilder v1.28.1
 	github.com/proullon/ramsql v0.1.4
 	github.com/simpleforce/simpleforce v0.0.0-20220429021116-acf4ac67ef68
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/oauth2 v0.21.0
+	golang.org/x/oauth2 v0.22.0
 )
 
 require (

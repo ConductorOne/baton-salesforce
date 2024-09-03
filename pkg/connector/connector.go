@@ -85,20 +85,7 @@ func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, err
 func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
 	logger := ctxzap.Extract(d.ctx)
 	logger.Debug("baton-salesforce: SetTokenSource start")
-
-	token, err := tokenSource.Token()
-	if err != nil {
-		panic(fmt.Sprintf("baton-salesforce: tokenSource could not get a token %s", err.Error()))
-	}
-	salesforceClient, err := client.NewSalesforceClient(
-		d.ctx,
-		d.instanceURL,
-		token.AccessToken,
-	)
-	if err != nil {
-		panic(fmt.Sprintf("baton-salesforce: could not create a client %s", err))
-	}
-	d.client = salesforceClient
+	d.client.TokenSource = tokenSource
 }
 
 // New returns a new instance of the connector.
@@ -122,18 +109,17 @@ func New(
 	)
 
 	// If no security token is passed in (i.e. is ""), then instantiate with a
-	// broken  client. Client is later overwritten when .SetTokenSource() is called.
-	salesforceClient, err := client.NewSalesforceClient(
-		ctx,
-		instanceURL,
-		accessToken,
-	)
-	if err != nil {
-		return nil, err
+	// "broken" client. Client is later overwritten when .SetTokenSource() is
+	// called.
+	var tokenSource oauth2.TokenSource
+	if accessToken != "" {
+		tokenSource = oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: accessToken},
+		)
 	}
 
 	salesforce := Salesforce{
-		client:                    salesforceClient,
+		client:                    client.New(instanceURL, tokenSource),
 		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,

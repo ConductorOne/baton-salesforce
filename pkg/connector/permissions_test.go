@@ -22,11 +22,8 @@ func TestPermissionsList(t *testing.T) {
 	defer test.TearDownDB(db)
 	defer server.Close()
 
-	confluenceClient, err := client.NewSalesforceClient(
-		ctx,
-		server.URL,
-		"mock-access-token",
-	)
+	confluenceClient := client.New(server.URL, test.MockTokenSource())
+	err = confluenceClient.Initialize(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/simpleforce/simpleforce"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -23,8 +24,10 @@ const (
 )
 
 type SalesforceClient struct {
+	baseUrl             string
 	client              *simpleforce.Client
 	salesforceTransport *salesforceHttpTransport
+	TokenSource         oauth2.TokenSource
 }
 
 // Gathered from the UserType field found here:
@@ -42,14 +45,14 @@ type salesforceHttpTransport struct {
 	rateLimit *v2.RateLimitDescription
 }
 
-func NewSalesforceClient(
-	ctx context.Context,
-	baseUrl string,
-	accessToken string,
-) (*SalesforceClient, error) {
+func New(baseUrl string, tokenSource oauth2.TokenSource) *SalesforceClient {
+	return &SalesforceClient{baseUrl: baseUrl, TokenSource: tokenSource}
+}
+
+func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	logger := ctxzap.Extract(ctx)
 	simpleClient := simpleforce.NewClient(
-		baseUrl,
+		c.baseUrl,
 		SalesforceClientID,
 		simpleforce.DefaultAPIVersion,
 	)
@@ -66,22 +69,25 @@ func NewSalesforceClient(
 			"salesforce-connector: error creating salesforce client",
 			zap.Error(err),
 		)
-		return nil, err
+		return err
 	}
 	interceptedTransport := salesforceHttpTransport{
 		base:      httpClient.Transport,
 		rateLimit: &v2.RateLimitDescription{},
 	}
 
+	token, err := c.TokenSource.Token()
+	if err != nil {
+		return err
+	}
+
 	httpClient.Transport = &interceptedTransport
 	simpleClient.SetHttpClient(httpClient)
-	simpleClient.SetSidLoc(accessToken, baseUrl)
+	simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
 
-	return &SalesforceClient{
-		client: simpleClient,
-		// Get a pointer to the transport layer.
-		salesforceTransport: &interceptedTransport,
-	}, nil
+	c.client = simpleClient
+	c.salesforceTransport = &interceptedTransport
+	return nil
 }
 
 func (c *SalesforceClient) GetInfo(ctx context.Context) (
@@ -89,6 +95,11 @@ func (c *SalesforceClient) GetInfo(ctx context.Context) (
 	*v2.RateLimitDescription,
 	error,
 ) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	response, err := c.client.ApexREST(
 		http.MethodGet,
 		InfoPath,

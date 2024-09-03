@@ -22,7 +22,7 @@ func TestProfilesList(t *testing.T) {
 	defer test.TearDownDB(db)
 	defer server.Close()
 
-	confluenceClient := client.New(server.URL, test.MockTokenSource())
+	confluenceClient := client.New(server.URL, test.MockTokenSource(), "", "")
 	err = confluenceClient.Initialize(ctx)
 	if err != nil {
 		t.Fatal(err)

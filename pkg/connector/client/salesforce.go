@@ -28,6 +28,8 @@ type SalesforceClient struct {
 	client              *simpleforce.Client
 	salesforceTransport *salesforceHttpTransport
 	TokenSource         oauth2.TokenSource
+	Username            string
+	Password            string
 }
 
 // Gathered from the UserType field found here:
@@ -45,8 +47,18 @@ type salesforceHttpTransport struct {
 	rateLimit *v2.RateLimitDescription
 }
 
-func New(baseUrl string, tokenSource oauth2.TokenSource) *SalesforceClient {
-	return &SalesforceClient{baseUrl: baseUrl, TokenSource: tokenSource}
+func New(
+	baseUrl string,
+	tokenSource oauth2.TokenSource,
+	username string,
+	password string,
+) *SalesforceClient {
+	return &SalesforceClient{
+		Password:    password,
+		TokenSource: tokenSource,
+		Username:    username,
+		baseUrl:     baseUrl,
+	}
 }
 
 func (c *SalesforceClient) Initialize(ctx context.Context) error {
@@ -56,6 +68,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		SalesforceClientID,
 		simpleforce.DefaultAPIVersion,
 	)
+
 	// Inject my own HTTP Client.
 	httpClient, err := uhttp.NewClient(
 		ctx,
@@ -76,17 +89,25 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		rateLimit: &v2.RateLimitDescription{},
 	}
 
-	token, err := c.TokenSource.Token()
-	if err != nil {
-		return err
+	// Oauth takes precedence over username, password.
+	if c.TokenSource != nil {
+		token, err := c.TokenSource.Token()
+		if err != nil {
+			return err
+		}
+		simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
+	} else {
+		err = simpleClient.LoginPassword(c.Username, c.Password, "")
+		if err != nil {
+			return err
+		}
 	}
 
 	httpClient.Transport = &interceptedTransport
 	simpleClient.SetHttpClient(httpClient)
-	simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
-
 	c.client = simpleClient
 	c.salesforceTransport = &interceptedTransport
+
 	return nil
 }
 

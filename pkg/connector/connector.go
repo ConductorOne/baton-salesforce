@@ -93,7 +93,8 @@ func New(
 	ctx context.Context,
 	instanceURL string,
 	useUsernameForEmail bool,
-	accessToken string,
+	username string,
+	password string,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -104,22 +105,17 @@ func New(
 	logger.Debug(
 		"New Salesforce connector",
 		zap.String("instanceURL", instanceURL),
-		zap.String("accessToken", accessToken),
+		zap.String("username", username),
+		zap.Bool("password?", password != ""),
 		zap.Bool("useUsernameForEmail", useUsernameForEmail),
 	)
 
-	// If no security token is passed in (i.e. is ""), then instantiate with a
-	// "broken" client. Client is later overwritten when .SetTokenSource() is
-	// called.
+	// Instantiate with a "broken" client. Client is later overwritten either
+	// when .SetTokenSource() or .LoginPassword() are called.
 	var tokenSource oauth2.TokenSource
-	if accessToken != "" {
-		tokenSource = oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: accessToken},
-		)
-	}
-
+	salesforceClient := client.New(instanceURL, tokenSource, username, password)
 	salesforce := Salesforce{
-		client:                    client.New(instanceURL, tokenSource),
+		client:                    salesforceClient,
 		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,

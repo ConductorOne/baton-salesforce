@@ -26,7 +26,17 @@ func TestConfigs(t *testing.T) {
 				"is valid",
 			},
 			{
-				"--instance-url 1 --user-username-for-email --access-token 1",
+				"--instance-url 1 --user-username-for-email --salesforce-password 1",
+				false,
+				"missing username",
+			},
+			{
+				"--instance-url 1 --user-username-for-email --salesforce-username 1",
+				false,
+				"missing password",
+			},
+			{
+				"--instance-url 1 --user-username-for-email --salesforce-username 1 --salesforce-password 1",
 				true,
 				"all",
 			},

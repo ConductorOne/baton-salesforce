@@ -73,6 +73,7 @@ Flags:
   -p, --provisioning                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
       --salesforce-password string   Salesforce account password ($BATON_SALESFORCE_PASSWORD)
       --salesforce-username string   Salesforce account username ($BATON_SALESFORCE_USERNAME)
+      --security-token string        Salesforce security token (optional if trusted IP is configured) ($BATON_SECURITY_TOKEN)
       --skip-full-sync               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
       --ticketing                    This must be set to enable ticketing support ($BATON_TICKETING)
       --user-username-for-email      Use Salesforce usernames for email ($BATON_USER_USERNAME_FOR_EMAIL)

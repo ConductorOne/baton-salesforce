@@ -22,8 +22,7 @@ func TestGroupsList(t *testing.T) {
 	defer test.TearDownDB(db)
 	defer server.Close()
 
-	confluenceClient := client.New(server.URL, test.MockTokenSource(), "", "")
-	err = confluenceClient.Initialize(ctx)
+	confluenceClient, err := test.Client(ctx, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

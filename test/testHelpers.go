@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,21 @@ import (
 	"github.com/simpleforce/simpleforce"
 	"golang.org/x/oauth2"
 )
+
+func Client(ctx context.Context, baseUrl string) (*client.SalesforceClient, error) {
+	confluenceClient := client.New(
+		baseUrl,
+		MockTokenSource(),
+		"",
+		"",
+		"",
+	)
+	err := confluenceClient.Initialize(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return confluenceClient, nil
+}
 
 func MockTokenSource() oauth2.TokenSource {
 	return oauth2.StaticTokenSource(

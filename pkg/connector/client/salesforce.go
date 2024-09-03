@@ -30,6 +30,7 @@ type SalesforceClient struct {
 	TokenSource         oauth2.TokenSource
 	Username            string
 	Password            string
+	securityToken       string
 }
 
 // Gathered from the UserType field found here:
@@ -52,12 +53,14 @@ func New(
 	tokenSource oauth2.TokenSource,
 	username string,
 	password string,
+	securityToken string,
 ) *SalesforceClient {
 	return &SalesforceClient{
-		Password:    password,
-		TokenSource: tokenSource,
-		Username:    username,
-		baseUrl:     baseUrl,
+		baseUrl:       baseUrl,
+		Password:      password,
+		securityToken: securityToken,
+		TokenSource:   tokenSource,
+		Username:      username,
 	}
 }
 
@@ -97,7 +100,11 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		}
 		simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
 	} else {
-		err = simpleClient.LoginPassword(c.Username, c.Password, "")
+		err = simpleClient.LoginPassword(
+			c.Username,
+			c.Password,
+			c.securityToken,
+		)
 		if err != nil {
 			return err
 		}

@@ -22,12 +22,17 @@ var (
 		"salesforce-password",
 		field.WithDescription("Salesforce account password"),
 	)
+	SecurityTokenField = field.StringField(
+		"security-token",
+		field.WithDescription("Salesforce security token (optional if trusted IP is configured)"),
+	)
 
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
 		UseUsernameForEmailField,
 		UsernameField,
 		PasswordField,
+		SecurityTokenField,
 	}
 
 	Configuration = field.NewConfiguration(

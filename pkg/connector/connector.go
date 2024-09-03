@@ -95,6 +95,7 @@ func New(
 	useUsernameForEmail bool,
 	username string,
 	password string,
+	securityToken string,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -107,13 +108,20 @@ func New(
 		zap.String("instanceURL", instanceURL),
 		zap.String("username", username),
 		zap.Bool("password?", password != ""),
+		zap.Bool("securityToken?", securityToken != ""),
 		zap.Bool("useUsernameForEmail", useUsernameForEmail),
 	)
 
 	// Instantiate with a "broken" client. Client is later overwritten either
 	// when .SetTokenSource() or .LoginPassword() are called.
 	var tokenSource oauth2.TokenSource
-	salesforceClient := client.New(instanceURL, tokenSource, username, password)
+	salesforceClient := client.New(
+		instanceURL,
+		tokenSource,
+		username,
+		password,
+		securityToken,
+	)
 	salesforce := Salesforce{
 		client:                    salesforceClient,
 		ctx:                       ctx,

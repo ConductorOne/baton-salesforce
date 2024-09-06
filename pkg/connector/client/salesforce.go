@@ -130,6 +130,11 @@ func (c *SalesforceClient) GetInfo(ctx context.Context) (
 	*v2.RateLimitDescription,
 	error,
 ) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	response, err := c.client.ApexREST(
 		http.MethodGet,
 		InfoPath,

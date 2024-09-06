@@ -31,6 +31,7 @@ type SalesforceClient struct {
 	Username            string
 	Password            string
 	securityToken       string
+	initialized         bool
 }
 
 // Gathered from the UserType field found here:
@@ -66,6 +67,12 @@ func New(
 
 func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	logger := ctxzap.Extract(ctx)
+	if c.initialized {
+		logger.Debug("Salesforce client already initialized")
+		return nil
+	}
+	logger.Debug("Initializing Salesforce client")
+
 	simpleClient := simpleforce.NewClient(
 		c.baseUrl,
 		SalesforceClientID,
@@ -114,7 +121,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	simpleClient.SetHttpClient(httpClient)
 	c.client = simpleClient
 	c.salesforceTransport = &interceptedTransport
-
+	c.initialized = true
 	return nil
 }
 
@@ -123,11 +130,6 @@ func (c *SalesforceClient) GetInfo(ctx context.Context) (
 	*v2.RateLimitDescription,
 	error,
 ) {
-	err := c.Initialize(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	response, err := c.client.ApexREST(
 		http.MethodGet,
 		InfoPath,
@@ -555,30 +557,6 @@ func (c *SalesforceClient) GetGroupMemberships(
 	return memberships, paginationUrl, ratelimitData, nil
 }
 
-func (c *SalesforceClient) getSObject(
-	ctx context.Context,
-	query *SalesforceQuery,
-) (
-	*simpleforce.SObject,
-	*v2.RateLimitDescription,
-	error,
-) {
-	records, _, ratelimitData, err := c.query(
-		ctx,
-		query,
-		"",
-		1,
-	)
-	if err != nil {
-		return nil, ratelimitData, err
-	}
-	if len(records) != 1 {
-		return nil, ratelimitData, fmt.Errorf("expected 1 record, got %d", len(records))
-	}
-
-	return &records[0], ratelimitData, nil
-}
-
 func (c *SalesforceClient) getGroupMembership(
 	ctx context.Context,
 	userId string,
@@ -624,16 +602,15 @@ func (c *SalesforceClient) AddUserToGroup(
 		zap.String("user_id", userId),
 		zap.String("group_id", groupId),
 	)
-	groupMembership := c.client.
-		SObject(TableNameGroupMemberships).
-		Set("GroupID", groupId).
-		Set("UserOrGroupId", userId).
-		Create()
-	ratelimitData := c.salesforceTransport.rateLimit
-	if groupMembership == nil {
-		return ratelimitData, fmt.Errorf("failed to create object")
-	}
-	return ratelimitData, nil
+
+	return c.CreateObject(
+		ctx,
+		TableNameGroupMemberships,
+		map[string]string{
+			"GroupId":       groupId,
+			"UserOrGroupId": userId,
+		},
+	)
 }
 
 func (c *SalesforceClient) RemoveUserFromGroup(
@@ -645,13 +622,8 @@ func (c *SalesforceClient) RemoveUserFromGroup(
 	if err != nil {
 		return ratelimitData, err
 	}
-	// TODO(marcos): There is a bug in simpleforce that prevents us from doing found.Delete().
-	err = c.client.
-		SObject(TableNameGroupMemberships).
-		Set("Id", found.ID()).
-		Delete()
-	ratelimitData = c.salesforceTransport.rateLimit
-	return ratelimitData, err
+
+	return c.DeleteObject(ctx, TableNameGroupMemberships, found.ID())
 }
 
 func (c *SalesforceClient) AddUserToPermissionSet(
@@ -659,17 +631,15 @@ func (c *SalesforceClient) AddUserToPermissionSet(
 	userId string,
 	permissionSetId string,
 ) (*v2.RateLimitDescription, error) {
-	groupMembership := c.client.
-		SObject(TableNamePermissionAssignments).
-		Set("AssigneeId", userId).
-		Set("PermissionSetId", permissionSetId).
-		Set("IsActive", 1).
-		Create()
-	ratelimitData := c.salesforceTransport.rateLimit
-	if groupMembership == nil {
-		return ratelimitData, fmt.Errorf("failed to create permission set")
-	}
-	return ratelimitData, nil
+	return c.CreateObject(
+		ctx,
+		TableNamePermissionAssignments,
+		map[string]string{
+			"AssigneeId":      userId,
+			"PermissionSetId": permissionSetId,
+			"IsActive":        "1",
+		},
+	)
 }
 
 func (c *SalesforceClient) RemoveUserFromPermissionSet(
@@ -681,35 +651,7 @@ func (c *SalesforceClient) RemoveUserFromPermissionSet(
 	if err != nil {
 		return ratelimitData, err
 	}
-	// TODO(marcos): There is a bug in simpleforce that prevents us from doing found.Delete().
-	err = c.client.
-		SObject(TableNamePermissionAssignments).
-		Set("Id", found.ID()).
-		Delete()
-	ratelimitData = c.salesforceTransport.rateLimit
-	return ratelimitData, err
-}
-
-func (c *SalesforceClient) setValue(
-	userId string,
-	fieldName string,
-	fieldValue string,
-) (*v2.RateLimitDescription, error) {
-	user := c.client.
-		SObject(TableNameUsers).
-		Get(userId)
-
-	ratelimitData := c.salesforceTransport.rateLimit
-	if user == nil {
-		return ratelimitData, fmt.Errorf("missing user %s", userId)
-	}
-
-	user = user.Set(fieldName, fieldValue).Update()
-	ratelimitData = c.salesforceTransport.rateLimit
-	if user == nil {
-		return ratelimitData, fmt.Errorf("failed to update user")
-	}
-	return ratelimitData, nil
+	return c.DeleteObject(ctx, TableNamePermissionAssignments, found.ID())
 }
 
 func (c *SalesforceClient) AddUserToProfile(
@@ -717,46 +659,7 @@ func (c *SalesforceClient) AddUserToProfile(
 	userId string,
 	profileId string,
 ) (*v2.RateLimitDescription, error) {
-	user := c.client.
-		SObject(TableNameUsers).
-		Get(userId)
-
-	ratelimitData := c.salesforceTransport.rateLimit
-	if user == nil {
-		return ratelimitData, fmt.Errorf("missing user %s", userId)
-	}
-
-	user = user.Set("ProfileId", profileId).Update()
-	ratelimitData = c.salesforceTransport.rateLimit
-	if user == nil {
-		return ratelimitData, fmt.Errorf("failed to update object")
-	}
-	return ratelimitData, nil
-}
-
-func (c *SalesforceClient) clearValue(
-	userId string,
-	fieldName string,
-	fieldValue string,
-) (*v2.RateLimitDescription, error) {
-	user := c.client.
-		SObject(TableNameUsers).
-		Get(userId)
-	ratelimitData := c.salesforceTransport.rateLimit
-	if user == nil {
-		return ratelimitData, fmt.Errorf("missing user %s", userId)
-	}
-	if user.StringField(fieldName) != fieldValue {
-		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
-	}
-
-	user = user.Set(fieldName, "").Update()
-	ratelimitData = c.salesforceTransport.rateLimit
-	if user == nil {
-		return ratelimitData, fmt.Errorf("failed to update user")
-	}
-
-	return ratelimitData, nil
+	return c.setValue(ctx, userId, "ProfileId", profileId)
 }
 
 func (c *SalesforceClient) RemoveUserFromProfile(
@@ -764,7 +667,7 @@ func (c *SalesforceClient) RemoveUserFromProfile(
 	userId string,
 	profileId string,
 ) (*v2.RateLimitDescription, error) {
-	return c.clearValue(userId, "ProfileId", profileId)
+	return c.clearValue(ctx, userId, "ProfileId", profileId)
 }
 
 func (c *SalesforceClient) AddUserToRole(
@@ -772,7 +675,7 @@ func (c *SalesforceClient) AddUserToRole(
 	userId string,
 	roleId string,
 ) (*v2.RateLimitDescription, error) {
-	return c.setValue(userId, "UserRoleId", roleId)
+	return c.setValue(ctx, userId, "UserRoleId", roleId)
 }
 
 func (c *SalesforceClient) RemoveUserFromRole(
@@ -780,5 +683,5 @@ func (c *SalesforceClient) RemoveUserFromRole(
 	userId string,
 	roleId string,
 ) (*v2.RateLimitDescription, error) {
-	return c.clearValue(userId, "UserRoleId", roleId)
+	return c.clearValue(ctx, userId, "UserRoleId", roleId)
 }

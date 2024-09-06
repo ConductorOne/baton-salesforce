@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -44,6 +45,11 @@ func (c *SalesforceClient) query(
 	*v2.RateLimitDescription,
 	error,
 ) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
 	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
 	records, err := c.client.Query(queryString)
@@ -62,4 +68,142 @@ func (c *SalesforceClient) query(
 		nextToken = records.NextRecordsURL
 	}
 	return records.Records, nextToken, ratelimitData, nil
+}
+
+func (c *SalesforceClient) getSObject(
+	ctx context.Context,
+	query *SalesforceQuery,
+) (
+	*simpleforce.SObject,
+	*v2.RateLimitDescription,
+	error,
+) {
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) != 1 {
+		return nil, ratelimitData, fmt.Errorf("expected 1 record, got %d", len(records))
+	}
+
+	return &records[0], ratelimitData, nil
+}
+
+// CreateObject this call to simpleforce is broken out into a helper function so
+// that we can always ensure that the client is initialized.
+func (c *SalesforceClient) CreateObject(
+	ctx context.Context,
+	tableName string,
+	values map[string]string,
+) (*v2.RateLimitDescription, error) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	created := c.client.SObject(tableName)
+	for key, value := range values {
+		created = created.Set(key, value)
+	}
+	created = created.Create()
+
+	ratelimitData := c.salesforceTransport.rateLimit
+	if created == nil {
+		return ratelimitData, fmt.Errorf("failed to create object")
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) DeleteObject(
+	ctx context.Context,
+	tableName string,
+	id string,
+) (*v2.RateLimitDescription, error) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO(marcos): There is a bug in simpleforce that prevents us from doing found.Delete().
+	err = c.client.
+		SObject(tableName).
+		Set("Id", id).
+		Delete()
+
+	ratelimitData := c.salesforceTransport.rateLimit
+	return ratelimitData, err
+}
+
+func (c *SalesforceClient) getOneUser(ctx context.Context, userId string) (
+	*simpleforce.SObject,
+	*v2.RateLimitDescription,
+	error,
+) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	user := c.client.
+		SObject(TableNameUsers).
+		Get(userId)
+
+	ratelimitData := c.salesforceTransport.rateLimit
+	if user == nil {
+		return nil, ratelimitData, fmt.Errorf("missing user %s", userId)
+	}
+	return user, ratelimitData, nil
+}
+
+func (c *SalesforceClient) updateUser(
+	user *simpleforce.SObject,
+	fieldName string,
+	value string,
+) (
+	*v2.RateLimitDescription,
+	error,
+) {
+	user = user.Set(fieldName, value).Update()
+	ratelimitData := c.salesforceTransport.rateLimit
+	if user == nil {
+		return ratelimitData, fmt.Errorf("failed to update user")
+	}
+
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) setValue(
+	ctx context.Context,
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user, ratelimitData, err := c.getOneUser(ctx, userId)
+	if err != nil {
+		return ratelimitData, err
+	}
+
+	return c.updateUser(user, fieldName, fieldValue)
+}
+
+func (c *SalesforceClient) clearValue(
+	ctx context.Context,
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user, ratelimitData, err := c.getOneUser(ctx, userId)
+	if err != nil {
+		return ratelimitData, err
+	}
+
+	if user.StringField(fieldName) != fieldValue {
+		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
+	}
+
+	return c.updateUser(user, fieldName, "")
 }

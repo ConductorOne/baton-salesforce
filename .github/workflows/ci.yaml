@@ -65,7 +65,6 @@ jobs:
         run: ./scripts/get-baton.sh && mv baton /usr/local/bin
 
       - name: Check for grant before revoking
-
         run:
           baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status ".grants[].principal.id.resource == \"${{ env.CONNECTOR_PRINCIPAL }}\""
 
@@ -79,7 +78,6 @@ jobs:
         run: ./baton-salesforce --grant-entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --grant-principal="${{ env.CONNECTOR_PRINCIPAL }}" --grant-principal-type="${{ env.CONNECTOR_PRINCIPAL_TYPE }}"
 
       - name: Check grant was re-granted
-
         run:
           baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status ".grants[].principal.id.resource == \"${{ env.CONNECTOR_PRINCIPAL }}\""
 

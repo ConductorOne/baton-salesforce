@@ -62,7 +62,7 @@ jobs:
 
       - name: Test grant/revoking IAM entitlements
         env:
-          BATON: ./baton/baton
+          BATON: /usr/local/bin/baton
           BATON_ENTITLEMENT: "group:00G8a000003XHtmEAG:member"
           BATON_PRINCIPAL: "0058a00000KGxQ8AAL"
           BATON_PRINCIPAL_TYPE: "user"

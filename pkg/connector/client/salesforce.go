@@ -101,18 +101,21 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 
 	// Oauth takes precedence over username, password.
 	if c.TokenSource != nil {
+		logger.Debug("Salesforce client using token source")
 		token, err := c.TokenSource.Token()
 		if err != nil {
 			return err
 		}
 		simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
 	} else {
+		logger.Debug("Salesforce client using username and password")
 		err = simpleClient.LoginPassword(
 			c.Username,
 			c.Password,
 			c.securityToken,
 		)
 		if err != nil {
+			logger.Error("could not login", zap.Error(err))
 			return err
 		}
 	}

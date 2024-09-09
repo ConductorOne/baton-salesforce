@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -9,6 +10,8 @@ import (
 	"github.com/simpleforce/simpleforce"
 	"go.uber.org/zap"
 )
+
+var ObjectNotFound = errors.New("SObject does not exists")
 
 func getQueryString(
 	q *SalesforceQuery,
@@ -88,7 +91,7 @@ func (c *SalesforceClient) getSObject(
 		return nil, ratelimitData, err
 	}
 	if len(records) != 1 {
-		return nil, ratelimitData, fmt.Errorf("expected 1 record, got %d", len(records))
+		return nil, ratelimitData, ObjectNotFound
 	}
 
 	return &records[0], ratelimitData, nil
@@ -101,6 +104,12 @@ func (c *SalesforceClient) CreateObject(
 	tableName string,
 	values map[string]string,
 ) (*v2.RateLimitDescription, error) {
+	logger := ctxzap.Extract(ctx)
+	logger.Debug(
+		"Starting CreateObject",
+		zap.String("tableName", tableName),
+	)
+
 	err := c.Initialize(ctx)
 	if err != nil {
 		return nil, err
@@ -111,6 +120,11 @@ func (c *SalesforceClient) CreateObject(
 		created = created.Set(key, value)
 	}
 	created = created.Create()
+
+	logger.Debug(
+		"Called Create()",
+		zap.String("created.ID()", created.ID()),
+	)
 
 	ratelimitData := c.salesforceTransport.rateLimit
 	if created == nil {
@@ -124,6 +138,12 @@ func (c *SalesforceClient) DeleteObject(
 	tableName string,
 	id string,
 ) (*v2.RateLimitDescription, error) {
+	logger := ctxzap.Extract(ctx)
+	logger.Debug(
+		"Starting DeleteObject",
+		zap.String("tableName", tableName),
+	)
+
 	err := c.Initialize(ctx)
 	if err != nil {
 		return nil, err

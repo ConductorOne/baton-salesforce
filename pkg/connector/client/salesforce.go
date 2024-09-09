@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -625,13 +626,17 @@ func (c *SalesforceClient) RemoveUserFromGroup(
 	ctx context.Context,
 	userId string,
 	groupId string,
-) (*v2.RateLimitDescription, error) {
+) (bool, *v2.RateLimitDescription, error) {
 	found, ratelimitData, err := c.getGroupMembership(ctx, userId, groupId)
 	if err != nil {
-		return ratelimitData, err
+		if errors.Is(err, ObjectNotFound) {
+			return false, ratelimitData, nil
+		}
+		return false, ratelimitData, err
 	}
 
-	return c.DeleteObject(ctx, TableNameGroupMemberships, found.ID())
+	ratelimitData, err = c.DeleteObject(ctx, TableNameGroupMemberships, found.ID())
+	return true, ratelimitData, err
 }
 
 func (c *SalesforceClient) AddUserToPermissionSet(

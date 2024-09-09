@@ -190,13 +190,20 @@ func (o *groupBuilder) Revoke(
 	ctx context.Context,
 	grant *v2.Grant,
 ) (annotations.Annotations, error) {
-	ratelimitData, err := o.client.RemoveUserFromGroup(
+	wasRevoked, ratelimitData, err := o.client.RemoveUserFromGroup(
 		ctx,
 		grant.Principal.Id.Resource,
 		grant.Entitlement.Resource.Id.Resource,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
-	return outputAnnotations, err
+	if err != nil {
+		return outputAnnotations, err
+	}
+
+	if !wasRevoked {
+		outputAnnotations.Append(&v2.GrantAlreadyRevoked{})
+	}
+	return outputAnnotations, nil
 }
 
 func newGroupBuilder(client *client.SalesforceClient) *groupBuilder {

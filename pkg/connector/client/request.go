@@ -81,17 +81,27 @@ func (c *SalesforceClient) getSObject(
 	*v2.RateLimitDescription,
 	error,
 ) {
+	logger := ctxzap.Extract(ctx)
 	records, _, ratelimitData, err := c.query(
 		ctx,
 		query,
 		"",
-		1,
+		-1,
 	)
 	if err != nil {
 		return nil, ratelimitData, err
 	}
-	if len(records) != 1 {
+
+	if len(records) == 0 {
 		return nil, ratelimitData, ObjectNotFound
+	}
+
+	if len(records) > 1 {
+		logger.Error(
+			"found too many Salesforce objects",
+			zap.String("query", query.String()),
+			zap.Int("count", len(records)),
+		)
 	}
 
 	return &records[0], ratelimitData, nil

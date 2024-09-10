@@ -149,7 +149,8 @@ func (c *SalesforceClient) DeleteObject(
 		return nil, err
 	}
 
-	// TODO(marcos): There is a bug in simpleforce that prevents us from doing found.Delete().
+	// TODO(marcos): There is a bug in simpleforce that prevents us from doing
+	// `found.Delete()`. See https://github.com/simpleforce/simpleforce/pull/44.
 	err = c.client.
 		SObject(tableName).
 		Set("Id", id).

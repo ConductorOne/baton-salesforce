@@ -250,6 +250,9 @@ func handleDelete(db *sql.DB, request *http.Request) error {
 			id,
 		),
 	)
+	if err != nil {
+		return err
+	}
 
 	count, err := result.RowsAffected()
 	if err != nil {
@@ -365,14 +368,12 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	columnsString := "('" + strings.Join(columns, "','") + "')"
 	valuesString := "(" + strings.Join(values, ",") + ")"
 
-	insertQuery := fmt.Sprintf(
+	_, err = db.Exec(fmt.Sprintf(
 		"INSERT INTO %s %s VALUES %s",
 		tableName,
 		columnsString,
 		valuesString,
-	)
-
-	_, err = db.Exec(insertQuery)
+	))
 	if err != nil {
 		return nil, err
 	}

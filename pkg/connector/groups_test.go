@@ -117,7 +117,7 @@ func TestGroupsList(t *testing.T) {
 		test.AssertNoRatelimitAnnotations(t, grantAnnotationsAfter)
 
 		// TODO(marcos): We don't actually detect double grants.
-		//test.AssertContainsAnnotation(t, &v2.GrantAlreadyExists{}, grantAnnotationsAfter)
+		// test.AssertContainsAnnotation(t, &v2.GrantAlreadyExists{}, grantAnnotationsAfter)
 
 		grant := v2.Grant{
 			Entitlement: &entitlement,

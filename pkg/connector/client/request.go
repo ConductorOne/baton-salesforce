@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var ObjectNotFound = errors.New("SObject does not exists")
+var ObjectNotFound = errors.New("Salesforce object does not exists")
 
 func getQueryString(
 	q *SalesforceQuery,

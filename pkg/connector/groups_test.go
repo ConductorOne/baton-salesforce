@@ -22,11 +22,7 @@ func TestGroupsList(t *testing.T) {
 	defer test.TearDownDB(db)
 	defer server.Close()
 
-	confluenceClient, err := client.NewSalesforceClient(
-		ctx,
-		server.URL,
-		"mock-access-token",
-	)
+	confluenceClient, err := test.Client(ctx, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,5 +97,43 @@ func TestGroupsList(t *testing.T) {
 		test.AssertNoRatelimitAnnotations(t, grantsAnnotations)
 		require.Equal(t, "", nextToken)
 		require.Len(t, grantsAfter, 1)
+	})
+
+	t.Run("should allow double grant and double revoke", func(t *testing.T) {
+		group, _ := groupResource(ctx, &client.SalesforceGroup{ID: "00G1X"})
+		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, false)
+
+		entitlement := v2.Entitlement{
+			Id:       entitlement.NewEntitlementID(group, groupMemberEntitlementName),
+			Resource: group,
+		}
+
+		grantAnnotationsBefore, err := c.Grant(ctx, user, &entitlement)
+		require.Nil(t, err)
+		test.AssertNoRatelimitAnnotations(t, grantAnnotationsBefore)
+
+		grantAnnotationsAfter, err := c.Grant(ctx, user, &entitlement)
+		require.Nil(t, err)
+		test.AssertNoRatelimitAnnotations(t, grantAnnotationsAfter)
+
+		// TODO(marcos): We don't actually detect double grants.
+		// test.AssertContainsAnnotation(t, &v2.GrantAlreadyExists{}, grantAnnotationsAfter)
+
+		grant := v2.Grant{
+			Entitlement: &entitlement,
+			Principal:   user,
+		}
+
+		// Initial revoke is the same as any other revoke.
+		revokeAnnotationsBefore, err := c.Revoke(ctx, &grant)
+		require.Nil(t, err)
+		test.AssertNoRatelimitAnnotations(t, revokeAnnotationsBefore)
+
+		// Second revoke.
+		revokeAnnotationsAfter, err := c.Revoke(ctx, &grant)
+		require.Nil(t, err)
+		test.AssertNoRatelimitAnnotations(t, revokeAnnotationsAfter)
+
+		test.AssertContainsAnnotation(t, &v2.GrantAlreadyRevoked{}, revokeAnnotationsAfter)
 	})
 }

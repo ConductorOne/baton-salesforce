@@ -85,20 +85,7 @@ func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, err
 func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
 	logger := ctxzap.Extract(d.ctx)
 	logger.Debug("baton-salesforce: SetTokenSource start")
-
-	token, err := tokenSource.Token()
-	if err != nil {
-		panic(fmt.Sprintf("baton-salesforce: tokenSource could not get a token %s", err.Error()))
-	}
-	salesforceClient, err := client.NewSalesforceClient(
-		d.ctx,
-		d.instanceURL,
-		token.AccessToken,
-	)
-	if err != nil {
-		panic(fmt.Sprintf("baton-salesforce: could not create a client %s", err))
-	}
-	d.client = salesforceClient
+	d.client.TokenSource = tokenSource
 }
 
 // New returns a new instance of the connector.
@@ -106,7 +93,9 @@ func New(
 	ctx context.Context,
 	instanceURL string,
 	useUsernameForEmail bool,
-	accessToken string,
+	username string,
+	password string,
+	securityToken string,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -117,21 +106,22 @@ func New(
 	logger.Debug(
 		"New Salesforce connector",
 		zap.String("instanceURL", instanceURL),
-		zap.String("accessToken", accessToken),
+		zap.String("username", username),
+		zap.Bool("password?", password != ""),
+		zap.Bool("securityToken?", securityToken != ""),
 		zap.Bool("useUsernameForEmail", useUsernameForEmail),
 	)
 
-	// If no security token is passed in (i.e. is ""), then instantiate with a
-	// broken  client. Client is later overwritten when .SetTokenSource() is called.
-	salesforceClient, err := client.NewSalesforceClient(
-		ctx,
+	// Instantiate with a "broken" client. Client is later overwritten either
+	// when .SetTokenSource() or .LoginPassword() are called.
+	var tokenSource oauth2.TokenSource
+	salesforceClient := client.New(
 		instanceURL,
-		accessToken,
+		tokenSource,
+		username,
+		password,
+		securityToken,
 	)
-	if err != nil {
-		return nil, err
-	}
-
 	salesforce := Salesforce{
 		client:                    salesforceClient,
 		ctx:                       ctx,

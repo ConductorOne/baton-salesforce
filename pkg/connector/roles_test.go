@@ -22,11 +22,7 @@ func TestRolesList(t *testing.T) {
 	defer test.TearDownDB(db)
 	defer server.Close()
 
-	confluenceClient, err := client.NewSalesforceClient(
-		ctx,
-		server.URL,
-		"mock-access-token",
-	)
+	confluenceClient, err := test.Client(ctx, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

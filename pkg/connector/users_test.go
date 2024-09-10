@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	"github.com/conductorone/baton-salesforce/test"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -22,11 +21,7 @@ func TestUsersList(t *testing.T) {
 		defer test.TearDownDB(db)
 		defer server.Close()
 
-		confluenceClient, err := client.NewSalesforceClient(
-			ctx,
-			server.URL,
-			"mock-access-token",
-		)
+		confluenceClient, err := test.Client(ctx, server.URL)
 		if err != nil {
 			t.Fatal(err)
 		}

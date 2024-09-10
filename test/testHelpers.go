@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -23,7 +24,29 @@ import (
 	_ "github.com/proullon/ramsql/driver"
 	"github.com/simpleforce/simpleforce"
 	"golang.org/x/oauth2"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
+
+type salesforceResponse struct {
+	Id      string `json:"id"`
+	Success bool   `json:"success"`
+}
+
+func Client(ctx context.Context, baseUrl string) (*client.SalesforceClient, error) {
+	confluenceClient := client.New(
+		baseUrl,
+		MockTokenSource(),
+		"",
+		"",
+		"",
+	)
+	err := confluenceClient.Initialize(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return confluenceClient, nil
+}
 
 func MockTokenSource() oauth2.TokenSource {
 	return oauth2.StaticTokenSource(
@@ -214,14 +237,31 @@ func getBody(request *http.Request) (map[string]interface{}, error) {
 }
 
 func handleDelete(db *sql.DB, request *http.Request) error {
+	_, err := handleShow(db, request)
+	if err != nil {
+		return fmt.Errorf("cannot delere noexisting resource")
+	}
+
 	tableName, id := parsePath(request)
-	_, err := db.Exec(
+	result, err := db.Exec(
 		fmt.Sprintf(
 			"DELETE FROM %s WHERE Id = '%s'",
 			tableName,
 			id,
 		),
 	)
+	if err != nil {
+		return err
+	}
+
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("resource not found")
+	}
+
 	return err
 }
 
@@ -271,12 +311,40 @@ func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
 }
 
 func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
-	nextId, err := uuid.NewUUID()
+	tableName, _ := parsePath(request)
+	body, err := getBody(request)
 	if err != nil {
 		return nil, err
 	}
-	tableName, _ := parsePath(request)
-	body, err := getBody(request)
+	// If object is immutable, then we can short-circuit if the row exists.
+	if slices.Contains([]string{client.TableNameGroupMemberships}, tableName) {
+		conditions := make([]string, 0)
+		for key, value := range body {
+			conditions = append(conditions, fmt.Sprintf(`"%s" = '%s'`, strings.ToLower(key), value))
+		}
+		conditionsString := strings.Join(conditions, " AND ")
+		queryString := fmt.Sprintf(
+			"SELECT Id, * FROM %s WHERE %s",
+			tableName,
+			conditionsString,
+		)
+		rows, err := query(db, queryString)
+		if err != nil {
+			return nil, err
+		}
+
+		// We already have this value.
+		if len(rows) > 0 {
+			return json.Marshal(
+				salesforceResponse{
+					Id:      rows[0].ID(),
+					Success: true,
+				},
+			)
+		}
+	}
+
+	nextId, err := uuid.NewUUID()
 	if err != nil {
 		return nil, err
 	}
@@ -300,23 +368,15 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	columnsString := "('" + strings.Join(columns, "','") + "')"
 	valuesString := "(" + strings.Join(values, ",") + ")"
 
-	_, err = db.Exec(
-		fmt.Sprintf(
-			"INSERT INTO %s %s VALUES %s",
-			tableName,
-			columnsString,
-			valuesString,
-		),
-	)
+	_, err = db.Exec(fmt.Sprintf(
+		"INSERT INTO %s %s VALUES %s",
+		tableName,
+		columnsString,
+		valuesString,
+	))
 	if err != nil {
 		return nil, err
 	}
-
-	type salesforceResponse struct {
-		Id      string `json:"id"`
-		Success bool   `json:"success"`
-	}
-
 	return json.Marshal(
 		salesforceResponse{
 			Id:      nextId.String(),
@@ -342,7 +402,7 @@ func getTotalSize(db *sql.DB, queryString string) (int, error) {
 	return len(rows), nil
 }
 
-func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
+func find(db *sql.DB, request *http.Request) (simpleforce.SObject, error) {
 	tableName, id := parsePath(request)
 	selectors := strings.Join(client.TableNamesToFieldsMapping[tableName], ",")
 	sqlString := fmt.Sprintf(
@@ -360,7 +420,15 @@ func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("expected 1 row, got %d", len(rows))
 	}
 
-	return json.Marshal(rows[0])
+	return rows[0], nil
+}
+
+func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
+	found, err := find(db, request)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(found)
 }
 
 func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
@@ -412,4 +480,68 @@ func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
 			Records:        rows,
 		},
 	)
+}
+
+func makeError(needle *anypb.Any, haystack ...proto.Message) error {
+	sb := make([]string, 0)
+	for _, v := range haystack {
+		sb = append(sb, string(v.ProtoReflect().Descriptor().FullName()))
+	}
+	return fmt.Errorf(
+		"error: any '%s' did not match expected types: [%s]",
+		needle.TypeUrl,
+		strings.Join(sb, ", "),
+	)
+}
+
+// AnyIsOneOf returns an error if the given needle is not found in the haystack.
+func AnyIsOneOf(needle *anypb.Any, haystack ...proto.Message) error {
+	for _, v := range haystack {
+		if needle.MessageIs(v) {
+			return nil
+		}
+	}
+	return makeError(needle, haystack...)
+}
+
+// TODO(marcos): Move these helpers to baton-sdk and refactor AssertNoRatelimitAnnotations.
+func AssertContainsAnnotation(
+	t *testing.T,
+	expectedAnnotation proto.Message,
+	actualAnnotations annotations.Annotations,
+) {
+	found, err := UnmarshalFromAnys(expectedAnnotation, actualAnnotations)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !found {
+		t.Fatal("expected annotation was not in annotations")
+	}
+}
+
+func AssertDoesNotContainAnnotation(
+	t *testing.T,
+	expectedAnnotation proto.Message,
+	actualAnnotations annotations.Annotations,
+) {
+	found, err := UnmarshalFromAnys(expectedAnnotation, actualAnnotations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found {
+		t.Fatal("expected annotation was found in annotations")
+	}
+}
+
+func UnmarshalFromAnys(needle proto.Message, haystack []*anypb.Any) (bool, error) {
+	for _, v := range haystack {
+		if v.MessageIs(needle) {
+			if err := v.UnmarshalTo(needle); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }

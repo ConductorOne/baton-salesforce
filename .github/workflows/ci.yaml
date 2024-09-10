@@ -11,7 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Run linters
-        uses: golangci/golangci-lint-action@v5
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
           args: --timeout=3m
@@ -42,11 +42,9 @@ jobs:
     env:
       BATON_LOG_LEVEL: debug
       BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
-      BATON_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-      CONNECTOR_GRANT: 'group:00G8a000003XHtmEAG:member:user:0058a00000KGxQ8AAL'
-      CONNECTOR_ENTITLEMENT: 'group:00G8a000003XHtmEAG:member'
-      CONNECTOR_PRINCIPAL: '0058a00000KGxQ8AAL'
-      CONNECTOR_PRINCIPAL_TYPE: 'user'
+      BATON_SALESFORCE_USERNAME: ${{ secrets.SALESFORCE_USERNAME }}
+      BATON_SALESFORCE_PASSWORD: ${{ secrets.SALESFORCE_PASSWORD }}
+      BATON_SECURITY_TOKEN: ${{ secrets.SECURITY_TOKEN }}
     steps:
       - name: Install Go
         uses: actions/setup-go@v5
@@ -62,22 +60,11 @@ jobs:
       - name: Install baton
         run: ./scripts/get-baton.sh && mv baton /usr/local/bin
 
-      - name: Check for grant before revoking
-
-        run:
-          baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status ".grants[].principal.id.resource == \"${{ env.CONNECTOR_PRINCIPAL }}\""
-
-      - name: Revoke grants
-        run: ./baton-salesforce --revoke-grant="${{ env.CONNECTOR_GRANT }}"
-
-      - name: Check grant was revoked
-        run: ./baton-salesforce && baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status "if .grants then .grants[]?.principal.id.resource != \"${{ env.CONNECTOR_PRINCIPAL }}\" else . end"
-
-      - name: Grant entitlement
-        run: ./baton-salesforce --grant-entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --grant-principal="${{ env.CONNECTOR_PRINCIPAL }}" --grant-principal-type="${{ env.CONNECTOR_PRINCIPAL_TYPE }}"
-
-      - name: Check grant was re-granted
-
-        run:
-          baton grants --entitlement="${{ env.CONNECTOR_ENTITLEMENT }}" --output-format=json | jq --exit-status ".grants[].principal.id.resource == \"${{ env.CONNECTOR_PRINCIPAL }}\""
-
+      - name: Test grant/revoking IAM entitlements
+        env:
+          BATON: /usr/local/bin/baton
+          BATON_ENTITLEMENT: "group:00G8a000003XHtmEAG:member"
+          BATON_PRINCIPAL: "0058a00000KGxQ8AAL"
+          BATON_PRINCIPAL_TYPE: "user"
+          COMMAND: ./baton-salesforce
+        run: ./test/grant-revoke.sh

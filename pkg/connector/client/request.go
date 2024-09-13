@@ -131,9 +131,13 @@ func (c *SalesforceClient) CreateObject(
 	}
 	created = created.Create()
 
+	debugFields := []zap.Field{}
+	if created != nil {
+		debugFields = append(debugFields, zap.String("created.ID()", created.ID()))
+	}
 	logger.Debug(
 		"Called Create()",
-		zap.String("created.ID()", created.ID()),
+		debugFields...,
 	)
 
 	ratelimitData := c.salesforceTransport.rateLimit

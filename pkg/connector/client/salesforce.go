@@ -615,7 +615,7 @@ func (c *SalesforceClient) AddUserToGroup(
 	return c.CreateObject(
 		ctx,
 		TableNameGroupMemberships,
-		map[string]string{
+		map[string]any{
 			"GroupId":       groupId,
 			"UserOrGroupId": userId,
 		},
@@ -647,10 +647,10 @@ func (c *SalesforceClient) AddUserToPermissionSet(
 	return c.CreateObject(
 		ctx,
 		TableNamePermissionAssignments,
-		map[string]string{
+		map[string]any{
 			"AssigneeId":      userId,
 			"PermissionSetId": permissionSetId,
-			"IsActive":        "1",
+			"IsActive":        true,
 		},
 	)
 }

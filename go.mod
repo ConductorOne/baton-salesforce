@@ -3,7 +3,7 @@ module github.com/conductorone/baton-salesforce
 go 1.22.5
 
 require (
-	github.com/conductorone/baton-sdk v0.2.25
+	github.com/conductorone/baton-sdk v0.2.31
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/huandu/go-sqlbuilder v1.28.1
@@ -13,6 +13,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.22.0
+	google.golang.org/protobuf v1.34.1
 )
 
 require (
@@ -91,7 +92,6 @@ require (
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240528184218-531527333157 // indirect
 	google.golang.org/grpc v1.65.0 // indirect
-	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

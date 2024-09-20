@@ -77,6 +77,14 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, error) {
 	_, ratelimitData, err := d.client.GetInfo(ctx)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	if err != nil {
+		return outputAnnotations, err
+	}
+
+	// Some users are using credentials that lack access to the "PermissionSets"
+	// table. Checking these credentials early.
+	_, _, ratelimitData, err = d.client.GetPermissionSets(ctx, "", 1)
+	outputAnnotations = client.WithRateLimitAnnotations(ratelimitData)
 	return outputAnnotations, err
 }
 

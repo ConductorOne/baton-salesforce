@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"github.com/conductorone/baton-sdk/pkg/field"
@@ -35,7 +35,7 @@ var (
 		SecurityTokenField,
 	}
 
-	Configuration = field.NewConfiguration(
+	ConfigurationSchema = field.NewConfiguration(
 		configurationFields,
 		field.FieldsRequiredTogether(UsernameField, PasswordField),
 	)

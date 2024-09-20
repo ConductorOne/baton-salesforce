@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 func TestConfigs(t *testing.T) {
 	test.ExerciseTestCasesFromExpressions(
 		t,
-		Configuration,
+		ConfigurationSchema,
 		nil,
 		ustrings.ParseFlags,
 		[]test.TestCaseFromExpression{

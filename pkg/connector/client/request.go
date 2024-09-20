@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -12,6 +13,10 @@ import (
 )
 
 var ObjectNotFound = errors.New("Salesforce object does not exists")
+var CredentialError = errors.New(
+	"the provided user credentials need more permissions in Salesforce." +
+		" Make sure the user has the \"View Setup and Configuration\" permission",
+)
 
 func getQueryString(
 	q *SalesforceQuery,
@@ -53,16 +58,11 @@ func (c *SalesforceClient) query(
 		return nil, "", nil, err
 	}
 
-	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
 	records, err := c.client.Query(queryString)
 	ratelimitData := c.salesforceTransport.rateLimit
+	err = interceptError(ctx, queryString, err)
 	if err != nil {
-		logger.Error(
-			"salesforce-connector: error querying salesforce",
-			zap.String("query", queryString),
-			zap.Error(err),
-		)
 		return nil, "", ratelimitData, err
 	}
 
@@ -71,6 +71,43 @@ func (c *SalesforceClient) query(
 		nextToken = records.NextRecordsURL
 	}
 	return records.Records, nextToken, ratelimitData, nil
+}
+
+// interceptError - intercept errors from Simpleforce and bubble up
+// better messages for know issues.
+func interceptError(
+	ctx context.Context,
+	query string,
+	err error,
+) error {
+	logger := ctxzap.Extract(ctx)
+
+	// Short-circuit if there is no error.
+	if err == nil {
+		return nil
+	}
+
+	found, regexErr := regexp.MatchString(
+		"Object type '[^']+' is not supported",
+		err.Error(),
+	)
+	if regexErr != nil {
+		return regexErr
+	}
+
+	if found {
+		logger.Info(
+			"salesforce-connector: client lacking permissions for query",
+			zap.String("query", query),
+		)
+		return CredentialError
+	}
+	logger.Error(
+		"salesforce-connector: error querying salesforce",
+		zap.String("query", query),
+		zap.Error(err),
+	)
+	return err
 }
 
 func (c *SalesforceClient) getSObject(

@@ -50,6 +50,7 @@ func userResource(
 		resource.WithUserProfile(profile),
 		resource.WithEmail(email, true),
 		resource.WithStatus(status),
+		resource.WithUserLogin(user.Username),
 	}
 
 	newUserResource, err := resource.NewUserResource(

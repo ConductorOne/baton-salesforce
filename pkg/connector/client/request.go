@@ -21,14 +21,8 @@ func getQueryString(
 	if paginationPath != "" {
 		return paginationPath
 	}
-
-	if pageSize <= 0 {
-		pageSize = PageSizeDefault
-	}
-
 	return q.
 		OrderBy(SalesforcePK).
-		Limit(pageSize).
 		String()
 }
 

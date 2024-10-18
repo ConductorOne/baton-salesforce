@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/simpleforce"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/simpleforce/simpleforce"
 	"go.uber.org/zap"
 )
 

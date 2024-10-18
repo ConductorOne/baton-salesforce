@@ -20,9 +20,9 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/conductorone/simpleforce"
 	"github.com/google/uuid"
 	_ "github.com/proullon/ramsql/driver"
-	"github.com/simpleforce/simpleforce"
 	"golang.org/x/oauth2"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -261,7 +261,6 @@ func handleDelete(db *sql.DB, request *http.Request) error {
 	if count == 0 {
 		return fmt.Errorf("resource not found")
 	}
-
 	return err
 }
 

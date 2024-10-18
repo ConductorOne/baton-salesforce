@@ -22,11 +22,11 @@ func TestRolesList(t *testing.T) {
 	defer test.TearDownDB(db)
 	defer server.Close()
 
-	confluenceClient, err := test.Client(ctx, server.URL)
+	salesforceClient, err := test.Client(ctx, server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := newRoleBuilder(confluenceClient)
+	c := newRoleBuilder(salesforceClient)
 
 	t.Run("should get roles with pagination", func(t *testing.T) {
 		resources := make([]*v2.Resource, 0)

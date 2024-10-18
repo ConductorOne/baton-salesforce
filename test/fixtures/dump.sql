@@ -17,7 +17,7 @@ CREATE TABLE PermissionSetAssignment (
     Id TEXT PRIMARY KEY,
     PermissionSetId TEXT,
     AssigneeId TEXT,
-    IsActive INTEGER
+    IsActive INT
 );
 
 CREATE TABLE PermissionSet (

@@ -191,6 +191,9 @@ github.com/conductorone/baton-sdk/pkg/uhttp
 github.com/conductorone/baton-sdk/pkg/us3
 github.com/conductorone/baton-sdk/pkg/ustrings
 github.com/conductorone/baton-sdk/pkg/utls
+# github.com/conductorone/simpleforce v0.0.4
+## explicit; go 1.21
+github.com/conductorone/simpleforce
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
@@ -345,9 +348,6 @@ github.com/shirou/gopsutil/v3/process
 # github.com/shoenig/go-m1cpu v0.1.6
 ## explicit; go 1.20
 github.com/shoenig/go-m1cpu
-# github.com/simpleforce/simpleforce v0.0.0-20220429021116-acf4ac67ef68
-## explicit; go 1.17
-github.com/simpleforce/simpleforce
 # github.com/sourcegraph/conc v0.3.0
 ## explicit; go 1.19
 github.com/sourcegraph/conc

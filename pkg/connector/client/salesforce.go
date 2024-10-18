@@ -10,8 +10,8 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/conductorone/simpleforce"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"github.com/simpleforce/simpleforce"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
@@ -80,7 +80,6 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		simpleforce.DefaultAPIVersion,
 	)
 
-	// Inject my own HTTP Client.
 	httpClient, err := uhttp.NewClient(
 		ctx,
 		uhttp.WithLogger(
@@ -99,6 +98,14 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		base:      httpClient.Transport,
 		rateLimit: &v2.RateLimitDescription{},
 	}
+
+	httpClient.Transport = &interceptedTransport
+	wrapper, err := uhttp.NewBaseHttpClientWithContext(ctx, httpClient)
+	if err != nil {
+		return fmt.Errorf("creating HTTP wrapper failed: %w", err)
+	}
+
+	simpleClient.SetHttpClient(wrapper)
 
 	// Oauth takes precedence over username, password.
 	if c.TokenSource != nil {
@@ -120,9 +127,6 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 			return err
 		}
 	}
-
-	httpClient.Transport = &interceptedTransport
-	simpleClient.SetHttpClient(httpClient)
 	c.client = simpleClient
 	c.salesforceTransport = &interceptedTransport
 	c.initialized = true

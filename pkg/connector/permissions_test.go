@@ -9,6 +9,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,6 +93,9 @@ func TestPermissionsList(t *testing.T) {
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, revokeAnnotations)
 
+		if err := uhttp.ClearCaches(ctx); err != nil {
+			t.Fatal(err)
+		}
 		grantsAfter, nextToken, grantsAnnotations, err := c.Grants(ctx, permission, &pagination.Token{})
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, grantsAnnotations)

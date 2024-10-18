@@ -34,18 +34,18 @@ type salesforceResponse struct {
 }
 
 func Client(ctx context.Context, baseUrl string) (*client.SalesforceClient, error) {
-	confluenceClient := client.New(
+	salesforceClient := client.New(
 		baseUrl,
 		MockTokenSource(),
 		"",
 		"",
 		"",
 	)
-	err := confluenceClient.Initialize(ctx)
+	err := salesforceClient.Initialize(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return confluenceClient, nil
+	return salesforceClient, nil
 }
 
 func MockTokenSource() oauth2.TokenSource {

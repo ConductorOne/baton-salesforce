@@ -21,11 +21,11 @@ func TestUsersList(t *testing.T) {
 		defer test.TearDownDB(db)
 		defer server.Close()
 
-		confluenceClient, err := test.Client(ctx, server.URL)
+		salesforceClient, err := test.Client(ctx, server.URL)
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := newUserBuilder(confluenceClient, false)
+		c := newUserBuilder(salesforceClient, false)
 
 		resources := make([]*v2.Resource, 0)
 		pToken := pagination.Token{

@@ -112,7 +112,7 @@ func (c *SalesforceClient) getSObject(
 func (c *SalesforceClient) CreateObject(
 	ctx context.Context,
 	tableName string,
-	values map[string]string,
+	values map[string]interface{},
 ) (*v2.RateLimitDescription, error) {
 	logger := ctxzap.Extract(ctx)
 	logger.Debug(

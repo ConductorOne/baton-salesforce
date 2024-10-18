@@ -89,7 +89,9 @@ func TestRolesList(t *testing.T) {
 			Principal:   user,
 		}
 
-		uhttp.ClearCaches(ctx)
+		if err := uhttp.ClearCaches(ctx); err != nil {
+			t.Fatal(err)
+		}
 		revokeAnnotations, err := c.Revoke(ctx, &grant)
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, revokeAnnotations)

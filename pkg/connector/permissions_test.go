@@ -92,7 +92,10 @@ func TestPermissionsList(t *testing.T) {
 		revokeAnnotations, err := c.Revoke(ctx, &grant)
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, revokeAnnotations)
-		uhttp.ClearCaches(ctx)
+
+		if err := uhttp.ClearCaches(ctx); err != nil {
+			t.Fatal(err)
+		}
 		grantsAfter, nextToken, grantsAnnotations, err := c.Grants(ctx, permission, &pagination.Token{})
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, grantsAnnotations)

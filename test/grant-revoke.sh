@@ -5,7 +5,7 @@ set -exo pipefail
  # CI test for use with CI AWS account
 if [ -z "$COMMAND" ]; then
   echo "COMMAND not set. using baton-salesforce"
-  COMMAND=baton-aws
+  COMMAND=baton-salesforce
 fi
 if [ -z "$BATON" ]; then
   echo "BATON not set. using baton"

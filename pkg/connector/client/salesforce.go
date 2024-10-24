@@ -654,7 +654,6 @@ func (c *SalesforceClient) AddUserToPermissionSet(
 		map[string]interface{}{
 			"AssigneeId":      userId,
 			"PermissionSetId": permissionSetId,
-			"IsActive":        1,
 		},
 	)
 }

@@ -187,6 +187,20 @@ func getIsActive(record simpleforce.SObject) (bool, error) {
 	}
 }
 
+func getBoolField(record simpleforce.SObject, field string) (bool, error) {
+	value := record.InterfaceField(field)
+	switch v := value.(type) {
+	case bool:
+		return v, nil
+	case string:
+		return v == "true", nil
+	case int, float64:
+		return v == 1, nil
+	default:
+		return false, fmt.Errorf("salesforce-connector: unexpected field %s type, %s", field, value)
+	}
+}
+
 func shouldSkipSyncingUserType(
 	ctx context.Context,
 	user simpleforce.SObject,

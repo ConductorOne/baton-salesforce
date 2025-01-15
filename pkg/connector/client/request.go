@@ -236,3 +236,90 @@ func (c *SalesforceClient) clearValue(
 
 	return c.updateUser(user, fieldName, "")
 }
+
+func (c *SalesforceClient) GetPermissionSetGroups(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]*PermissionSetGroup,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TablePermissionSetGroup)
+
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+	permissionSetGroups := make([]*PermissionSetGroup, 0)
+	for _, record := range records {
+		hasActivationRequired, err := getBoolField(record, "HasActivationRequired")
+		if err != nil {
+			return nil, "", ratelimitData, err
+		}
+
+		isDeleted, err := getBoolField(record, "IsDeleted")
+		if err != nil {
+			return nil, "", ratelimitData, err
+		}
+
+		permissionSetGroups = append(permissionSetGroups, &PermissionSetGroup{
+			ID:                    record.ID(),
+			Description:           record.StringField("Description"),
+			DeveloperName:         record.StringField("DeveloperName"),
+			HasActivationRequired: hasActivationRequired,
+			IsDeleted:             isDeleted,
+			Language:              record.StringField("Language"),
+			MasterLabel:           record.StringField("MasterLabel"),
+			NamespacePrefix:       record.StringField("NamespacePrefix"),
+		})
+	}
+	return permissionSetGroups, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetPermissionSetGroupComponent(
+	ctx context.Context,
+	permissionSetGroupId string,
+	pageToken string,
+	pageSize int,
+) (
+	[]*PermissionSetGroupComponent,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TablePermissionSetGroupComponent).
+		WhereEq("PermissionSetGroupId", permissionSetGroupId)
+
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+	permissionSetGroupComponents := make([]*PermissionSetGroupComponent, 0)
+	for _, record := range records {
+		isDeleted, err := getBoolField(record, "IsDeleted")
+		if err != nil {
+			return nil, "", ratelimitData, err
+		}
+
+		permissionSetGroupComponents = append(permissionSetGroupComponents, &PermissionSetGroupComponent{
+			ID:                   record.ID(),
+			IsDeleted:            isDeleted,
+			PermissionSetGroupID: record.StringField("PermissionSetGroupId"),
+			PermissionSetID:      record.StringField("PermissionSetId"),
+		})
+	}
+	return permissionSetGroupComponents, paginationUrl, ratelimitData, nil
+}

@@ -22,6 +22,8 @@ const (
 	SalesforceClientID = "ConductorOne"
 	GroupIDPrefix      = "00G"
 	UserIDPrefix       = "005"
+
+	trueConst = "true"
 )
 
 type SalesforceClient struct {
@@ -179,7 +181,7 @@ func getIsActive(record simpleforce.SObject) (bool, error) {
 	case bool:
 		return v, nil
 	case string:
-		return v == "true", nil
+		return v == trueConst, nil
 	case int, float64:
 		return v == 1, nil
 	default:
@@ -193,7 +195,7 @@ func getBoolField(record simpleforce.SObject, field string) (bool, error) {
 	case bool:
 		return v, nil
 	case string:
-		return v == "true", nil
+		return v == trueConst, nil
 	case int, float64:
 		return v == 1, nil
 	default:
@@ -521,7 +523,7 @@ func (c *SalesforceClient) GetPermissionSetAssignments(
 			UserID:          record.StringField("AssigneeId"),
 			// TODO(marcos): Is this a sane way to decide if the permission set
 			//  assignment is still active? Should we be using `IsActive`?
-			IsActive: record.StringField("AssigneeId") == "true",
+			IsActive: record.StringField("AssigneeId") == trueConst,
 		})
 	}
 	return assignments, paginationUrl, ratelimitData, nil

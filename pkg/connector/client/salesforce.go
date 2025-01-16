@@ -717,3 +717,159 @@ func (c *SalesforceClient) RemoveUserFromRole(
 ) (*v2.RateLimitDescription, error) {
 	return c.clearValue(ctx, userId, "UserRoleId", roleId)
 }
+
+func (c *SalesforceClient) GetPermissionSetGroups(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]*PermissionSetGroup,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TablePermissionSetGroup)
+
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+	permissionSetGroups := make([]*PermissionSetGroup, 0)
+	for _, record := range records {
+		hasActivationRequired, err := getBoolField(record, "HasActivationRequired")
+		if err != nil {
+			return nil, "", ratelimitData, err
+		}
+
+		isDeleted, err := getBoolField(record, "IsDeleted")
+		if err != nil {
+			return nil, "", ratelimitData, err
+		}
+
+		permissionSetGroups = append(permissionSetGroups, &PermissionSetGroup{
+			ID:                    record.ID(),
+			Description:           record.StringField("Description"),
+			DeveloperName:         record.StringField("DeveloperName"),
+			HasActivationRequired: hasActivationRequired,
+			IsDeleted:             isDeleted,
+			Language:              record.StringField("Language"),
+			MasterLabel:           record.StringField("MasterLabel"),
+			NamespacePrefix:       record.StringField("NamespacePrefix"),
+		})
+	}
+	return permissionSetGroups, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetPermissionSetGroupComponent(
+	ctx context.Context,
+	permissionSetGroupId string,
+	pageToken string,
+	pageSize int,
+) (
+	[]*PermissionSetGroupComponent,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TablePermissionSetGroupComponent).
+		WhereEq("PermissionSetGroupId", permissionSetGroupId)
+
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+	permissionSetGroupComponents := make([]*PermissionSetGroupComponent, 0)
+	for _, record := range records {
+		isDeleted, err := getBoolField(record, "IsDeleted")
+		if err != nil {
+			return nil, "", ratelimitData, err
+		}
+
+		permissionSetGroupComponents = append(permissionSetGroupComponents, &PermissionSetGroupComponent{
+			ID:                   record.ID(),
+			IsDeleted:            isDeleted,
+			PermissionSetGroupID: record.StringField("PermissionSetGroupId"),
+			PermissionSetID:      record.StringField("PermissionSetId"),
+		})
+	}
+	return permissionSetGroupComponents, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetOnePermissionSetGroupComponent(
+	ctx context.Context,
+	permissionSetGroupId string,
+	permissionSetId string,
+) (
+	*PermissionSetGroupComponent,
+	error,
+) {
+	query := NewQuery(TablePermissionSetGroupComponent).
+		WhereEq("PermissionSetGroupId", permissionSetGroupId).
+		WhereEq("PermissionSetId", permissionSetId)
+
+	records, _, _, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(records) != 1 {
+		return nil, fmt.Errorf("expected 1 record, got %d", len(records))
+	}
+
+	record := records[0]
+
+	isDeleted, err := getBoolField(record, "IsDeleted")
+	if err != nil {
+		return nil, err
+	}
+
+	permission := &PermissionSetGroupComponent{
+		ID:                   record.ID(),
+		IsDeleted:            isDeleted,
+		PermissionSetGroupID: record.StringField("PermissionSetGroupId"),
+		PermissionSetID:      record.StringField("PermissionSetId"),
+	}
+
+	return permission, nil
+}
+
+func (c *SalesforceClient) CreatePermissionSetGroupComponent(
+	ctx context.Context,
+	permissionSetGroupId string,
+	permissionSetId string,
+) (*v2.RateLimitDescription, error) {
+	return c.CreateObject(
+		ctx,
+		TablePermissionSetGroupComponent,
+		map[string]interface{}{
+			"PermissionSetGroupId": permissionSetGroupId,
+			"PermissionSetId":      permissionSetId,
+		},
+	)
+}
+
+func (c *SalesforceClient) DeletePermissionSetGroupComponent(
+	ctx context.Context,
+	permissionSetGroupComponentId string,
+) (*v2.RateLimitDescription, error) {
+	return c.DeleteObject(
+		ctx,
+		TablePermissionSetGroupComponent,
+		permissionSetGroupComponentId,
+	)
+}

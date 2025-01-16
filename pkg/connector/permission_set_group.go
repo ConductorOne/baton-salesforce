@@ -111,3 +111,59 @@ func newPermissionSetGroupBuilder(client *client.SalesforceClient) *permissionSe
 		client: client,
 	}
 }
+
+func (p *permissionSetGroupBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
+	if resource.Id.ResourceType == resourceTypePermissionSet.Id {
+		permissionSetID := resource.Id.Resource
+		permissionSetGroupID := entitlement.Resource.Id.Resource
+
+		_, err := p.client.CreatePermissionSetGroupComponent(
+			ctx,
+			permissionSetGroupID,
+			permissionSetID,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		permissionSetResourceID, err := rs.NewResourceID(resourceTypePermissionSet, permissionSetID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		permissionGrant := grant.NewGrant(
+			resource,
+			permissionSetGroupAssignmentEntitlementName,
+			permissionSetResourceID,
+		)
+
+		return []*v2.Grant{permissionGrant}, nil, nil
+	}
+
+	return nil, nil, fmt.Errorf("resource type %s is not supported", resource.Id.ResourceType)
+}
+
+func (p *permissionSetGroupBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
+	if grant.Principal.Id.ResourceType == resourceTypePermissionSet.Id {
+		permissionSetID := grant.Principal.Id.Resource
+		permissionSetGroupID := grant.Entitlement.Resource.Id.Resource
+
+		component, err := p.client.GetOnePermissionSetGroupComponent(ctx, permissionSetGroupID, permissionSetID)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = p.client.DeleteObject(
+			ctx,
+			permissionSetGroupID,
+			component.ID,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf("resource type %s is not supported", grant.Principal.Id.ResourceType)
+}

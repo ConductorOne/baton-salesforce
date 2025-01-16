@@ -117,7 +117,16 @@ func (p *permissionSetGroupBuilder) Grant(ctx context.Context, resource *v2.Reso
 		permissionSetID := resource.Id.Resource
 		permissionSetGroupID := entitlement.Resource.Id.Resource
 
-		_, err := p.client.CreatePermissionSetGroupComponent(
+		component, err := p.client.GetOnePermissionSetGroupComponent(ctx, permissionSetGroupID, permissionSetID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if component != nil {
+			return nil, annotations.New(&v2.GrantAlreadyExists{}), nil
+		}
+
+		_, err = p.client.CreatePermissionSetGroupComponent(
 			ctx,
 			permissionSetGroupID,
 			permissionSetID,
@@ -132,7 +141,7 @@ func (p *permissionSetGroupBuilder) Grant(ctx context.Context, resource *v2.Reso
 		}
 
 		permissionGrant := grant.NewGrant(
-			resource,
+			entitlement.Resource,
 			permissionSetGroupAssignmentEntitlementName,
 			permissionSetResourceID,
 		)
@@ -153,9 +162,13 @@ func (p *permissionSetGroupBuilder) Revoke(ctx context.Context, grant *v2.Grant)
 			return nil, err
 		}
 
+		if component == nil {
+			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+		}
+
 		_, err = p.client.DeleteObject(
 			ctx,
-			permissionSetGroupID,
+			client.TablePermissionSetGroupComponent,
 			component.ID,
 		)
 		if err != nil {

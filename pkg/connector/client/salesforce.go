@@ -827,6 +827,10 @@ func (c *SalesforceClient) GetOnePermissionSetGroupComponent(
 		return nil, err
 	}
 
+	if len(records) == 0 {
+		return nil, nil
+	}
+
 	if len(records) != 1 {
 		return nil, fmt.Errorf("expected 1 record, got %d", len(records))
 	}

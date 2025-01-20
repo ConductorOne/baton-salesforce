@@ -236,3 +236,50 @@ func (c *SalesforceClient) clearValue(
 
 	return c.updateUser(user, fieldName, "")
 }
+
+// clearOneValue clears a single value from a user record.
+func (c *SalesforceClient) clearOneValue(
+	ctx context.Context,
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	l := ctxzap.Extract(ctx)
+
+	user, ratelimitData, err := c.getOneUser(ctx, userId)
+	if err != nil {
+		return ratelimitData, err
+	}
+
+	if user.StringField(fieldName) != fieldValue {
+		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
+	}
+
+	copySObject, err := c.copySObject(user, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	l.Info("Clearing value", zap.Any("object", copySObject))
+
+	return c.updateUser(copySObject, fieldName, "")
+}
+
+func (c *SalesforceClient) copySObject(obj *simpleforce.SObject, allowedFields ...string) (*simpleforce.SObject, error) {
+	response := c.client.SObject(obj.Type())
+
+	response.Set("Id", obj.ID())
+	if obj.ExternalIDFieldName() != "" {
+		response.Set(obj.ExternalIDFieldName(), obj.ExternalID())
+	}
+
+	for _, field := range allowedFields {
+		if obj.StringField(field) == "" {
+			continue
+		}
+
+		response.Set(field, obj.StringField(field))
+	}
+
+	return response, nil
+}

@@ -187,7 +187,7 @@ github.com/conductorone/baton-sdk/pkg/uhttp
 github.com/conductorone/baton-sdk/pkg/us3
 github.com/conductorone/baton-sdk/pkg/ustrings
 github.com/conductorone/baton-sdk/pkg/utls
-# github.com/conductorone/simpleforce v0.0.4
+# github.com/conductorone/simpleforce v0.0.5
 ## explicit; go 1.21
 github.com/conductorone/simpleforce
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc

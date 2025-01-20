@@ -52,8 +52,8 @@ github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDk
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/conductorone/baton-sdk v0.2.62 h1:Y9RdYlm8RwFiNm5qFF9yiFfwxHwHPZ5kPM6VnrtJ+3Q=
 github.com/conductorone/baton-sdk v0.2.62/go.mod h1:s8Cj7lufoHVNz4cFM6etem0yjJgorl42jMhHrfM2sFA=
-github.com/conductorone/simpleforce v0.0.4 h1:ESTQizToL42cFbXUV6P1LCvVXNA2VKk09zy15ROUjcY=
-github.com/conductorone/simpleforce v0.0.4/go.mod h1:Jmkg8rt9tQL9zQJ6fW8BvD3SK3eksCDyoDyXxu2ZqNY=
+github.com/conductorone/simpleforce v0.0.5 h1:KuAa1s17jLGgN34inFSiBv5/sk04lBssv2vnvSeB88w=
+github.com/conductorone/simpleforce v0.0.5/go.mod h1:Jmkg8rt9tQL9zQJ6fW8BvD3SK3eksCDyoDyXxu2ZqNY=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

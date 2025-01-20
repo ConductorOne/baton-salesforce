@@ -1,11 +1,14 @@
 package simpleforce
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"log"
+	"net/http"
 
-	"github.com/pkg/errors"
+	"errors"
 )
 
 var (
@@ -37,7 +40,7 @@ func (err SalesforceError) Error() string {
 	return err.Message
 }
 
-//Need to get information out of this package.
+// Need to get information out of this package.
 func ParseSalesforceError(statusCode int, responseBody []byte) (err error) {
 	jsonError := jsonError{}
 	err = json.Unmarshal(responseBody, &jsonError)
@@ -71,4 +74,18 @@ func ParseSalesforceError(statusCode int, responseBody []byte) (err error) {
 		Message:  string(responseBody),
 		HttpCode: statusCode,
 	}
+}
+
+func parseUhttpError(resp *http.Response, err error) error {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		log.Println(logPrefix, "request failed,", resp.StatusCode)
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		newStr := buf.String()
+		theError := errors.Join(err, ParseSalesforceError(resp.StatusCode, buf.Bytes()))
+		log.Println(logPrefix, "Failed resp.body: ", newStr)
+		return theError
+	}
+
+	return err
 }

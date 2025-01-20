@@ -4,7 +4,7 @@ go 1.22.5
 
 require (
 	github.com/conductorone/baton-sdk v0.2.62
-	github.com/conductorone/simpleforce v0.0.4
+	github.com/conductorone/simpleforce v0.0.5
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/huandu/go-sqlbuilder v1.28.1

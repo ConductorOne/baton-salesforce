@@ -699,7 +699,7 @@ func (c *SalesforceClient) RemoveUserFromProfile(
 	userId string,
 	profileId string,
 ) (*v2.RateLimitDescription, error) {
-	return c.clearValue(ctx, userId, "ProfileId", profileId)
+	return c.clearOneValue(ctx, userId, "ProfileId", profileId)
 }
 
 func (c *SalesforceClient) AddUserToRole(

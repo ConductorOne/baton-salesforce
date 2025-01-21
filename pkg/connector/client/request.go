@@ -219,6 +219,25 @@ func (c *SalesforceClient) setValue(
 	return c.updateUser(user, fieldName, fieldValue)
 }
 
+func (c *SalesforceClient) setOneValue(
+	ctx context.Context,
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user, ratelimitData, err := c.getOneUser(ctx, userId)
+	if err != nil {
+		return ratelimitData, err
+	}
+
+	copySObject, err := c.copySObject(user, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.updateUser(copySObject, fieldName, fieldValue)
+}
+
 func (c *SalesforceClient) clearValue(
 	ctx context.Context,
 	userId string,
@@ -244,8 +263,6 @@ func (c *SalesforceClient) clearOneValue(
 	fieldName string,
 	fieldValue string,
 ) (*v2.RateLimitDescription, error) {
-	l := ctxzap.Extract(ctx)
-
 	user, ratelimitData, err := c.getOneUser(ctx, userId)
 	if err != nil {
 		return ratelimitData, err
@@ -259,8 +276,6 @@ func (c *SalesforceClient) clearOneValue(
 	if err != nil {
 		return nil, err
 	}
-
-	l.Info("Clearing value", zap.Any("object", copySObject))
 
 	return c.updateUser(copySObject, fieldName, "")
 }

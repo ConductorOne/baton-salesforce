@@ -5,15 +5,17 @@ import (
 )
 
 const (
-	SalesforcePK                   = "Id"
-	allFieldsKeyword               = "Fields(standard)"
-	TableNameGroupMemberships      = "GroupMember"
-	TableNameGroups                = "Group"
-	TableNamePermissionAssignments = "PermissionSetAssignment"
-	TableNamePermissionsSets       = "PermissionSet"
-	TableNameProfiles              = "Profile"
-	TableNameRoles                 = "UserRole"
-	TableNameUsers                 = "User"
+	SalesforcePK                     = "Id"
+	allFieldsKeyword                 = "Fields(standard)"
+	TableNameGroupMemberships        = "GroupMember"
+	TableNameGroups                  = "Group"
+	TableNamePermissionAssignments   = "PermissionSetAssignment"
+	TableNamePermissionsSets         = "PermissionSet"
+	TableNameProfiles                = "Profile"
+	TableNameRoles                   = "UserRole"
+	TableNameUsers                   = "User"
+	TablePermissionSetGroup          = "PermissionSetGroup"
+	TablePermissionSetGroupComponent = "PermissionSetGroupComponent"
 )
 
 var TableNamesToFieldsMapping = map[string][]string{
@@ -55,6 +57,20 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"Type",
 		"RelatedId",
 		"Related.Name",
+	},
+	TablePermissionSetGroup: {
+		"IsDeleted",
+		"DeveloperName",
+		"Language",
+		"MasterLabel",
+		"NamespacePrefix",
+		"Description",
+		"HasActivationRequired",
+	},
+	TablePermissionSetGroupComponent: {
+		"IsDeleted",
+		"PermissionSetGroupId",
+		"PermissionSetId",
 	},
 }
 

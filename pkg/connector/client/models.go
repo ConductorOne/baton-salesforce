@@ -66,3 +66,21 @@ type PermissionSetAssignment struct {
 	PermissionSetID string
 	IsActive        bool
 }
+
+type PermissionSetGroup struct {
+	ID                    string
+	IsDeleted             bool
+	DeveloperName         string
+	Language              string
+	MasterLabel           string
+	NamespacePrefix       string
+	Description           string
+	HasActivationRequired bool
+}
+
+type PermissionSetGroupComponent struct {
+	ID                   string
+	IsDeleted            bool
+	PermissionSetGroupID string
+	PermissionSetID      string
+}

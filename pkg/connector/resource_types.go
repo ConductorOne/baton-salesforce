@@ -38,4 +38,9 @@ var (
 		},
 		Annotations: annotationsForUserResourceType(),
 	}
+	resourceTypePermissionSetGroup = &v2.ResourceType{
+		Id:          "permission_set_group",
+		DisplayName: "Permission Set Group",
+		Traits:      []v2.ResourceType_Trait{},
+	}
 )

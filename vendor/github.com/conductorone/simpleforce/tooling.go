@@ -1,9 +1,12 @@
 package simpleforce
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+	"net/http"
 	"net/url"
 )
 
@@ -29,7 +32,9 @@ func (client *Client) UnTooling() {
 }
 
 // ExecuteAnonymous executes a body of Apex code
-func (client *Client) ExecuteAnonymous(apexBody string) (*ExecuteAnonymousResult, error) {
+func (client *Client) ExecuteAnonymous(ctx context.Context, apexBody string) (*ExecuteAnonymousResult, error) {
+	l := ctxzap.Extract(ctx)
+
 	if !client.isLoggedIn() {
 		return nil, ErrAuthentication
 	}
@@ -39,9 +44,9 @@ func (client *Client) ExecuteAnonymous(apexBody string) (*ExecuteAnonymousResult
 	baseURL := client.instanceURL
 	endpoint := fmt.Sprintf(formatString, baseURL, client.apiVersion, url.QueryEscape(apexBody))
 
-	data, err := client.httpRequest("GET", endpoint, nil)
+	data, err := client.httpRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		log.Println(logPrefix, "HTTP GET request failed:", endpoint)
+		l.Error("HTTP GET request failed", zap.String("endpoint", endpoint))
 		return nil, err
 	}
 

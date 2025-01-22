@@ -76,11 +76,19 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	}
 	logger.Debug("Initializing Salesforce client")
 
-	simpleClient := simpleforce.NewClient(
+	simpleClient, err := simpleforce.NewClient(
+		ctx,
 		c.baseUrl,
 		SalesforceClientID,
 		simpleforce.DefaultAPIVersion,
 	)
+	if err != nil {
+		logger.Error(
+			"salesforce-connector: error creating salesforce client",
+			zap.Error(err),
+		)
+		return err
+	}
 
 	httpClient, err := uhttp.NewClient(
 		ctx,
@@ -120,6 +128,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	} else {
 		logger.Debug("Salesforce client using username and password")
 		err = simpleClient.LoginPassword(
+			ctx,
 			c.Username,
 			c.Password,
 			c.securityToken,
@@ -146,6 +155,7 @@ func (c *SalesforceClient) GetInfo(ctx context.Context) (
 	}
 
 	response, err := c.client.ApexREST(
+		ctx,
 		http.MethodGet,
 		InfoPath,
 		nil,
@@ -301,9 +311,9 @@ func (c *SalesforceClient) GetUserRoles(
 // getGroupName - "Role groups" (i.e. groups that were created to group the
 // users with that role) have no names of their own. Here we need to get the
 // Role data in a second query.
-func getGroupName(record simpleforce.SObject) string {
+func getGroupName(ctx context.Context, record simpleforce.SObject) string {
 	var name string
-	role := record.SObjectField("Name", "Related")
+	role := record.SObjectField(ctx, "Name", "Related")
 	if role != nil {
 		name = role.StringField("Name")
 	}
@@ -338,7 +348,7 @@ func (c *SalesforceClient) GetGroups(
 	for _, record := range records {
 		group := &SalesforceGroup{
 			ID:            record.ID(),
-			Name:          getGroupName(record),
+			Name:          getGroupName(ctx, record),
 			RelatedID:     record.StringField("RelatedId"),
 			DeveloperName: record.StringField("DeveloperName"),
 			Type:          record.StringField("Type"),
@@ -349,9 +359,9 @@ func (c *SalesforceClient) GetGroups(
 	return groups, paginationUrl, ratelimitData, nil
 }
 
-func getPermissionSetName(record simpleforce.SObject) string {
+func getPermissionSetName(ctx context.Context, record simpleforce.SObject) string {
 	var name string
-	profile := record.SObjectField("Profile", "Profile")
+	profile := record.SObjectField(ctx, "Profile", "Profile")
 	if profile != nil {
 		name = profile.StringField("Name")
 	}
@@ -390,7 +400,7 @@ func (c *SalesforceClient) GetPermissionSets(
 	for _, record := range records {
 		permissionSet := &SalesforcePermission{
 			ID:        record.ID(),
-			Name:      getPermissionSetName(record),
+			Name:      getPermissionSetName(ctx, record),
 			Label:     record.StringField("Label"),
 			Type:      record.StringField("Type"),
 			ProfileID: record.StringField("ProfileId"),

@@ -2,8 +2,6 @@ module github.com/conductorone/baton-salesforce
 
 go 1.22.10
 
-toolchain go1.23.4
-
 require (
 	github.com/conductorone/baton-sdk v0.2.63
 	github.com/conductorone/simpleforce v0.0.6

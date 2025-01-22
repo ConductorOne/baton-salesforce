@@ -2,13 +2,14 @@ package simpleforce
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"html"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -67,7 +68,7 @@ func (client *Client) SetSidLoc(sid string, loc string) {
 }
 
 // Query runs an SOQL query. q could either be the SOQL string or the nextRecordsURL.
-func (client *Client) Query(q string) (*QueryResult, error) {
+func (client *Client) Query(ctx context.Context, q string) (*QueryResult, error) {
 	if !client.isLoggedIn() {
 		return nil, ErrAuthentication
 	}
@@ -86,9 +87,8 @@ func (client *Client) Query(q string) (*QueryResult, error) {
 		u = fmt.Sprintf(formatString, baseURL, client.apiVersion, url.QueryEscape(q))
 	}
 
-	data, err := client.httpRequest("GET", u, nil)
+	data, err := client.httpRequest(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		log.Println(logPrefix, "HTTP GET request failed:", u)
 		return nil, err
 	}
 
@@ -107,16 +107,18 @@ func (client *Client) Query(q string) (*QueryResult, error) {
 }
 
 // ApexREST executes a custom rest request with the provided method, path, and body. The path is relative to the domain.
-func (client *Client) ApexREST(method, path string, requestBody io.Reader) ([]byte, error) {
+func (client *Client) ApexREST(ctx context.Context, method, path string, requestBody io.Reader) ([]byte, error) {
+	l := ctxzap.Extract(ctx)
+
 	if !client.isLoggedIn() {
 		return nil, ErrAuthentication
 	}
 
 	u := fmt.Sprintf("%s/%s", client.instanceURL, path)
 
-	data, err := client.httpRequest(method, u, requestBody)
+	data, err := client.httpRequest(ctx, method, u, requestBody)
 	if err != nil {
-		log.Println(logPrefix, fmt.Sprintf("HTTP %s request failed:", method), u)
+		l.Error("HTTP GET request failed", zap.String("url", u), zap.Error(err))
 		return nil, err
 	}
 
@@ -141,7 +143,9 @@ func (client *Client) isLoggedIn() bool {
 // LoginPassword signs into salesforce using password. token is optional if trusted IP is configured.
 // Ref: https://developer.salesforce.com/docs/atlas.en-us.214.0.api_rest.meta/api_rest/intro_understanding_username_password_oauth_flow.htm
 // Ref: https://developer.salesforce.com/docs/atlas.en-us.214.0.api.meta/api/sforce_api_calls_login.htm
-func (client *Client) LoginPassword(username, password, token string) error {
+func (client *Client) LoginPassword(ctx context.Context, username, password, token string) error {
+	l := ctxzap.Extract(ctx)
+
 	// Use the SOAP interface to acquire session ID with username, password, and token.
 	// Do not use REST interface here as REST interface seems to have strong checking against client_id, while the SOAP
 	// interface allows a non-exist placeholder client_id to be used.
@@ -166,10 +170,10 @@ func (client *Client) LoginPassword(username, password, token string) error {
         </env:Envelope>`
 	soapBody = fmt.Sprintf(soapBody, client.clientID, username, html.EscapeString(password), token)
 
-	url := fmt.Sprintf("%s/services/Soap/u/%s", client.baseURL, client.apiVersion)
-	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(soapBody))
+	requestUrl := fmt.Sprintf("%s/services/Soap/u/%s", client.baseURL, client.apiVersion)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestUrl, strings.NewReader(soapBody))
 	if err != nil {
-		log.Println(logPrefix, "error occurred creating request,", err)
+		l.Error("error occurred creating request", zap.Error(err))
 		return err
 	}
 	req.Header.Add("Content-Type", "text/xml")
@@ -178,25 +182,26 @@ func (client *Client) LoginPassword(username, password, token string) error {
 
 	resp, err := client.httpClient.Do(req)
 	if err != nil {
-		log.Println(logPrefix, "error occurred submitting request,", err)
+		l.Error("error occurred submitting request", zap.Error(err))
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Println(logPrefix, "request failed,", resp.StatusCode)
+		l.Error("request failed", zap.Int("status_code", resp.StatusCode))
+
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(resp.Body)
+		_, _ = buf.ReadFrom(resp.Body)
 		newStr := buf.String()
-		log.Println(logPrefix, "Failed resp.body: ", newStr)
+		l.Error("Failed resp.body", zap.String("body", newStr))
 		theError := ParseSalesforceError(resp.StatusCode, buf.Bytes())
 		return theError
 	}
 
-	respData, err := ioutil.ReadAll(resp.Body)
+	respData, err := io.ReadAll(resp.Body)
 
 	if err != nil {
-		log.Println(logPrefix, "error occurred reading response data,", err)
+		l.Error("error occurred reading response data", zap.Error(err))
 	}
 
 	var loginResponse struct {
@@ -211,7 +216,7 @@ func (client *Client) LoginPassword(username, password, token string) error {
 
 	err = xml.Unmarshal(respData, &loginResponse)
 	if err != nil {
-		log.Println(logPrefix, "error occurred parsing login response,", err)
+		l.Error("error occurred parsing login response", zap.Error(err))
 		return err
 	}
 
@@ -223,13 +228,13 @@ func (client *Client) LoginPassword(username, password, token string) error {
 	client.user.email = loginResponse.UserEmail
 	client.user.fullName = loginResponse.UserFullName
 
-	log.Println(logPrefix, "User", client.user.name, "authenticated.")
+	l.Info("User authenticated", zap.String("user", client.user.name))
 	return nil
 }
 
 // httpRequest executes an HTTP request to the salesforce server and returns the response data in byte buffer.
-func (client *Client) httpRequest(method, url string, body io.Reader) ([]byte, error) {
-	req, err := http.NewRequest(method, url, body)
+func (client *Client) httpRequest(ctx context.Context, method, url string, body io.Reader) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -239,21 +244,15 @@ func (client *Client) httpRequest(method, url string, body io.Reader) ([]byte, e
 
 	resp, err := client.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, parseUhttpError(ctx, resp, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		log.Println(logPrefix, "request failed,", resp.StatusCode)
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(resp.Body)
-		newStr := buf.String()
-		theError := ParseSalesforceError(resp.StatusCode, buf.Bytes())
-		log.Println(logPrefix, "Failed resp.body: ", newStr)
-		return nil, theError
+		return nil, parseUhttpError(ctx, resp, err)
 	}
 
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // makeURL generates a REST API URL based on baseURL, APIVersion of the client.
@@ -264,19 +263,31 @@ func (client *Client) makeURL(req string) string {
 }
 
 // NewClient creates a new instance of the client.
-func NewClient(url, clientID, apiVersion string) *Client {
+func NewClient(ctx context.Context, url, clientID, apiVersion string) (*Client, error) {
+
+	httpClient, err := uhttp.NewClient(ctx, uhttp.WithLogger(true, ctxzap.Extract(ctx)))
+	if err != nil {
+		return nil, err
+	}
+
+	uhttpClient, err := uhttp.NewBaseHttpClientWithContext(ctx, httpClient)
+	if err != nil {
+		return nil, err
+	}
+
 	client := &Client{
 		apiVersion: apiVersion,
 		baseURL:    url,
 		clientID:   clientID,
-		httpClient: &uhttp.BaseHttpClient{},
+		httpClient: uhttpClient,
 	}
 
 	// Remove trailing "/" from base url to prevent "//" when paths are appended
 	if strings.HasSuffix(client.baseURL, "/") {
 		client.baseURL = client.baseURL[:len(client.baseURL)-1]
 	}
-	return client
+
+	return client, nil
 }
 
 func (client *Client) SetHttpClient(c *uhttp.BaseHttpClient) {
@@ -298,6 +309,10 @@ func (client *Client) download(apiPath string, filepath string) error {
 	// Get the data
 	httpClient := client.httpClient
 	req, err := http.NewRequest("GET", fmt.Sprintf("%s%s", strings.TrimRight(client.instanceURL, "/"), apiPath), nil)
+	if err != nil {
+		return err
+	}
+
 	req.Header.Add("Content-Type", "application/json; charset=UTF-8")
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Authorization", "Bearer "+client.sessionID)
@@ -310,7 +325,7 @@ func (client *Client) download(apiPath string, filepath string) error {
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(resp.Body)
+		_, _ = buf.ReadFrom(resp.Body)
 		return fmt.Errorf("ERROR: statuscode: %d, body: %s", resp.StatusCode, buf.String())
 	}
 
@@ -335,12 +350,19 @@ func parseHost(input string) string {
 }
 
 // Get the List of all available objects and their metadata for your organization's data
-func (client *Client) DescribeGlobal() (*SObjectMeta, error) {
+func (client *Client) DescribeGlobal(ctx context.Context) (*SObjectMeta, error) {
+	l := ctxzap.Extract(ctx)
+
 	apiPath := fmt.Sprintf("/services/data/v%s/sobjects", client.apiVersion)
 	baseURL := strings.TrimRight(client.baseURL, "/")
 	url := fmt.Sprintf("%s%s", baseURL, apiPath) // Get the objects
 	httpClient := client.httpClient
-	req, err := http.NewRequest("GET", url, nil)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	req.Header.Add("Content-Type", "application/json; charset=UTF-8")
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Authorization", "Bearer "+client.sessionID)
@@ -352,11 +374,11 @@ func (client *Client) DescribeGlobal() (*SObjectMeta, error) {
 	defer resp.Body.Close()
 
 	var meta SObjectMeta
+	l.Info("status code", zap.Int("status_code", resp.StatusCode), zap.String("url", url))
 
-	respData, err := ioutil.ReadAll(resp.Body)
-	log.Println(logPrefix, fmt.Sprintf("status code %d", resp.StatusCode))
+	respData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println(logPrefix, "error while reading all body")
+		l.Error("Failed to read response body", zap.Error(err))
 	}
 
 	err = json.Unmarshal(respData, &meta)

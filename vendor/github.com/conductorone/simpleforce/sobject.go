@@ -2,8 +2,10 @@ package simpleforce
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"log"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"net/http"
 	"strings"
 
@@ -55,13 +57,13 @@ type SObjectAttributes struct {
 
 // Describe queries the metadata of an SObject using the "describe" API.
 // Ref: https://developer.salesforce.com/docs/atlas.en-us.214.0.api_rest.meta/api_rest/resources_sobject_describe.htm
-func (obj *SObject) Describe() *SObjectMeta {
+func (obj *SObject) Describe(ctx context.Context) *SObjectMeta {
 	if obj.Type() == "" || obj.client() == nil {
 		// Sanity check.
 		return nil
 	}
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/describe")
-	data, err := obj.client().httpRequest(http.MethodGet, url, nil)
+	data, err := obj.client().httpRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil
 	}
@@ -79,10 +81,12 @@ func (obj *SObject) Describe() *SObjectMeta {
 // and id is not provided as the parameter, nil is returned.
 // If query is successful, the SObject is updated in-place and exact same address is returned; otherwise, nil is
 // returned if failed.
-func (obj *SObject) Get(id ...string) *SObject {
+func (obj *SObject) Get(ctx context.Context, id ...string) (*SObject, error) {
+	l := ctxzap.Extract(ctx)
+
 	if obj.Type() == "" || obj.client() == nil {
 		// Sanity check.
-		return nil
+		return nil, ErrNoTypeIdClientOrId
 	}
 
 	oid := obj.ID()
@@ -90,74 +94,78 @@ func (obj *SObject) Get(id ...string) *SObject {
 		oid = id[0]
 	}
 	if oid == "" {
-		log.Println(logPrefix, "object id not found.")
-		return nil
+		l.Warn("oid not found")
+		return nil, nil
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/" + oid)
-	data, err := obj.client().httpRequest(http.MethodGet, url, nil)
+	data, err := obj.client().httpRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Println(logPrefix, "http request failed,", err)
-		return nil
+		l.Warn("failed to process http request", zap.Error(err))
+		return nil, err
 	}
 
 	err = json.Unmarshal(data, obj)
 	if err != nil {
-		log.Println(logPrefix, "json decode failed,", err)
-		return nil
+		l.Warn("failed to unmarshal data", zap.Error(err))
+		return nil, err
 	}
 
-	return obj
+	return obj, nil
 }
 
 // Create posts the JSON representation of the SObject to salesforce to create the entry.
 // If the creation is successful, the ID of the SObject instance is updated with the ID returned. Otherwise, nil is
 // returned for failures.
 // Ref: https://developer.salesforce.com/docs/atlas.en-us.214.0.api_rest.meta/api_rest/dome_sobject_create.htm
-func (obj *SObject) Create() *SObject {
+func (obj *SObject) Create(ctx context.Context) (*SObject, error) {
+	l := ctxzap.Extract(ctx)
+
 	if obj.Type() == "" || obj.client() == nil {
 		// Sanity check.
-		return nil
+		return nil, ErrNoTypeIdClientOrId
 	}
 
 	// Make a copy of the incoming SObject, but skip certain metadata fields as they're not understood by salesforce.
 	reqObj := obj.makeCopy()
 	reqData, err := json.Marshal(reqObj)
 	if err != nil {
-		log.Println(logPrefix, "failed to convert sobject to json,", err)
-		return nil
+		l.Warn("failed to convert sobject to json", zap.Error(err))
+		return nil, err
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/")
-	respData, err := obj.client().httpRequest(http.MethodPost, url, bytes.NewReader(reqData))
+	respData, err := obj.client().httpRequest(ctx, http.MethodPost, url, bytes.NewReader(reqData))
 	if err != nil {
-		log.Println(logPrefix, "failed to process http request,", err)
-		return nil
+		l.Warn("failed to process http request", zap.Error(err))
+		return nil, err
 	}
 
 	err = obj.setIDFromResponseData(respData)
 	if err != nil {
-		log.Println(logPrefix, "failed to parse response,", err)
-		return nil
+		l.Warn("failed to parse response data", zap.Error(err))
+		return nil, err
 	}
 
-	return obj
+	return obj, nil
 }
 
 // Update updates SObject in place. Upon successful, same SObject is returned for chained access.
 // ID is required.
-func (obj *SObject) Update() *SObject {
+func (obj *SObject) Update(ctx context.Context) (*SObject, error) {
+	l := ctxzap.Extract(ctx)
+
 	if obj.Type() == "" || obj.client() == nil || obj.ID() == "" {
 		// Sanity check.
-		return nil
+		return nil, ErrNoTypeIdClientOrId
 	}
 
 	// Make a copy of the incoming SObject, but skip certain metadata fields as they're not understood by salesforce.
 	reqObj := obj.makeCopy()
 	reqData, err := json.Marshal(reqObj)
 	if err != nil {
-		log.Println(logPrefix, "failed to convert sobject to json,", err)
-		return nil
+		l.Warn("failed to convert sobject to json", zap.Error(err))
+		return nil, err
 	}
 
 	queryBase := "sobjects/"
@@ -165,34 +173,39 @@ func (obj *SObject) Update() *SObject {
 		queryBase = "tooling/sobjects/"
 	}
 	url := obj.client().makeURL(queryBase + obj.Type() + "/" + obj.ID())
-	respData, err := obj.client().httpRequest(http.MethodPatch, url, bytes.NewReader(reqData))
+	respData, err := obj.client().httpRequest(ctx, http.MethodPatch, url, bytes.NewReader(reqData))
 	if err != nil {
-		log.Println(logPrefix, "failed to process http request,", err)
-		return nil
+		l.Warn("failed to process http request", zap.Error(err))
+		return nil, err
 	}
-	log.Println(string(respData))
+	l.Debug("response data", zap.ByteString("data", respData))
 
-	return obj
+	return obj, nil
 }
 
 // Upsert creates SObject or updates existing SObject in place. Upon successful upsert, same SObject is returned for chained access.
 // ID, ExternalIDField and Type are required. ID is the value of the external ID in this case.
-func (obj *SObject) Upsert() *SObject {
-	log.Println(logPrefix, "ExternalID:", obj.ExternalID())
-	log.Println(logPrefix, "ExternalIDField:", obj.ExternalIDFieldName())
+func (obj *SObject) Upsert(ctx context.Context) (*SObject, error) {
+	l := ctxzap.Extract(ctx)
+
+	l.Info("Upserting SObject")
+
+	l.Info("ExternalID:", zap.String("ExternalID", obj.ExternalID()))
+	l.Info("ExternalIDField:", zap.String("ExternalIDField", obj.ExternalIDFieldName()))
+
 	if obj.Type() == "" || obj.client() == nil || obj.ExternalIDFieldName() == "" ||
 		obj.ExternalID() == "" {
 		// Sanity check.
-		log.Println(logPrefix, "required fields are missing")
-		return nil
+		l.Warn("required fields are missing")
+		return nil, errors.New("required fields are missing")
 	}
 
 	// Make a copy of the incoming SObject, but skip certain metadata fields as they're not understood by salesforce.
 	reqObj := obj.makeCopy()
 	reqData, err := json.Marshal(reqObj)
 	if err != nil {
-		log.Println(logPrefix, "failed to convert sobject to json,", err)
-		return nil
+		l.Warn("failed to convert sobject to json", zap.Error(err))
+		return nil, err
 	}
 
 	queryBase := "sobjects/"
@@ -201,10 +214,10 @@ func (obj *SObject) Upsert() *SObject {
 	}
 	url := obj.client().
 		makeURL(queryBase + obj.Type() + "/" + obj.ExternalIDFieldName() + "/" + obj.ExternalID())
-	respData, err := obj.client().httpRequest(http.MethodPatch, url, bytes.NewReader(reqData))
+	respData, err := obj.client().httpRequest(ctx, http.MethodPatch, url, bytes.NewReader(reqData))
 	if err != nil {
-		log.Println(logPrefix, "failed to process http request,", err)
-		return nil
+		l.Warn("failed to process http request", zap.Error(err))
+		return nil, err
 	}
 
 	// Upsert returns with 201 and id in response if a new record is created. If a record is updated, it returns
@@ -212,17 +225,19 @@ func (obj *SObject) Upsert() *SObject {
 	if len(respData) > 0 {
 		err = obj.setIDFromResponseData(respData)
 		if err != nil {
-			log.Println(logPrefix, "failed to parse response,", err)
-			return nil
+			l.Warn("failed to parse response data", zap.Error(err))
+			return nil, err
 		}
 	}
 
-	return obj
+	return obj, nil
 }
 
 // Delete deletes an SObject record identified by external ID. nil is returned if the operation completes successfully;
 // otherwise an error is returned
-func (obj *SObject) Delete(id ...string) error {
+func (obj *SObject) Delete(ctx context.Context, id ...string) error {
+	l := ctxzap.Extract(ctx)
+
 	if obj.Type() == "" || obj.client() == nil {
 		// Sanity check
 		return ErrFailure
@@ -237,8 +252,10 @@ func (obj *SObject) Delete(id ...string) error {
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/" + obj.ID())
-	log.Println(url)
-	_, err := obj.client().httpRequest(http.MethodDelete, url, nil)
+
+	l.Info("Deleting SObject", zap.String("url", url))
+
+	_, err := obj.client().httpRequest(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
@@ -273,9 +290,9 @@ func (obj *SObject) ExternalID() string {
 // StringField accesses a field in the SObject as string. Empty string is returned if the field doesn't exist.
 func (obj *SObject) StringField(key string) string {
 	value := obj.InterfaceField(key)
-	switch value.(type) {
+	switch value := value.(type) {
 	case string:
-		return value.(string)
+		return value
 	default:
 		return ""
 	}
@@ -283,7 +300,9 @@ func (obj *SObject) StringField(key string) string {
 
 // SObjectField accesses a field in the SObject as another SObject. This is only applicable if the field is an external
 // ID to another object. The typeName of the SObject must be provided. <nil> is returned if the field is empty.
-func (obj *SObject) SObjectField(typeName, key string) *SObject {
+func (obj *SObject) SObjectField(ctx context.Context, typeName, key string) *SObject {
+	l := ctxzap.Extract(ctx)
+
 	// First check if there's an associated ID directly.
 	oid := obj.StringField(key)
 	if oid != "" {
@@ -317,7 +336,7 @@ func (obj *SObject) SObjectField(typeName, key string) *SObject {
 	rIndex := strings.LastIndex(url, "/")
 	if rIndex == -1 || rIndex+1 == len(url) {
 		// hmm... this shouldn't happen, unless the URL is hand crafted.
-		log.Println(logPrefix, "invalid url,", url)
+		l.Error("invalid url", zap.String("url", url))
 		return nil
 	}
 	oid = url[rIndex+1:]
@@ -371,9 +390,9 @@ func (obj *SObject) Set(key string, value interface{}) *SObject {
 // client returns the associated Client with the SObject.
 func (obj *SObject) client() *Client {
 	client := obj.InterfaceField(sobjectClientKey)
-	switch client.(type) {
+	switch client := client.(type) {
 	case *Client:
-		return client.(*Client)
+		return client
 	default:
 		return nil
 	}
@@ -432,12 +451,10 @@ func (obj *SObject) setIDFromResponseData(respData []byte) error {
 	}
 	err := json.Unmarshal(respData, &respVal)
 	if err != nil {
-		log.Println(logPrefix, "failed to process response data,", err)
 		return err
 	}
 
 	if !respVal.Success || respVal.ID == "" {
-		log.Println(logPrefix, "unsuccessful")
 		return errors.New("request was unsuccessful")
 	}
 

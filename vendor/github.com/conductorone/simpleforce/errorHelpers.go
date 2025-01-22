@@ -1,11 +1,16 @@
 package simpleforce
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+	"net/http"
 
-	"github.com/pkg/errors"
+	"errors"
 )
 
 var (
@@ -14,6 +19,11 @@ var (
 
 	// ErrAuthentication is returned when authentication failed.
 	ErrAuthentication = errors.New("authentication failure")
+
+	// ErrNoTypeIdClientOrId is returned when the sObject has no type id, client or id.
+	ErrNoTypeIdClientOrId = errors.New("sObject has no type id, client or id")
+
+	ErrOidNotFound = errors.New("oid not found")
 )
 
 type jsonError []struct {
@@ -37,7 +47,7 @@ func (err SalesforceError) Error() string {
 	return err.Message
 }
 
-//Need to get information out of this package.
+// Need to get information out of this package.
 func ParseSalesforceError(statusCode int, responseBody []byte) (err error) {
 	jsonError := jsonError{}
 	err = json.Unmarshal(responseBody, &jsonError)
@@ -71,4 +81,30 @@ func ParseSalesforceError(statusCode int, responseBody []byte) (err error) {
 		Message:  string(responseBody),
 		HttpCode: statusCode,
 	}
+}
+
+func parseUhttpError(ctx context.Context, resp *http.Response, errHttp error) error {
+	l := ctxzap.Extract(ctx)
+
+	if resp == nil {
+		return errHttp
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		l.Error("request failed", zap.Int("status_code", resp.StatusCode))
+
+		buf := new(bytes.Buffer)
+		_, err := buf.ReadFrom(resp.Body)
+		if err != nil {
+			return errors.Join(errHttp, err)
+		}
+
+		newStr := buf.String()
+		theError := errors.Join(errHttp, ParseSalesforceError(resp.StatusCode, buf.Bytes()))
+
+		l.Error("Failed resp.body", zap.String("body", newStr))
+		return theError
+	}
+
+	return errHttp
 }

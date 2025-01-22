@@ -49,7 +49,7 @@ func (c *SalesforceClient) query(
 
 	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
-	records, err := c.client.Query(queryString)
+	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
 		logger.Error(
@@ -123,7 +123,10 @@ func (c *SalesforceClient) CreateObject(
 	for key, value := range values {
 		created = created.Set(key, value)
 	}
-	created = created.Create()
+	created, err = created.Create(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	debugFields := []zap.Field{}
 	if created != nil {
@@ -162,7 +165,7 @@ func (c *SalesforceClient) DeleteObject(
 	err = c.client.
 		SObject(tableName).
 		Set("Id", id).
-		Delete()
+		Delete(ctx)
 
 	ratelimitData := c.salesforceTransport.rateLimit
 	return ratelimitData, err
@@ -177,9 +180,12 @@ func (c *SalesforceClient) getOneUser(ctx context.Context, userId string) (
 	if err != nil {
 		return nil, nil, err
 	}
-	user := c.client.
+	user, err := c.client.
 		SObject(TableNameUsers).
-		Get(userId)
+		Get(ctx, userId)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	ratelimitData := c.salesforceTransport.rateLimit
 	if user == nil {
@@ -189,6 +195,7 @@ func (c *SalesforceClient) getOneUser(ctx context.Context, userId string) (
 }
 
 func (c *SalesforceClient) updateUser(
+	ctx context.Context,
 	user *simpleforce.SObject,
 	fieldName string,
 	value string,
@@ -196,8 +203,12 @@ func (c *SalesforceClient) updateUser(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	user = user.Set(fieldName, value).Update()
+	user, err := user.Set(fieldName, value).Update(ctx)
 	ratelimitData := c.salesforceTransport.rateLimit
+	if err != nil {
+		return ratelimitData, err
+	}
+
 	if user == nil {
 		return ratelimitData, fmt.Errorf("failed to update user")
 	}
@@ -216,7 +227,26 @@ func (c *SalesforceClient) setValue(
 		return ratelimitData, err
 	}
 
-	return c.updateUser(user, fieldName, fieldValue)
+	return c.updateUser(ctx, user, fieldName, fieldValue)
+}
+
+func (c *SalesforceClient) setOneValue(
+	ctx context.Context,
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user, ratelimitData, err := c.getOneUser(ctx, userId)
+	if err != nil {
+		return ratelimitData, err
+	}
+
+	copySObject, err := c.copySObject(user, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.updateUser(ctx, copySObject, fieldName, fieldValue)
 }
 
 func (c *SalesforceClient) clearValue(
@@ -234,5 +264,48 @@ func (c *SalesforceClient) clearValue(
 		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
 	}
 
-	return c.updateUser(user, fieldName, "")
+	return c.updateUser(ctx, user, fieldName, "")
+}
+
+// clearOneValue clears a single value from a user record.
+func (c *SalesforceClient) clearOneValue(
+	ctx context.Context,
+	userId string,
+	fieldName string,
+	fieldValue string,
+) (*v2.RateLimitDescription, error) {
+	user, ratelimitData, err := c.getOneUser(ctx, userId)
+	if err != nil {
+		return ratelimitData, err
+	}
+
+	if user.StringField(fieldName) != fieldValue {
+		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
+	}
+
+	copySObject, err := c.copySObject(user, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.updateUser(ctx, copySObject, fieldName, "")
+}
+
+func (c *SalesforceClient) copySObject(obj *simpleforce.SObject, allowedFields ...string) (*simpleforce.SObject, error) {
+	response := c.client.SObject(obj.Type())
+
+	response.Set("Id", obj.ID())
+	if obj.ExternalIDFieldName() != "" {
+		response.Set(obj.ExternalIDFieldName(), obj.ExternalID())
+	}
+
+	for _, field := range allowedFields {
+		if obj.StringField(field) == "" {
+			continue
+		}
+
+		response.Set(field, obj.StringField(field))
+	}
+
+	return response, nil
 }

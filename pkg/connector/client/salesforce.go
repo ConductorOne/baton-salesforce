@@ -245,7 +245,10 @@ func (c *SalesforceClient) GetUsers(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(TableNameUsers)
+	// Filter for Standard users only - these are full Salesforce users with standard licenses.
+	// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
+	// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
+	query := NewQuery(TableNameUsers).WhereEq("UserType", "Standard")
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -454,7 +457,7 @@ func (c *SalesforceClient) getAssignments(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(TableNameUsers).WhereEq(conditionKey, conditionValue)
+	query := NewQuery(TableNameUsers).WhereEq("UserType", "Standard").WhereEq(conditionKey, conditionValue)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -488,7 +491,7 @@ func (c *SalesforceClient) GetProfileAssignments(
 	return c.getAssignments(ctx, "ProfileId", profileID, pageToken, pageSize)
 }
 
-// GetRoleAssignments - SELECT Id, UserRoleId FROM User Where UserRoleId != ”.
+// GetRoleAssignments - SELECT Id, UserRoleId FROM User Where UserRoleId != "".
 func (c *SalesforceClient) GetRoleAssignments(
 	ctx context.Context,
 	userRoleID string,

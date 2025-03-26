@@ -53,6 +53,10 @@ func userResource(
 		resource.WithUserLogin(user.Username),
 	}
 
+	if user.LastLoginDate != nil {
+		userTraitOptions = append(userTraitOptions, resource.WithLastLogin(*user.LastLoginDate))
+	}
+
 	newUserResource, err := resource.NewUserResource(
 		displayName,
 		resourceTypeUser,

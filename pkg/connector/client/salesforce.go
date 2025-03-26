@@ -267,14 +267,21 @@ func (c *SalesforceClient) GetUsers(
 		if shouldSkipSyncingUserType(ctx, record) {
 			continue
 		}
+
+		lastLogin, err := parseSalesforceDatetime(record.StringField("LastLoginDate"))
+		if err != nil {
+			return nil, "", nil, err
+		}
+
 		users = append(users, &SalesforceUser{
-			ID:        record.ID(),
-			Username:  record.StringField("Username"),
-			Email:     record.StringField("Email"),
-			FirstName: record.StringField("FirstName"),
-			LastName:  record.StringField("LastName"),
-			UserType:  record.StringField("UserType"),
-			IsActive:  isActive,
+			ID:            record.ID(),
+			Username:      record.StringField("Username"),
+			Email:         record.StringField("Email"),
+			FirstName:     record.StringField("FirstName"),
+			LastName:      record.StringField("LastName"),
+			UserType:      record.StringField("UserType"),
+			IsActive:      isActive,
+			LastLoginDate: lastLogin,
 		})
 	}
 	return users, paginationUrl, ratelimitData, nil

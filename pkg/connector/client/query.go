@@ -28,6 +28,7 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"UserType",
 		"ProfileId",
 		"UserRoleId",
+		"LastLoginDate",
 	},
 	TableNameRoles: {
 		"Name",

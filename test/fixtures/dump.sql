@@ -47,15 +47,16 @@ CREATE TABLE UserRole
 
 CREATE TABLE User
 (
-    Id         TEXT PRIMARY KEY,
-    FirstName  TEXT,
-    LastName   TEXT,
-    Email      TEXT,
-    Username   TEXT,
-    IsActive   INT,
-    UserType   TEXT,
-    ProfileId  TEXT,
-    UserRoleId TEXT
+    Id            TEXT PRIMARY KEY,
+    FirstName     TEXT,
+    LastName      TEXT,
+    Email         TEXT,
+    Username      TEXT,
+    IsActive      INT,
+    UserType      TEXT,
+    ProfileId     TEXT,
+    UserRoleId    TEXT,
+    LastLoginDate TEXT
 );
 
 CREATE TABLE PermissionSetGroup
@@ -76,9 +77,7 @@ CREATE TABLE PermissionSetGroupComponent
     IsDeleted            TEXT,
     PermissionSetGroupId TEXT,
     PermissionSetId      TEXT
-)
-
-INSERT INTO User (Id,
+) INSERT INTO User (Id,
                   FirstName,
                   LastName,
                   Email,
@@ -86,7 +85,9 @@ INSERT INTO User (Id,
                   IsActive,
                   UserType,
                   ProfileId,
-                  UserRoleId)
+                  UserRoleId,
+                  LastLoginDate
+    )
 VALUES ('0051X',
         'FirstName',
         'LastName',
@@ -95,7 +96,8 @@ VALUES ('0051X',
         1,
         'Standard',
         '',
-        ''),
+        '',
+        '2025-03-26T16:43:31.000+0000'),
        ('0052X',
         'FirstName',
         'LastName',
@@ -104,7 +106,8 @@ VALUES ('0051X',
         1,
         'Standard',
         '',
-        ''),
+        '',
+        '2025-03-26T16:43:31.000+0000'),
        ('0053X',
         'FirstName',
         'LastName',
@@ -113,7 +116,8 @@ VALUES ('0051X',
         1,
         'Standard',
         '',
-        '');
+        '',
+        '2025-03-26T16:43:31.000+0000');
 
 INSERT INTO Group (Id,
                    Name,

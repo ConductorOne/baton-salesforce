@@ -1,13 +1,16 @@
 package client
 
+import "time"
+
 type SalesforceUser struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Username  string `json:"username"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	UserType  string `json:"user_type"`
-	IsActive  bool   `json:"is_active"`
+	ID            string     `json:"id"`
+	Email         string     `json:"email"`
+	Username      string     `json:"username"`
+	FirstName     string     `json:"first_name"`
+	LastName      string     `json:"last_name"`
+	UserType      string     `json:"user_type"`
+	IsActive      bool       `json:"is_active"`
+	LastLoginDate *time.Time `json:"last_login_date"`
 }
 
 type SalesforceCompany struct {

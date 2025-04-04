@@ -18,6 +18,7 @@ import (
 
 const (
 	InfoPath           = "/services/data/v24.0/chatter/users/me"
+	ResetPasswordPath  = "/services/data/v24.0/sobjects/User/%s/password"
 	PageSizeDefault    = 100
 	SalesforceClientID = "ConductorOne"
 	GroupIDPrefix      = "00G"

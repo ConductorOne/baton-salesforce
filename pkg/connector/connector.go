@@ -26,6 +26,7 @@ type Salesforce struct {
 	ctx                       context.Context
 	instanceURL               string
 	shouldUseUsernameForEmail bool
+	syncSecrets               bool
 }
 
 // fallBackToHTTPS checks to domain and tacks on "https://" if no scheme is
@@ -67,9 +68,67 @@ func (d *Salesforce) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.
 
 // Metadata returns metadata about the connector.
 func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
+	defaultTimeZone := "America/New_York"
+
 	return &v2.ConnectorMetadata{
 		DisplayName: "Salesforce",
 		Description: "Connector syncing Salesforce users",
+		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
+			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
+				"email": {
+					DisplayName: "Email",
+					Required:    true,
+					Description: "This email will be used as the login for the user.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Email",
+					Order:       1,
+				},
+				"profileId": {
+					DisplayName: "Profile ID",
+					Required:    true,
+					Description: "Salesforce Profile ID",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "ProfileId",
+					Order:       2,
+				},
+				"alias": {
+					DisplayName: "Alias",
+					Required:    true,
+					Description: "User Alias",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "Alias",
+					Order:       3,
+				},
+				"last_name": {
+					DisplayName: "Last Name",
+					Required:    true,
+					Description: "User last name",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "LastName",
+					Order:       4,
+				},
+				"timezone": {
+					DisplayName: "Time Zone",
+					Required:    true,
+					Description: "User time zone",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{
+							DefaultValue: &defaultTimeZone,
+						},
+					},
+					Placeholder: "TimeZone",
+					Order:       5,
+				},
+			},
+		},
 	}, nil
 }
 
@@ -97,6 +156,7 @@ func New(
 	username string,
 	password string,
 	securityToken string,
+	syncSecrets bool,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -128,6 +188,7 @@ func New(
 		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,
+		syncSecrets:               syncSecrets,
 	}
 	return &salesforce, nil
 }

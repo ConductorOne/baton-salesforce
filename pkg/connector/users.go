@@ -7,8 +7,11 @@ import (
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 type userBuilder struct {
@@ -138,6 +141,103 @@ func (o *userBuilder) Grants(
 	error,
 ) {
 	return nil, "", nil, nil
+}
+
+func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreateRequest, error) {
+	email, ok := resource.GetProfileStringValue(accountInfo.Profile, "email")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing email in account info")
+	}
+
+	alias, ok := resource.GetProfileStringValue(accountInfo.Profile, "alias")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing alias in account info")
+	}
+
+	lastName, ok := resource.GetProfileStringValue(accountInfo.Profile, "last_name")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
+	}
+
+	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profile_id")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing profile_id in account info")
+	}
+
+	timezone, ok := resource.GetProfileStringValue(accountInfo.Profile, "timezone")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing timezone in account info")
+	}
+
+	return &client.UserCreateRequest{
+		Email:       email,
+		Alias:       alias,
+		TimeZoneSid: timezone,
+		ProfileId:   profileId,
+		LastName:    lastName,
+	}, nil
+}
+
+func (o *userBuilder) CreateAccount(
+	ctx context.Context,
+	accountInfo *v2.AccountInfo,
+	credentialOptions *v2.CredentialOptions,
+) (
+	connectorbuilder.CreateAccountResponse,
+	[]*v2.PlaintextData,
+	annotations.Annotations,
+	error,
+) {
+	l := ctxzap.Extract(ctx)
+
+	userRequest, err := getUserCreateRequestParams(accountInfo)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("baton-salesforce: create account get InviteUserParams failed %w", err)
+	}
+
+	userExist, err := o.client.UserExist(ctx, userRequest.Email)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("baton-salesforce: check if user exists failed %w", err)
+	}
+
+	if userExist {
+		l.Info("User already exists, skipping user creation")
+	} else {
+		err = o.client.CreateUser(ctx, *userRequest)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	l.Info("Sending reset password email", zap.String("email", user.Email))
+	err = o.client.SendResetPasswordEmail(ctx, user.ID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	r, err := userResource(ctx, user, o.shouldUseUsernameForEmail)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
+	}
+
+	return &v2.CreateAccountResponse_ActionRequiredResult{
+		Resource: r,
+		Message:  fmt.Sprintf("A reset password email has been sent to %s", user.Email),
+	}, nil, nil, nil
+}
+
+func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.CredentialDetailsAccountProvisioning, annotations.Annotations, error) {
+	return &v2.CredentialDetailsAccountProvisioning{
+		SupportedCredentialOptions: []v2.CapabilityDetailCredentialOption{
+			v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+		},
+		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
+	}, nil, nil
 }
 
 func newUserBuilder(

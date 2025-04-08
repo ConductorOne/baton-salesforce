@@ -56,6 +56,7 @@ func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.Res
 		newProfileBuilder(d.client),
 		newRoleBuilder(d.client),
 		newPermissionSetGroupBuilder(d.client),
+		newConnectedApplicationBuilder(d.client),
 	}
 }
 

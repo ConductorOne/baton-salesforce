@@ -43,4 +43,11 @@ var (
 		DisplayName: "Permission Set Group",
 		Traits:      []v2.ResourceType_Trait{},
 	}
+	resourceTypeConnectedApplication = &v2.ResourceType{
+		Id:          "connected_application",
+		DisplayName: "Connected Application",
+		Traits: []v2.ResourceType_Trait{
+			v2.ResourceType_TRAIT_APP,
+		},
+	}
 )

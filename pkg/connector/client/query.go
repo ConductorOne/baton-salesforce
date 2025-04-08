@@ -16,6 +16,7 @@ const (
 	TableNameUsers                   = "User"
 	TablePermissionSetGroup          = "PermissionSetGroup"
 	TablePermissionSetGroupComponent = "PermissionSetGroupComponent"
+	TableNameConnectedApps           = "ConnectedApplication"
 )
 
 var TableNamesToFieldsMapping = map[string][]string{
@@ -72,6 +73,12 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"IsDeleted",
 		"PermissionSetGroupId",
 		"PermissionSetId",
+	},
+	TableNameConnectedApps: {
+		"Name",
+		"CreatedDate",
+		"CreatedById",
+		"LastModifiedDate",
 	},
 }
 

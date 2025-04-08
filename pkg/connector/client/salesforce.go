@@ -898,3 +898,39 @@ func (c *SalesforceClient) DeletePermissionSetGroupComponent(
 		permissionSetGroupComponentId,
 	)
 }
+
+func (c *SalesforceClient) GetConnectedApplications(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]*ConnectedApplication,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameConnectedApps)
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+
+	permissions := make([]*ConnectedApplication, 0)
+
+	for _, record := range records {
+		permissionSet := &ConnectedApplication{
+			ID:               record.ID(),
+			Name:             record.StringField("Name"),
+			CreatedById:      record.StringField("CreatedById"),
+			CreatedDate:      record.StringField("CreatedDate"),
+			LastModifiedDate: record.StringField("LastModifiedDate"),
+		}
+		permissions = append(permissions, permissionSet)
+	}
+	return permissions, paginationUrl, ratelimitData, nil
+}

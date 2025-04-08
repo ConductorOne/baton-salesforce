@@ -150,3 +150,12 @@ VALUES ('198X', 'name'),
 INSERT INTO UserRole (Id, Name)
 VALUES ('199X', 'name'),
        ('299X', 'name');
+
+CREATE TABLE ConnectedApplication
+(
+    ID               TEXT PRIMARY KEY,
+    Name             TEXT,
+    CreatedDate      TEXT,
+    CreatedById      TEXT,
+    LastModifiedDate TEXT,
+)

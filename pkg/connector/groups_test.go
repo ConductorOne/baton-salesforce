@@ -55,7 +55,7 @@ func TestGroupsList(t *testing.T) {
 
 	t.Run("should grant and revoke entitlements", func(t *testing.T) {
 		group, _ := groupResource(ctx, &client.SalesforceGroup{ID: "00G1X"})
-		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, false)
+		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
 
 		entitlement := v2.Entitlement{
 			Id:       entitlement.NewEntitlementID(group, groupMemberEntitlementName),
@@ -105,7 +105,7 @@ func TestGroupsList(t *testing.T) {
 
 	t.Run("should allow double grant and double revoke", func(t *testing.T) {
 		group, _ := groupResource(ctx, &client.SalesforceGroup{ID: "00G1X"})
-		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, false)
+		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
 
 		entitlement := v2.Entitlement{
 			Id:       entitlement.NewEntitlementID(group, groupMemberEntitlementName),

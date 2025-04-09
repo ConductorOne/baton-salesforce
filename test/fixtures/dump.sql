@@ -159,3 +159,11 @@ CREATE TABLE ConnectedApplication
     CreatedById      TEXT,
     LastModifiedDate TEXT,
 )
+
+CREATE TABLE UserLogin
+(
+    ID               TEXT PRIMARY KEY,
+    UserId           TEXT,
+    IsFrozen         TEXT,
+    IsPasswordLocked TEXT
+)

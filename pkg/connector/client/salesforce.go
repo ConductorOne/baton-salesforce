@@ -920,7 +920,7 @@ func (c *SalesforceClient) GetConnectedApplications(
 		return nil, "", ratelimitData, err
 	}
 
-	permissions := make([]*ConnectedApplication, 0)
+	apps := make([]*ConnectedApplication, 0)
 
 	for _, record := range records {
 		permissionSet := &ConnectedApplication{
@@ -930,7 +930,51 @@ func (c *SalesforceClient) GetConnectedApplications(
 			CreatedDate:      record.StringField("CreatedDate"),
 			LastModifiedDate: record.StringField("LastModifiedDate"),
 		}
-		permissions = append(permissions, permissionSet)
+		apps = append(apps, permissionSet)
 	}
-	return permissions, paginationUrl, ratelimitData, nil
+	return apps, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetUserLogin(
+	ctx context.Context,
+	userId string,
+) (
+	*UserLogin,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameUserLogin).WhereEq("UserId", userId)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+
+	record := records[0]
+
+	isFrozen, err := getBoolField(record, "IsFrozen")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	isPasswordLocked, err := getBoolField(record, "IsPasswordLocked")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	userLogin := &UserLogin{
+		ID:               record.ID(),
+		UserId:           record.StringField("UserId"),
+		IsFrozen:         isFrozen,
+		IsPasswordLocked: isPasswordLocked,
+	}
+	return userLogin, ratelimitData, nil
 }

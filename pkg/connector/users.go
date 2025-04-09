@@ -24,6 +24,7 @@ type userBuilder struct {
 func userResource(
 	ctx context.Context,
 	user *client.SalesforceUser,
+	userLogin *client.UserLogin,
 	shouldUseUsernameForEmail bool,
 ) (*v2.Resource, error) {
 	displayName := fmt.Sprintf(
@@ -32,8 +33,13 @@ func userResource(
 		user.LastName,
 	)
 	status := v2.UserTrait_Status_STATUS_DISABLED
+
 	if user.IsActive {
-		status = v2.UserTrait_Status_STATUS_ENABLED
+		if userLogin != nil && userLogin.IsFrozen {
+			status = v2.UserTrait_Status_STATUS_DISABLED
+		} else {
+			status = v2.UserTrait_Status_STATUS_ENABLED
+		}
 	}
 
 	email := user.Email
@@ -101,9 +107,15 @@ func (o *userBuilder) List(
 
 	rv := make([]*v2.Resource, 0)
 	for _, user := range users {
+		userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
+		if err != nil {
+			return nil, "", nil, err
+		}
+
 		newResource, err := userResource(
 			ctx,
 			user,
+			userLogin,
 			o.shouldUseUsernameForEmail,
 		)
 		if err != nil {
@@ -220,7 +232,12 @@ func (o *userBuilder) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	r, err := userResource(ctx, user, o.shouldUseUsernameForEmail)
+	userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
 	}

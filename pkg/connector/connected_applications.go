@@ -48,7 +48,7 @@ func (o *connectedApplicationBuilder) List(
 	annotations.Annotations,
 	error,
 ) {
-	permissions, nextToken, ratelimitData, err := o.client.GetConnectedApplications(
+	applications, nextToken, ratelimitData, err := o.client.GetConnectedApplications(
 		ctx,
 		pToken.Token,
 		pToken.Size,
@@ -58,9 +58,9 @@ func (o *connectedApplicationBuilder) List(
 		return nil, "", outputAnnotations, err
 	}
 
-	rv := make([]*v2.Resource, 0, len(permissions))
-	for _, permission := range permissions {
-		newResource, err := connectedApplicationResource(ctx, permission)
+	rv := make([]*v2.Resource, 0, len(applications))
+	for _, application := range applications {
+		newResource, err := connectedApplicationResource(ctx, application)
 		if err != nil {
 			return nil, "", outputAnnotations, err
 		}

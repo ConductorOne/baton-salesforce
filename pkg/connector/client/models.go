@@ -95,3 +95,10 @@ type ConnectedApplication struct {
 	CreatedById      string
 	LastModifiedDate string
 }
+
+type UserLogin struct {
+	ID               string
+	UserId           string
+	IsFrozen         bool
+	IsPasswordLocked bool
+}

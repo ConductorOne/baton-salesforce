@@ -26,7 +26,6 @@ type Salesforce struct {
 	ctx                       context.Context
 	instanceURL               string
 	shouldUseUsernameForEmail bool
-	syncSecrets               bool
 }
 
 // fallBackToHTTPS checks to domain and tacks on "https://" if no scheme is
@@ -157,7 +156,6 @@ func New(
 	username string,
 	password string,
 	securityToken string,
-	syncSecrets bool,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -189,7 +187,6 @@ func New(
 		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,
-		syncSecrets:               syncSecrets,
 	}
 	return &salesforce, nil
 }

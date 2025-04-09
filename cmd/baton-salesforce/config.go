@@ -27,19 +27,12 @@ var (
 		field.WithDescription("Salesforce security token (optional if trusted IP is configured)"),
 	)
 
-	SyncSecrets = field.BoolField(
-		"sync-secrets",
-		field.WithDescription("Enable to sync secrets"),
-		field.WithDefaultValue(false),
-	)
-
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
 		UseUsernameForEmailField,
 		UsernameField,
 		PasswordField,
 		SecurityTokenField,
-		SyncSecrets,
 	}
 
 	Configuration = field.NewConfiguration(

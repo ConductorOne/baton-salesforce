@@ -18,6 +18,7 @@ import (
 
 const (
 	InfoPath           = "/services/data/v24.0/chatter/users/me"
+	ResetPasswordPath  = "/services/data/v24.0/sobjects/User/%s/password"
 	PageSizeDefault    = 100
 	SalesforceClientID = "ConductorOne"
 	GroupIDPrefix      = "00G"
@@ -896,4 +897,84 @@ func (c *SalesforceClient) DeletePermissionSetGroupComponent(
 		TablePermissionSetGroupComponent,
 		permissionSetGroupComponentId,
 	)
+}
+
+func (c *SalesforceClient) GetConnectedApplications(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]*ConnectedApplication,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameConnectedApps)
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+
+	apps := make([]*ConnectedApplication, 0)
+
+	for _, record := range records {
+		permissionSet := &ConnectedApplication{
+			ID:               record.ID(),
+			Name:             record.StringField("Name"),
+			CreatedById:      record.StringField("CreatedById"),
+			CreatedDate:      record.StringField("CreatedDate"),
+			LastModifiedDate: record.StringField("LastModifiedDate"),
+		}
+		apps = append(apps, permissionSet)
+	}
+	return apps, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetUserLogin(
+	ctx context.Context,
+	userId string,
+) (
+	*UserLogin,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameUserLogin).WhereEq("UserId", userId)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+
+	record := records[0]
+
+	isFrozen, err := getBoolField(record, "IsFrozen")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	isPasswordLocked, err := getBoolField(record, "IsPasswordLocked")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	userLogin := &UserLogin{
+		ID:               record.ID(),
+		UserId:           record.StringField("UserId"),
+		IsFrozen:         isFrozen,
+		IsPasswordLocked: isPasswordLocked,
+	}
+	return userLogin, ratelimitData, nil
 }

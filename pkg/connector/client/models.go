@@ -87,3 +87,18 @@ type PermissionSetGroupComponent struct {
 	PermissionSetGroupID string
 	PermissionSetID      string
 }
+
+type ConnectedApplication struct {
+	ID               string
+	Name             string
+	CreatedDate      string
+	CreatedById      string
+	LastModifiedDate string
+}
+
+type UserLogin struct {
+	ID               string
+	UserId           string
+	IsFrozen         bool
+	IsPasswordLocked bool
+}

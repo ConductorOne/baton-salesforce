@@ -3,18 +3,6 @@
   "resourceTypeCapabilities": [
     {
       "resourceType": {
-        "id": "connected_application",
-        "displayName": "Connected Application",
-        "traits": [
-          "TRAIT_APP"
-        ]
-      },
-      "capabilities": [
-        "CAPABILITY_SYNC"
-      ]
-    },
-    {
-      "resourceType": {
         "id": "group",
         "displayName": "Group",
         "traits": [

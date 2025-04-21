@@ -924,11 +924,8 @@ func (c *SalesforceClient) GetConnectedApplications(
 
 	for _, record := range records {
 		permissionSet := &ConnectedApplication{
-			ID:               record.ID(),
-			Name:             record.StringField("Name"),
-			CreatedById:      record.StringField("CreatedById"),
-			CreatedDate:      record.StringField("CreatedDate"),
-			LastModifiedDate: record.StringField("LastModifiedDate"),
+			ID:   record.ID(),
+			Name: record.StringField("Name"),
 		}
 		apps = append(apps, permissionSet)
 	}

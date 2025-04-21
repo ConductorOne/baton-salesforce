@@ -26,6 +26,10 @@ var (
 		"security-token",
 		field.WithDescription("Salesforce security token (optional if trusted IP is configured)"),
 	)
+	SyncConnectedApps = field.BoolField(
+		"sync-connected-apps",
+		field.WithDescription("Optionally sync access to connected apps"),
+	)
 
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
@@ -33,6 +37,7 @@ var (
 		UsernameField,
 		PasswordField,
 		SecurityTokenField,
+		SyncConnectedApps,
 	}
 
 	Configuration = field.NewConfiguration(

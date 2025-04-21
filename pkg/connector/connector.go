@@ -26,6 +26,7 @@ type Salesforce struct {
 	ctx                       context.Context
 	instanceURL               string
 	shouldUseUsernameForEmail bool
+	syncConnectedApps         bool
 }
 
 // fallBackToHTTPS checks to domain and tacks on "https://" if no scheme is
@@ -48,15 +49,18 @@ func fallBackToHTTPS(domain string) (string, error) {
 // ResourceSyncers returns a ResourceSyncer for each resource type that should
 // be synced from the upstream service.
 func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
-	return []connectorbuilder.ResourceSyncer{
+	rv := []connectorbuilder.ResourceSyncer{
 		newUserBuilder(d.client, d.shouldUseUsernameForEmail),
 		newGroupBuilder(d.client),
 		newPermissionBuilder(d.client),
 		newProfileBuilder(d.client),
 		newRoleBuilder(d.client),
 		newPermissionSetGroupBuilder(d.client),
-		newConnectedApplicationBuilder(d.client),
 	}
+	if d.syncConnectedApps {
+		rv = append(rv, newConnectedApplicationBuilder(d.client))
+	}
+	return rv
 }
 
 // Asset takes an input AssetRef and attempts to fetch it using the connector's
@@ -156,6 +160,7 @@ func New(
 	username string,
 	password string,
 	securityToken string,
+	syncConnectedApps bool,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -187,6 +192,7 @@ func New(
 		ctx:                       ctx,
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,
+		syncConnectedApps:         syncConnectedApps,
 	}
 	return &salesforce, nil
 }

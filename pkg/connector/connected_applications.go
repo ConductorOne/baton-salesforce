@@ -23,13 +23,7 @@ func connectedApplicationResource(ctx context.Context, app *client.ConnectedAppl
 		app.Name,
 		resourceTypeConnectedApplication,
 		app.ID,
-		resource.WithAppTrait(
-			resource.WithAppProfile(map[string]interface{}{
-				"created_by_id":      app.CreatedById,
-				"created_date":       app.CreatedDate,
-				"last_modified_date": app.LastModifiedDate,
-			}),
-		),
+		resource.WithAppTrait(),
 	)
 	if err != nil {
 		return nil, err

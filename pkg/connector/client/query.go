@@ -77,9 +77,6 @@ var TableNamesToFieldsMapping = map[string][]string{
 	},
 	TableNameConnectedApps: {
 		"Name",
-		"CreatedDate",
-		"CreatedById",
-		"LastModifiedDate",
 	},
 	TableNameUserLogin: {
 		"UserId",

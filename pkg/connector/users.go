@@ -10,6 +10,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -225,6 +226,12 @@ func (o *userBuilder) CreateAccount(
 		if err != nil {
 			return nil, nil, nil, err
 		}
+	}
+
+	// Clear cache to find the new user by email, otherwise it will not be found
+	err = uhttp.ClearCaches(ctx)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	user, err := o.client.GetUserByEmail(ctx, userRequest.Email)

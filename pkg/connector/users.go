@@ -220,7 +220,27 @@ func (o *userBuilder) CreateAccount(
 	}
 
 	if userExist {
-		l.Info("User already exists, skipping user creation")
+		user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if userLogin.IsFrozen {
+			err := o.client.UnfreezeUser(ctx, userRequest.Email)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			l.Info("User is frozen, unfreezing user", zap.String("email", userRequest.Email))
+			// TODO: should we reset the password?
+		} else {
+			l.Info("User already exists, skipping user creation")
+		}
 	} else {
 		err = o.client.CreateUser(ctx, *userRequest)
 		if err != nil {
@@ -269,6 +289,17 @@ func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.C
 		},
 		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
 	}, nil, nil
+}
+
+func (o *userBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
+	userId := resourceId.Resource
+
+	err := o.client.FreezeUser(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func newUserBuilder(

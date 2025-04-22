@@ -975,3 +975,28 @@ func (c *SalesforceClient) GetUserLogin(
 	}
 	return userLogin, ratelimitData, nil
 }
+
+func (c *SalesforceClient) FreezeUser(
+	ctx context.Context,
+	userId string,
+) error {
+	_, err := c.client.
+		SObject(TableNameUserLogin).
+		Set("UserId", userId).
+		Set("IsFrozen", true).
+		Update(ctx)
+	return err
+}
+
+func (c *SalesforceClient) UnfreezeUser(
+	ctx context.Context,
+	userId string,
+) error {
+	_, err := c.client.
+		SObject(TableNameUserLogin).
+		Set("UserId", userId).
+		Set("IsFrozen", false).
+		Update(ctx)
+
+	return err
+}

@@ -171,6 +171,11 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
 	}
 
+	firstName, ok := resource.GetProfileStringValue(accountInfo.Profile, "first_name")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing first_name in account info")
+	}
+
 	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profileId")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing profileId in account info")
@@ -187,6 +192,7 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		TimeZoneSid: timezone,
 		ProfileId:   profileId,
 		LastName:    lastName,
+		FirstName:   firstName,
 	}, nil
 }
 

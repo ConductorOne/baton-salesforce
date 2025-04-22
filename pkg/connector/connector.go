@@ -119,6 +119,16 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 					Placeholder: "LastName",
 					Order:       4,
 				},
+				"first_name": {
+					DisplayName: "First Name",
+					Required:    true,
+					Description: "User first name",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "FirstName",
+					Order:       5,
+				},
 				"timezone": {
 					DisplayName: "Time Zone",
 					Required:    true,
@@ -129,7 +139,7 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 						},
 					},
 					Placeholder: "TimeZone",
-					Order:       5,
+					Order:       6,
 				},
 			},
 		},

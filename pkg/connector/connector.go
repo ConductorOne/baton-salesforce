@@ -109,16 +109,6 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 					Placeholder: "Alias",
 					Order:       3,
 				},
-				"last_name": {
-					DisplayName: "Last Name",
-					Required:    true,
-					Description: "User last name",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "LastName",
-					Order:       4,
-				},
 				"first_name": {
 					DisplayName: "First Name",
 					Required:    true,
@@ -128,6 +118,16 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 					},
 					Placeholder: "FirstName",
 					Order:       5,
+				},
+				"last_name": {
+					DisplayName: "Last Name",
+					Required:    true,
+					Description: "User last name",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "LastName",
+					Order:       4,
 				},
 				"timezone": {
 					DisplayName: "Time Zone",

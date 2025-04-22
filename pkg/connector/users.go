@@ -166,14 +166,14 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		return nil, fmt.Errorf("baton-salesforce: missing alias in account info")
 	}
 
-	lastName, ok := resource.GetProfileStringValue(accountInfo.Profile, "last_name")
-	if !ok {
-		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
-	}
-
 	firstName, ok := resource.GetProfileStringValue(accountInfo.Profile, "first_name")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing first_name in account info")
+	}
+
+	lastName, ok := resource.GetProfileStringValue(accountInfo.Profile, "last_name")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
 	}
 
 	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profileId")
@@ -191,8 +191,8 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		Alias:       alias,
 		TimeZoneSid: timezone,
 		ProfileId:   profileId,
-		LastName:    lastName,
 		FirstName:   firstName,
+		LastName:    lastName,
 	}, nil
 }
 
@@ -237,7 +237,7 @@ func (o *userBuilder) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	l.Info("Reset password email sent", zap.String("email", user.Email), zap.String("user_id", user.ID))
+	l.Debug("Reset password email sent", zap.String("email", user.Email), zap.String("user_id", user.ID))
 
 	userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
 	if err != nil {

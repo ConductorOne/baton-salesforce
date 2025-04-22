@@ -237,6 +237,7 @@ func (o *userBuilder) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	l.Info("Reset password email sent", zap.String("email", user.Email), zap.String("user_id", user.ID))
 
 	userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
 	if err != nil {
@@ -248,9 +249,9 @@ func (o *userBuilder) CreateAccount(
 		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
 	}
 
-	return &v2.CreateAccountResponse_ActionRequiredResult{
-		Resource: r,
-		Message:  fmt.Sprintf("A reset password email has been sent to %s", user.Email),
+	return &v2.CreateAccountResponse_SuccessResult{
+		Resource:              r,
+		IsCreateAccountResult: true,
 	}, nil, nil, nil
 }
 

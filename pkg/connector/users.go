@@ -171,9 +171,9 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
 	}
 
-	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profile_id")
+	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profileId")
 	if !ok {
-		return nil, fmt.Errorf("baton-salesforce: missing profile_id in account info")
+		return nil, fmt.Errorf("baton-salesforce: missing profileId in account info")
 	}
 
 	timezone, ok := resource.GetProfileStringValue(accountInfo.Profile, "timezone")

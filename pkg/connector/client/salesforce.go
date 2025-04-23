@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -737,6 +738,19 @@ func (c *SalesforceClient) RemoveUserFromRole(
 	roleId string,
 ) (*v2.RateLimitDescription, error) {
 	return c.clearValue(ctx, userId, "UserRoleId", roleId)
+}
+
+func (c *SalesforceClient) SetUserActiveState(
+	ctx context.Context,
+	userId string,
+	active bool,
+) (*v2.RateLimitDescription, error) {
+	rld, err := c.setOneValue(ctx, userId, "IsActive", strconv.FormatBool(active))
+	if err != nil {
+		return rld, err
+	}
+
+	return rld, nil
 }
 
 func (c *SalesforceClient) GetPermissionSetGroups(

@@ -220,7 +220,22 @@ func (o *userBuilder) CreateAccount(
 	}
 
 	if userExist {
-		l.Info("User already exists, skipping user creation")
+		// l.Info("User already exists, skipping user creation")
+		user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !user.IsActive {
+			rl, err := o.client.SetUserActiveState(ctx, user.ID, true)
+			outputAnnotations := client.WithRateLimitAnnotations(rl)
+			if err != nil {
+				return nil, nil, outputAnnotations, err
+			}
+			l.Info("User is inactive; activating user", zap.String("email", userRequest.Email), zap.String("user_id", user.ID))
+		} else {
+			l.Info("User already exists, skipping user creation")
+		}
 	} else {
 		err = o.client.CreateUser(ctx, *userRequest)
 		if err != nil {
@@ -269,6 +284,18 @@ func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.C
 		},
 		PreferredCredentialOption: v2.CapabilityDetailCredentialOption_CAPABILITY_DETAIL_CREDENTIAL_OPTION_NO_PASSWORD,
 	}, nil, nil
+}
+
+func (o *userBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
+	userId := resourceId.Resource
+
+	rl, err := o.client.SetUserActiveState(ctx, userId, false)
+	outputAnnotations := client.WithRateLimitAnnotations(rl)
+	if err != nil {
+		return outputAnnotations, err
+	}
+
+	return outputAnnotations, nil
 }
 
 func newUserBuilder(

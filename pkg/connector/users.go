@@ -220,6 +220,7 @@ func (o *userBuilder) CreateAccount(
 	}
 
 	if userExist {
+		l.Info("🐱User already exists, checking if user is frozen", zap.String("email", userRequest.Email))
 		user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
 		if err != nil {
 			return nil, nil, nil, err
@@ -231,13 +232,11 @@ func (o *userBuilder) CreateAccount(
 		}
 
 		if userLogin.IsFrozen {
-			err := o.client.UnfreezeUser(ctx, userRequest.Email)
+			annos, err := o.client.UnfreezeUser(ctx, userLogin.ID)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, annos, err
 			}
-
-			l.Info("User is frozen, unfreezing user", zap.String("email", userRequest.Email))
-			// TODO: should we reset the password?
+			l.Info("User is frozen, unfreezing user", zap.String("email", userRequest.Email), zap.String("user_id", user.ID))
 		} else {
 			l.Info("User already exists, skipping user creation")
 		}
@@ -294,12 +293,12 @@ func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.C
 func (o *userBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
 	userId := resourceId.Resource
 
-	err := o.client.FreezeUser(ctx, userId)
+	annos, err := o.client.FreezeUser(ctx, userId)
 	if err != nil {
-		return nil, err
+		return annos, err
 	}
 
-	return nil, nil
+	return annos, nil
 }
 
 func newUserBuilder(

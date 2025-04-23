@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/simpleforce"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -973,30 +974,51 @@ func (c *SalesforceClient) GetUserLogin(
 		IsFrozen:         isFrozen,
 		IsPasswordLocked: isPasswordLocked,
 	}
+	l := ctxzap.Extract(ctx)
+	l.Info("🐱 userLogin", zap.Any("userLogin", userLogin))
 	return userLogin, ratelimitData, nil
 }
 
 func (c *SalesforceClient) FreezeUser(
 	ctx context.Context,
 	userId string,
-) error {
-	_, err := c.client.
+) (annotations.Annotations, error) {
+	userLogin, err := c.client.
 		SObject(TableNameUserLogin).
-		Set("UserId", userId).
-		Set("IsFrozen", true).
-		Update(ctx)
-	return err
+		Get(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	l := ctxzap.Extract(ctx)
+	l.Info("🐱 userLogin", zap.Any("userLogin", userLogin))
+
+	_, err = userLogin.Set("IsFrozen", true).Update(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (c *SalesforceClient) UnfreezeUser(
 	ctx context.Context,
-	userId string,
-) error {
-	_, err := c.client.
+	userLoginId string,
+) (annotations.Annotations, error) {
+	userLogin, err := c.client.
 		SObject(TableNameUserLogin).
-		Set("UserId", userId).
-		Set("IsFrozen", false).
-		Update(ctx)
+		Get(ctx, userLoginId)
+	if err != nil {
+		return nil, err
+	}
 
-	return err
+	l := ctxzap.Extract(ctx)
+	l.Info("🐱 userLogin", zap.Any("userLogin", userLogin))
+
+	_, err = userLogin.Set("IsFrozen", false).Update(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }

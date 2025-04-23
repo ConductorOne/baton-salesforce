@@ -10,6 +10,7 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -166,14 +167,19 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		return nil, fmt.Errorf("baton-salesforce: missing alias in account info")
 	}
 
+	firstName, ok := resource.GetProfileStringValue(accountInfo.Profile, "first_name")
+	if !ok {
+		return nil, fmt.Errorf("baton-salesforce: missing first_name in account info")
+	}
+
 	lastName, ok := resource.GetProfileStringValue(accountInfo.Profile, "last_name")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
 	}
 
-	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profile_id")
+	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profileId")
 	if !ok {
-		return nil, fmt.Errorf("baton-salesforce: missing profile_id in account info")
+		return nil, fmt.Errorf("baton-salesforce: missing profileId in account info")
 	}
 
 	timezone, ok := resource.GetProfileStringValue(accountInfo.Profile, "timezone")
@@ -186,6 +192,7 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		Alias:       alias,
 		TimeZoneSid: timezone,
 		ProfileId:   profileId,
+		FirstName:   firstName,
 		LastName:    lastName,
 	}, nil
 }
@@ -221,6 +228,12 @@ func (o *userBuilder) CreateAccount(
 		}
 	}
 
+	// Clear cache to find the new user by email, otherwise it will not be found
+	err = uhttp.ClearCaches(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
 	if err != nil {
 		return nil, nil, nil, err
@@ -231,6 +244,7 @@ func (o *userBuilder) CreateAccount(
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	l.Debug("Reset password email sent", zap.String("email", user.Email), zap.String("user_id", user.ID))
 
 	userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
 	if err != nil {
@@ -242,9 +256,9 @@ func (o *userBuilder) CreateAccount(
 		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
 	}
 
-	return &v2.CreateAccountResponse_ActionRequiredResult{
-		Resource: r,
-		Message:  fmt.Sprintf("A reset password email has been sent to %s", user.Email),
+	return &v2.CreateAccountResponse_SuccessResult{
+		Resource:              r,
+		IsCreateAccountResult: true,
 	}, nil, nil, nil
 }
 

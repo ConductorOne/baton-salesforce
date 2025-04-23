@@ -15,6 +15,7 @@ type UserCreateRequest struct {
 	Email       string
 	Alias       string
 	LastName    string
+	FirstName   string
 	ProfileId   string
 	TimeZoneSid string
 }
@@ -35,6 +36,7 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		"Alias":             request.Alias,
 		"Email":             request.Email,
 		"LastName":          request.LastName,
+		"FirstName":         request.FirstName,
 		"TimeZoneSidKey":    request.TimeZoneSid,
 		"ProfileId":         request.ProfileId,
 		"EmailEncodingKey":  "UTF-8",

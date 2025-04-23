@@ -292,7 +292,12 @@ func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.C
 func (o *userBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
 	userId := resourceId.Resource
 
-	err := o.client.FreezeUser(ctx, userId)
+	userLogin, _, err := o.client.GetUserLogin(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	err = o.client.FreezeUser(ctx, userLogin.ID)
 	if err != nil {
 		return nil, err
 	}

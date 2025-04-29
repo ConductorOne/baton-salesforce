@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
-	"go.uber.org/zap"
 	"html"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 )
@@ -180,13 +181,20 @@ func (client *Client) LoginPassword(ctx context.Context, username, password, tok
 	req.Header.Add("charset", "UTF-8")
 	req.Header.Add("SOAPAction", "login")
 
+	l.Debug("Sending SOAP login request",
+		zap.String("request_url", requestUrl),
+		zap.String("username", username),
+		zap.Any("request_headers", req.Header))
+
 	resp, err := client.httpClient.Do(req)
-	if err != nil {
+	// Handle non-API errors
+	if err != nil && resp == nil {
 		l.Error("error occurred submitting request", zap.Error(err))
 		return err
 	}
 	defer resp.Body.Close()
 
+	// We have a response, but there's still possibly an error from the request, so we'll attempt to parse the error & body.
 	if resp.StatusCode != http.StatusOK {
 		l.Error("request failed", zap.Int("status_code", resp.StatusCode))
 

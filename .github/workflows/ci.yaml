@@ -1,7 +1,20 @@
 name: ci
 on: pull_request
 permissions:
+  actions: write
+  attestations: write
+  checks: write
   contents: write
+  deployments: write
+  discussions: write
+  issues: write
+  metadata: read
+  packages: write
+  pages: write
+  pull-requests: write
+  repository-projects: write
+  security-events: write
+  statuses: write
 jobs:
   go-lint:
     runs-on: ubuntu-latest

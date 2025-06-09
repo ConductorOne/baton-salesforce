@@ -286,18 +286,6 @@ func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.C
 	}, nil, nil
 }
 
-func (o *userBuilder) Delete(ctx context.Context, resourceId *v2.ResourceId) (annotations.Annotations, error) {
-	userId := resourceId.Resource
-
-	rl, err := o.client.SetUserActiveState(ctx, userId, false)
-	outputAnnotations := client.WithRateLimitAnnotations(rl)
-	if err != nil {
-		return outputAnnotations, err
-	}
-
-	return outputAnnotations, nil
-}
-
 func newUserBuilder(
 	client *client.SalesforceClient,
 	shouldUseUsernameForEmail bool,

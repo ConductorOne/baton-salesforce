@@ -7,7 +7,9 @@ import (
 	"net/url"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
+	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
@@ -144,6 +146,47 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 			},
 		},
 	}, nil
+}
+
+var updateUserStatusActionSchema = &v2.BatonActionSchema{
+	Name: "update_user_status",
+	Arguments: []*config.Field{
+		{
+			Name:        "resource_id",
+			DisplayName: "User Resource ID",
+			Description: "The ID of the user resource to update the status of",
+			Field:       &config.Field_StringField{},
+			IsRequired:  true,
+		},
+		{
+			Name:        "is_active",
+			DisplayName: "Is Active",
+			Description: "Update the user status to active or inactive",
+			Field:       &config.Field_BoolField{},
+			IsRequired:  true,
+		},
+	},
+	ReturnTypes: []*config.Field{
+		{
+			Name:        "success",
+			DisplayName: "Success",
+			Description: "Whether the user resource status was updated successfully",
+			Field:       &config.Field_BoolField{},
+		},
+	},
+}
+
+func (d *Salesforce) RegisterActionManager(ctx context.Context) (connectorbuilder.CustomActionManager, error) {
+	l := ctxzap.Extract(ctx)
+
+	actionManager := actions.NewActionManager(ctx)
+	err := actionManager.RegisterAction(ctx, "update_user_status", updateUserStatusActionSchema, d.updateUserStatus)
+	if err != nil {
+		l.Error("failed to register action", zap.Error(err))
+		return nil, err
+	}
+
+	return actionManager, nil
 }
 
 // Validate is called to ensure that the connector is properly configured. It

@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"time"
 
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -71,6 +72,39 @@ func (c *SalesforceClient) UserExist(
 	}
 
 	return user != nil, nil
+}
+
+func (c *SalesforceClient) GetUserByEmailWithRetry(
+	ctx context.Context,
+	email string,
+) (
+	*SalesforceUser,
+	error,
+) {
+	maxRetries := 3
+	baseDelay := time.Second
+	var err error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// Clear cache or we won't get new responses
+		err = uhttp.ClearCaches(ctx)
+		if err != nil {
+			return nil, err
+		}
+		user, err := c.GetUserByEmail(ctx, email)
+		if err == nil {
+			return user, nil
+		}
+
+		if status.Code(err) != codes.NotFound {
+			return nil, err
+		}
+		// Wait before retrying with exponential backoff
+		delay := time.Duration(attempt+1) * baseDelay
+		time.Sleep(delay)
+	}
+
+	return nil, fmt.Errorf("failed to get user by email after %d retries", maxRetries)
 }
 
 func (c *SalesforceClient) GetUserByEmail(

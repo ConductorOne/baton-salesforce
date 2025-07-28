@@ -85,7 +85,7 @@ func (c *SalesforceClient) GetUserByEmailWithRetry(
 	baseDelay := time.Second
 	var err error
 
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		// Clear cache or we won't get new responses
 		err = uhttp.ClearCaches(ctx)
 		if err != nil {
@@ -99,9 +99,15 @@ func (c *SalesforceClient) GetUserByEmailWithRetry(
 		if status.Code(err) != codes.NotFound {
 			return nil, err
 		}
-		// Wait before retrying with exponential backoff
-		delay := time.Duration(attempt+1) * baseDelay
-		time.Sleep(delay)
+		if attempt < maxRetries-1 {
+			delay := time.Duration(attempt+1) * baseDelay
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// continue to next attempt
+			}
+		}
 	}
 
 	return nil, fmt.Errorf("failed to get user by email after %d retries", maxRetries)

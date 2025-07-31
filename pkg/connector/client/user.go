@@ -123,8 +123,9 @@ func (c *SalesforceClient) GetUserByEmail(
 	// Filter for Standard users only - these are full Salesforce users with standard licenses.
 	// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
 	// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
+	// While we're not syncing Chatter users, we need to support creating them so we can possibly then upgrade them.
+	// this is slightly Weird behavior but there's a future where we do a more nuanced thing here.
 	query := NewQuery(TableNameUsers).
-		WhereEq("UserType", "Standard").
 		WhereEq("Email", email)
 	records, _, _, err := c.query(
 		ctx,

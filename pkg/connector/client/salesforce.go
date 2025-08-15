@@ -241,6 +241,7 @@ func (c *SalesforceClient) GetUsers(
 	ctx context.Context,
 	pageToken string,
 	pageSize int,
+	syncDeactivatedUsers bool,
 ) (
 	[]*SalesforceUser,
 	string,
@@ -265,6 +266,9 @@ func (c *SalesforceClient) GetUsers(
 		isActive, err := getIsActive(record)
 		if err != nil {
 			return nil, "", nil, err
+		}
+		if !syncDeactivatedUsers && !isActive {
+			continue
 		}
 		if shouldSkipSyncingUserType(ctx, record) {
 			continue

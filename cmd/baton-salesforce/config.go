@@ -30,6 +30,11 @@ var (
 		"sync-connected-apps",
 		field.WithDescription("Optionally sync access to connected apps"),
 	)
+	SyncDeactivatedUsers = field.BoolField(
+		"sync-deactivated-users",
+		field.WithDescription("Optionally sync deactivated users"),
+		field.WithDefaultValue(true),
+	)
 
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
@@ -38,6 +43,7 @@ var (
 		PasswordField,
 		SecurityTokenField,
 		SyncConnectedApps,
+		SyncDeactivatedUsers,
 	}
 
 	Configuration = field.NewConfiguration(

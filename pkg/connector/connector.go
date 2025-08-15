@@ -29,6 +29,7 @@ type Salesforce struct {
 	instanceURL               string
 	shouldUseUsernameForEmail bool
 	syncConnectedApps         bool
+	syncDeactivatedUsers      bool
 }
 
 // fallBackToHTTPS checks to domain and tacks on "https://" if no scheme is
@@ -52,7 +53,7 @@ func fallBackToHTTPS(domain string) (string, error) {
 // be synced from the upstream service.
 func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
 	rv := []connectorbuilder.ResourceSyncer{
-		newUserBuilder(d.client, d.shouldUseUsernameForEmail),
+		newUserBuilder(d.client, d.shouldUseUsernameForEmail, d.syncDeactivatedUsers),
 		newGroupBuilder(d.client),
 		newPermissionBuilder(d.client),
 		newProfileBuilder(d.client),
@@ -214,6 +215,7 @@ func New(
 	password string,
 	securityToken string,
 	syncConnectedApps bool,
+	syncDeactivatedUsers bool,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -246,6 +248,7 @@ func New(
 		shouldUseUsernameForEmail: useUsernameForEmail,
 		instanceURL:               instanceURL,
 		syncConnectedApps:         syncConnectedApps,
+		syncDeactivatedUsers:      syncDeactivatedUsers,
 	}
 	return &salesforce, nil
 }

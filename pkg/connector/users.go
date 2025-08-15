@@ -18,6 +18,7 @@ type userBuilder struct {
 	resourceType              *v2.ResourceType
 	client                    *client.SalesforceClient
 	shouldUseUsernameForEmail bool
+	syncDeactivatedUsers      bool
 }
 
 // userResource convert a SalesforceUser into a Resource.
@@ -99,6 +100,7 @@ func (o *userBuilder) List(
 		ctx,
 		pToken.Token,
 		pToken.Size,
+		o.syncDeactivatedUsers,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
@@ -282,10 +284,12 @@ func (o *userBuilder) CreateAccountCapabilityDetails(ctx context.Context) (*v2.C
 func newUserBuilder(
 	client *client.SalesforceClient,
 	shouldUseUsernameForEmail bool,
+	syncDeactivatedUsers bool,
 ) *userBuilder {
 	return &userBuilder{
 		resourceType:              resourceTypeUser,
 		client:                    client,
 		shouldUseUsernameForEmail: shouldUseUsernameForEmail,
+		syncDeactivatedUsers:      syncDeactivatedUsers,
 	}
 }

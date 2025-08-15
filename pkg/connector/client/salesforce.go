@@ -314,6 +314,27 @@ func (c *SalesforceClient) GetProfileById(ctx context.Context, id string) (*Sale
 	}, ratelimitData, nil
 }
 
+func (c *SalesforceClient) GetProfileByName(ctx context.Context, name string) (*SalesforceProfile, *v2.RateLimitDescription, error) {
+	query := NewQuery(TableNameProfiles).WhereEq("Name", name)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+	return &SalesforceProfile{
+		ID:            records[0].ID(),
+		Name:          records[0].StringField("Name"),
+		UserLicenseId: records[0].StringField("UserLicenseId"),
+	}, ratelimitData, nil
+}
+
 // GetUserRoles - SELECT Id, Name FROM UserRole.
 func (c *SalesforceClient) GetUserRoles(
 	ctx context.Context,
@@ -477,6 +498,26 @@ func (c *SalesforceClient) GetProfiles(
 		})
 	}
 	return profiles, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetUserLicenseByID(ctx context.Context, id string) (*SalesforceUserLicense, *v2.RateLimitDescription, error) {
+	query := NewQuery(TableNameUserLicenses).WhereEq("Id", id)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+	return &SalesforceUserLicense{
+		ID:   records[0].ID(),
+		Name: records[0].StringField("Name"),
+	}, ratelimitData, nil
 }
 
 // getAssignments DRY up some querying. This could be smarter to handle more cases.

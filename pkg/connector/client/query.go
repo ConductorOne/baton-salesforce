@@ -12,6 +12,7 @@ const (
 	TableNamePermissionAssignments   = "PermissionSetAssignment"
 	TableNamePermissionsSets         = "PermissionSet"
 	TableNameProfiles                = "Profile"
+	TableNameUserLicenses            = "UserLicense"
 	TableNameRoles                   = "UserRole"
 	TableNameUsers                   = "User"
 	TablePermissionSetGroup          = "PermissionSetGroup"

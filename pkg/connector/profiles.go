@@ -169,20 +169,34 @@ func (o *profileBuilder) Revoke(
 	ctx context.Context,
 	grant *v2.Grant,
 ) (annotations.Annotations, error) {
+	logger := ctxzap.Extract(ctx)
 	profile, _, err := o.client.GetProfileById(ctx, grant.Entitlement.Resource.Id.Resource)
 	if err != nil {
 		return nil, err
 	}
 
-	leastPrivilegedProfileID, ok := o.licenseToLeastProfileMapping[profile.UserLicenseId]
-	if !ok {
-		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration", profile.UserLicenseId)
+	profileUserLicense, _, err := o.client.GetUserLicenseByID(ctx, profile.UserLicenseId)
+	if err != nil {
+		return nil, fmt.Errorf("salesforce-connector: error getting user license by name: %w", err)
 	}
 
-	leastPrivilegedProfile, _, err := o.client.GetProfileById(ctx, leastPrivilegedProfileID)
+	leastPrivilegedProfileName, ok := o.licenseToLeastProfileMapping[profileUserLicense.Name]
+	if !ok {
+		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration", profileUserLicense.Name)
+	}
+
+	leastPrivilegedProfile, _, err := o.client.GetProfileByName(ctx, leastPrivilegedProfileName)
 	if err != nil {
 		return nil, fmt.Errorf("salesforce-connector: error getting least privileged profile: %w", err)
 	}
+
+	logger.Debug(
+		"salesforce-connector: setting new user's profile to the least privileged profile",
+		zap.String("principal_id", grant.Principal.Id.Resource),
+		zap.String("least_privileged_profile_id", leastPrivilegedProfile.ID),
+		zap.String("user_license_name", profileUserLicense.Name),
+		zap.String("least_privileged_profile_name", leastPrivilegedProfileName),
+	)
 
 	ratelimitData, err := o.client.SetNewUserProfile(
 		ctx,

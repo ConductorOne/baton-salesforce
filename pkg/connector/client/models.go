@@ -56,6 +56,11 @@ type SalesforceProfile struct {
 	UserLicenseId string
 }
 
+type SalesforceUserLicense struct {
+	ID   string
+	Name string
+}
+
 type ChatterUser struct {
 	CompanyName string `json:"companyName"`
 	Email       string `json:"email"`

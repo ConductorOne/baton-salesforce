@@ -55,6 +55,7 @@ func getConnector(ctx context.Context, v *viper.Viper) (types.ConnectorServer, e
 		v.GetString(PasswordField.FieldName),
 		v.GetString(SecurityTokenField.FieldName),
 		v.GetBool(SyncConnectedApps.FieldName),
+		v.GetBool(SyncDeactivatedUsers.FieldName),
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))

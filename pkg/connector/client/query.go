@@ -40,6 +40,9 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"Name",
 		"UserLicenseId",
 	},
+	TableNameUserLicenses: {
+		"Name",
+	},
 	TableNamePermissionAssignments: {
 		"PermissionSetId",
 		"AssigneeId",

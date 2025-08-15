@@ -37,6 +37,7 @@ var TableNamesToFieldsMapping = map[string][]string{
 	},
 	TableNameProfiles: {
 		"Name",
+		"UserLicenseId",
 	},
 	TableNamePermissionAssignments: {
 		"PermissionSetId",

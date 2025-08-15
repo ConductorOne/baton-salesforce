@@ -176,7 +176,7 @@ func (o *profileBuilder) Revoke(
 
 	leastPrivilegedProfileID, ok := o.licenseToLeastProfileMapping[profile.UserLicenseId]
 	if !ok {
-		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration.", profile.UserLicenseId)
+		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration", profile.UserLicenseId)
 	}
 
 	leastPrivilegedProfile, _, err := o.client.GetProfileById(ctx, leastPrivilegedProfileID)

@@ -293,6 +293,48 @@ func (c *SalesforceClient) GetUsers(
 	return users, paginationUrl, ratelimitData, nil
 }
 
+func (c *SalesforceClient) GetProfileById(ctx context.Context, id string) (*SalesforceProfile, *v2.RateLimitDescription, error) {
+	query := NewQuery(TableNameProfiles).WhereEq("Id", id)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+	return &SalesforceProfile{
+		ID:            records[0].ID(),
+		Name:          records[0].StringField("Name"),
+		UserLicenseId: records[0].StringField("UserLicenseId"),
+	}, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetProfileByName(ctx context.Context, name string) (*SalesforceProfile, *v2.RateLimitDescription, error) {
+	query := NewQuery(TableNameProfiles).WhereEq("Name", name)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+	return &SalesforceProfile{
+		ID:            records[0].ID(),
+		Name:          records[0].StringField("Name"),
+		UserLicenseId: records[0].StringField("UserLicenseId"),
+	}, ratelimitData, nil
+}
+
 // GetUserRoles - SELECT Id, Name FROM UserRole.
 func (c *SalesforceClient) GetUserRoles(
 	ctx context.Context,
@@ -450,11 +492,32 @@ func (c *SalesforceClient) GetProfiles(
 	profiles := make([]*SalesforceProfile, 0)
 	for _, record := range records {
 		profiles = append(profiles, &SalesforceProfile{
-			ID:   record.ID(),
-			Name: record.StringField("Name"),
+			ID:            record.ID(),
+			Name:          record.StringField("Name"),
+			UserLicenseId: record.StringField("UserLicenseId"),
 		})
 	}
 	return profiles, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetUserLicenseByID(ctx context.Context, id string) (*SalesforceUserLicense, *v2.RateLimitDescription, error) {
+	query := NewQuery(TableNameUserLicenses).WhereEq("Id", id)
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		query,
+		"",
+		1,
+	)
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+	if len(records) == 0 {
+		return nil, ratelimitData, nil
+	}
+	return &SalesforceUserLicense{
+		ID:   records[0].ID(),
+		Name: records[0].StringField("Name"),
+	}, ratelimitData, nil
 }
 
 // getAssignments DRY up some querying. This could be smarter to handle more cases.
@@ -720,12 +783,12 @@ func (c *SalesforceClient) AddUserToProfile(
 	return c.setOneValue(ctx, userId, "ProfileId", profileId)
 }
 
-func (c *SalesforceClient) RemoveUserFromProfile(
+func (c *SalesforceClient) SetNewUserProfile(
 	ctx context.Context,
 	userId string,
 	profileId string,
 ) (*v2.RateLimitDescription, error) {
-	return c.clearOneValue(ctx, userId, "ProfileId", profileId)
+	return c.setOneValue(ctx, userId, "ProfileId", profileId)
 }
 
 func (c *SalesforceClient) AddUserToRole(

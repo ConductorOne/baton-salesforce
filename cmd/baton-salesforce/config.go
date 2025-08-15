@@ -35,6 +35,10 @@ var (
 		field.WithDescription("Optionally sync deactivated users"),
 		field.WithDefaultValue(true),
 	)
+	LicenseToLeastPrivilegedProfileMapping = field.StringMapField(
+		"license-to-least-privileged-profile-mapping",
+		field.WithDescription("Mapping of Salesforce license types to least privileged profiles"),
+	)
 
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
@@ -44,6 +48,7 @@ var (
 		SecurityTokenField,
 		SyncConnectedApps,
 		SyncDeactivatedUsers,
+		LicenseToLeastPrivilegedProfileMapping,
 	}
 
 	Configuration = field.NewConfiguration(

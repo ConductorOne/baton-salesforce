@@ -27,7 +27,7 @@ func TestProfilesList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := newProfileBuilder(salesforceClient)
+	c := newProfileBuilder(salesforceClient, nil)
 
 	t.Run("should get profiles with pagination", func(t *testing.T) {
 		resources := make([]*v2.Resource, 0)

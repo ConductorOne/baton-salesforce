@@ -20,8 +20,9 @@ const (
 )
 
 type profileBuilder struct {
-	resourceType *v2.ResourceType
-	client       *client.SalesforceClient
+	resourceType                 *v2.ResourceType
+	client                       *client.SalesforceClient
+	licenseToLeastProfileMapping map[string]string
 }
 
 // profileResource convert a Salesforce profile into a Resource.
@@ -168,18 +169,38 @@ func (o *profileBuilder) Revoke(
 	ctx context.Context,
 	grant *v2.Grant,
 ) (annotations.Annotations, error) {
-	ratelimitData, err := o.client.RemoveUserFromProfile(
+	profile, _, err := o.client.GetProfileById(ctx, grant.Entitlement.Resource.Id.Resource)
+	if err != nil {
+		return nil, err
+	}
+
+	leastPrivilegedProfileID, ok := o.licenseToLeastProfileMapping[profile.UserLicenseId]
+	if !ok {
+		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration.", profile.UserLicenseId)
+	}
+
+	leastPrivilegedProfile, _, err := o.client.GetProfileById(ctx, leastPrivilegedProfileID)
+	if err != nil {
+		return nil, fmt.Errorf("salesforce-connector: error getting least privileged profile: %w", err)
+	}
+
+	ratelimitData, err := o.client.SetNewUserProfile(
 		ctx,
 		grant.Principal.Id.Resource,
-		grant.Entitlement.Resource.Id.Resource,
+		leastPrivilegedProfile.ID,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("salesforce-connector: error setting new user's profile to the least privileged profile: %w", err)
+	}
+
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	return outputAnnotations, err
 }
 
-func newProfileBuilder(client *client.SalesforceClient) *profileBuilder {
+func newProfileBuilder(client *client.SalesforceClient, licenseToLeastProfileMapping map[string]string) *profileBuilder {
 	return &profileBuilder{
-		resourceType: resourceTypeProfile,
-		client:       client,
+		resourceType:                 resourceTypeProfile,
+		client:                       client,
+		licenseToLeastProfileMapping: licenseToLeastProfileMapping,
 	}
 }

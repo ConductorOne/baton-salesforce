@@ -51,8 +51,9 @@ type SalesforcePermission struct {
 }
 
 type SalesforceProfile struct {
-	ID   string
-	Name string
+	ID            string
+	Name          string
+	UserLicenseId string
 }
 
 type ChatterUser struct {

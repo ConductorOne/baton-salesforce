@@ -71,6 +71,12 @@ CREATE TABLE PermissionSetGroup
     HasActivationRequired TEXT
 )
 
+CREATE TABLE UserLicense
+(
+    Id   TEXT PRIMARY KEY,
+    Name TEXT
+);
+
 CREATE TABLE PermissionSetGroupComponent
 (
     Id                   TEXT PRIMARY KEY,

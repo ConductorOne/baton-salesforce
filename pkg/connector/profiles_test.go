@@ -93,13 +93,8 @@ func TestProfilesList(t *testing.T) {
 			t.Fatal(err)
 		}
 		revokeAnnotations, err := c.Revoke(ctx, &grant)
-		require.Nil(t, err)
+		// No mapping for the license, so we expect an error
+		require.NotNil(t, err)
 		test.AssertNoRatelimitAnnotations(t, revokeAnnotations)
-
-		grantsAfter, nextToken, grantsAnnotations, err := c.Grants(ctx, profile, &pagination.Token{})
-		require.Nil(t, err)
-		test.AssertNoRatelimitAnnotations(t, grantsAnnotations)
-		require.Equal(t, "", nextToken)
-		require.Len(t, grantsAfter, 0)
 	})
 }

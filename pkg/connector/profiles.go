@@ -180,6 +180,10 @@ func (o *profileBuilder) Revoke(
 		return nil, fmt.Errorf("salesforce-connector: error getting user license by name: %w", err)
 	}
 
+	if profileUserLicense == nil {
+		return nil, fmt.Errorf("salesforce-connector: user license not found for profile %s", profile.UserLicenseId)
+	}
+
 	leastPrivilegedProfileName, ok := o.licenseToLeastProfileMapping[profileUserLicense.Name]
 	if !ok {
 		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration", profileUserLicense.Name)

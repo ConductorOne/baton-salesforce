@@ -36,7 +36,8 @@ CREATE TABLE PermissionSet
 CREATE TABLE Profile
 (
     Id   TEXT PRIMARY KEY,
-    Name TEXT
+    Name TEXT,
+    UserLicenseId TEXT
 );
 
 CREATE TABLE UserRole

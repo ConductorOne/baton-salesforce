@@ -36,7 +36,8 @@ CREATE TABLE PermissionSet
 CREATE TABLE Profile
 (
     Id   TEXT PRIMARY KEY,
-    Name TEXT
+    Name TEXT,
+    UserLicenseId TEXT
 );
 
 CREATE TABLE UserRole
@@ -70,6 +71,12 @@ CREATE TABLE PermissionSetGroup
     Description           TEXT,
     HasActivationRequired TEXT
 )
+
+CREATE TABLE UserLicense
+(
+    Id   TEXT PRIMARY KEY,
+    Name TEXT
+);
 
 CREATE TABLE PermissionSetGroupComponent
 (
@@ -144,9 +151,9 @@ INSERT INTO PermissionSet (Id, Name, Label, Type, ProfileId, "Profile")
 VALUES ('345X', 'name', 'label', 'type', '1', '{"Name": "profile name"}');
 INSERT INTO PermissionSetAssignment (Id, PermissionSetId, AssigneeId, IsActive)
 VALUES ('1X', '345X', '0051X', 1);
-INSERT INTO Profile (Id, Name)
-VALUES ('198X', 'name'),
-       ('298X', 'name');
+INSERT INTO Profile (Id, Name, UserLicenseId)
+VALUES ('198X', 'name', '1'),
+       ('298X', 'name', '2');
 INSERT INTO UserRole (Id, Name)
 VALUES ('199X', 'name'),
        ('299X', 'name');

@@ -24,12 +24,13 @@ func annotationsForUserResourceType() annotations.Annotations {
 }
 
 type Salesforce struct {
-	client                    *client.SalesforceClient
-	ctx                       context.Context
-	instanceURL               string
-	shouldUseUsernameForEmail bool
-	syncConnectedApps         bool
-	syncDeactivatedUsers      bool
+	client                       *client.SalesforceClient
+	ctx                          context.Context
+	instanceURL                  string
+	shouldUseUsernameForEmail    bool
+	syncConnectedApps            bool
+	syncDeactivatedUsers         bool
+	licenseToLeastProfileMapping map[string]string
 }
 
 // fallBackToHTTPS checks to domain and tacks on "https://" if no scheme is
@@ -56,7 +57,7 @@ func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.Res
 		newUserBuilder(d.client, d.shouldUseUsernameForEmail, d.syncDeactivatedUsers),
 		newGroupBuilder(d.client),
 		newPermissionBuilder(d.client),
-		newProfileBuilder(d.client),
+		newProfileBuilder(d.client, d.licenseToLeastProfileMapping),
 		newRoleBuilder(d.client),
 		newPermissionSetGroupBuilder(d.client),
 	}
@@ -216,6 +217,7 @@ func New(
 	securityToken string,
 	syncConnectedApps bool,
 	syncDeactivatedUsers bool,
+	licenseToLeastProfileMapping map[string]string,
 ) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(instanceURL)
@@ -230,6 +232,9 @@ func New(
 		zap.Bool("password?", password != ""),
 		zap.Bool("securityToken?", securityToken != ""),
 		zap.Bool("useUsernameForEmail", useUsernameForEmail),
+		zap.Bool("syncConnectedApps", syncConnectedApps),
+		zap.Bool("syncDeactivatedUsers", syncDeactivatedUsers),
+		zap.Any("licenseToLeastProfileMapping", licenseToLeastProfileMapping),
 	)
 
 	// Instantiate with a "broken" client. Client is later overwritten either
@@ -243,12 +248,13 @@ func New(
 		securityToken,
 	)
 	salesforce := Salesforce{
-		client:                    salesforceClient,
-		ctx:                       ctx,
-		shouldUseUsernameForEmail: useUsernameForEmail,
-		instanceURL:               instanceURL,
-		syncConnectedApps:         syncConnectedApps,
-		syncDeactivatedUsers:      syncDeactivatedUsers,
+		client:                       salesforceClient,
+		ctx:                          ctx,
+		shouldUseUsernameForEmail:    useUsernameForEmail,
+		instanceURL:                  instanceURL,
+		syncConnectedApps:            syncConnectedApps,
+		syncDeactivatedUsers:         syncDeactivatedUsers,
+		licenseToLeastProfileMapping: licenseToLeastProfileMapping,
 	}
 	return &salesforce, nil
 }

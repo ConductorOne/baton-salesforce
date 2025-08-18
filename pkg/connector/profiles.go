@@ -20,8 +20,9 @@ const (
 )
 
 type profileBuilder struct {
-	resourceType *v2.ResourceType
-	client       *client.SalesforceClient
+	resourceType                 *v2.ResourceType
+	client                       *client.SalesforceClient
+	licenseToLeastProfileMapping map[string]string
 }
 
 // profileResource convert a Salesforce profile into a Resource.
@@ -168,18 +169,56 @@ func (o *profileBuilder) Revoke(
 	ctx context.Context,
 	grant *v2.Grant,
 ) (annotations.Annotations, error) {
-	ratelimitData, err := o.client.RemoveUserFromProfile(
+	logger := ctxzap.Extract(ctx)
+	profile, _, err := o.client.GetProfileById(ctx, grant.Entitlement.Resource.Id.Resource)
+	if err != nil {
+		return nil, err
+	}
+
+	profileUserLicense, _, err := o.client.GetUserLicenseByID(ctx, profile.UserLicenseId)
+	if err != nil {
+		return nil, fmt.Errorf("salesforce-connector: error getting user license by name: %w", err)
+	}
+
+	if profileUserLicense == nil {
+		return nil, fmt.Errorf("salesforce-connector: user license not found for profile %s", profile.UserLicenseId)
+	}
+
+	leastPrivilegedProfileName, ok := o.licenseToLeastProfileMapping[profileUserLicense.Name]
+	if !ok {
+		return nil, fmt.Errorf("salesforce-connector: no least privileged profile found for license %s. Please add a mapping in the connector configuration", profileUserLicense.Name)
+	}
+
+	leastPrivilegedProfile, _, err := o.client.GetProfileByName(ctx, leastPrivilegedProfileName)
+	if err != nil {
+		return nil, fmt.Errorf("salesforce-connector: error getting least privileged profile: %w", err)
+	}
+
+	logger.Debug(
+		"salesforce-connector: setting new user's profile to the least privileged profile",
+		zap.String("principal_id", grant.Principal.Id.Resource),
+		zap.String("least_privileged_profile_id", leastPrivilegedProfile.ID),
+		zap.String("user_license_name", profileUserLicense.Name),
+		zap.String("least_privileged_profile_name", leastPrivilegedProfileName),
+	)
+
+	ratelimitData, err := o.client.SetNewUserProfile(
 		ctx,
 		grant.Principal.Id.Resource,
-		grant.Entitlement.Resource.Id.Resource,
+		leastPrivilegedProfile.ID,
 	)
+	if err != nil {
+		return nil, fmt.Errorf("salesforce-connector: error setting new user's profile to the least privileged profile: %w", err)
+	}
+
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	return outputAnnotations, err
 }
 
-func newProfileBuilder(client *client.SalesforceClient) *profileBuilder {
+func newProfileBuilder(client *client.SalesforceClient, licenseToLeastProfileMapping map[string]string) *profileBuilder {
 	return &profileBuilder{
-		resourceType: resourceTypeProfile,
-		client:       client,
+		resourceType:                 resourceTypeProfile,
+		client:                       client,
+		licenseToLeastProfileMapping: licenseToLeastProfileMapping,
 	}
 }

@@ -12,6 +12,7 @@ const (
 	TableNamePermissionAssignments   = "PermissionSetAssignment"
 	TableNamePermissionsSets         = "PermissionSet"
 	TableNameProfiles                = "Profile"
+	TableNameUserLicenses            = "UserLicense"
 	TableNameRoles                   = "UserRole"
 	TableNameUsers                   = "User"
 	TablePermissionSetGroup          = "PermissionSetGroup"
@@ -36,6 +37,10 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"Name",
 	},
 	TableNameProfiles: {
+		"Name",
+		"UserLicenseId",
+	},
+	TableNameUserLicenses: {
 		"Name",
 	},
 	TableNamePermissionAssignments: {

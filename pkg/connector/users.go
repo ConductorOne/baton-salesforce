@@ -198,6 +198,33 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 	}, nil
 }
 
+func (o *userBuilder) Delete(
+	ctx context.Context,
+	resourceId *v2.ResourceId,
+) (
+	annotations.Annotations,
+	error,
+) {
+	l := ctxzap.Extract(ctx)
+
+	userId := resourceId.Resource
+	isActive := false
+
+	ratelimitData, err := o.client.SetUserActiveState(ctx, userId, isActive)
+	if err != nil {
+		l.Error("Failed to update user status",
+			zap.String("resource_id", userId),
+			zap.Bool("is_active", isActive),
+			zap.Error(err))
+
+		return nil, err
+	}
+
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+
+	return outputAnnotations, nil
+}
+
 func (o *userBuilder) CreateAccount(
 	ctx context.Context,
 	accountInfo *v2.AccountInfo,

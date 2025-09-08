@@ -56,7 +56,6 @@ func getConnector(ctx context.Context, cfg *config.Salesforce) (types.ConnectorS
 		cfg.GetString(config.SecurityTokenField.FieldName),
 		cfg.GetBool(config.SyncConnectedApps.FieldName),
 		cfg.GetBool(config.SyncDeactivatedUsers.FieldName),
-		cfg.GetBool(config.SyncNonStandardUsers.FieldName),
 		cfg.GetStringMapString(config.LicenseToLeastPrivilegedProfileMapping.FieldName),
 	)
 	if err != nil {

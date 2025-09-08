@@ -25,7 +25,7 @@ func TestUsersList(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := newUserBuilder(salesforceClient, false, true, true)
+		c := newUserBuilder(salesforceClient, false, true)
 
 		resources := make([]*v2.Resource, 0)
 		pToken := pagination.Token{

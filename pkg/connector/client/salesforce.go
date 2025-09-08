@@ -738,7 +738,7 @@ func (c *SalesforceClient) RemoveUserFromGroup(
 ) (bool, *v2.RateLimitDescription, error) {
 	found, ratelimitData, err := c.getGroupMembership(ctx, userId, groupId)
 	if err != nil {
-		if errors.Is(err, ObjectNotFound) {
+		if errors.Is(err, ErrObjectNotFound) {
 			return false, ratelimitData, nil
 		}
 		return false, ratelimitData, err

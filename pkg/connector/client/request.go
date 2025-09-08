@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var ObjectNotFound = errors.New("Salesforce object does not exists")
+var ErrObjectNotFound = errors.New("salesforce object does not exist")
 
 func getQueryString(
 	q *SalesforceQuery,
@@ -87,7 +87,7 @@ func (c *SalesforceClient) getSObject(
 	}
 
 	if len(records) == 0 {
-		return nil, ratelimitData, ObjectNotFound
+		return nil, ratelimitData, ErrObjectNotFound
 	}
 
 	if len(records) > 1 {

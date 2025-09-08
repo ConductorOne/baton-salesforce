@@ -4,8 +4,15 @@ package config
 import "reflect"
 
 type Salesforce struct {
-	Domain string `mapstructure:"instance-url"`
-	ApiKey string `mapstructure:"api-key"`
+	InstanceUrl                            string            `mapstructure:"instance-url"`
+	UseUsernameForEmail                    bool              `mapstructure:"user-username-for-email"`
+	Username                               string            `mapstructure:"salesforce-username"`
+	Password                               string            `mapstructure:"salesforce-password"`
+	SecurityToken                          string            `mapstructure:"security-token"`
+	SyncConnectedApps                      bool              `mapstructure:"sync-connected-apps"`
+	SyncDeactivatedUsers                   bool              `mapstructure:"sync-deactivated-users"`
+	SyncNonStandardUsers                   bool              `mapstructure:"sync-non-standard-users"`
+	LicenseToLeastPrivilegedProfileMapping map[string]string `mapstructure:"license-to-least-privileged-profile-mapping"`
 }
 
 func (c *Salesforce) findFieldByTag(tagValue string) (any, bool) {

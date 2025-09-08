@@ -4,7 +4,7 @@ package config
 import "reflect"
 
 type Salesforce struct {
-	Domain string `mapstructure:"domain"`
+	Domain string `mapstructure:"instance-url"`
 	ApiKey string `mapstructure:"api-key"`
 }
 

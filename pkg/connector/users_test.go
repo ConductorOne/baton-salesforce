@@ -14,18 +14,18 @@ func TestUsersList(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("should get users with pagination", func(t *testing.T) {
-		server, db, err := test.FixturesServer()
+		server, db, err := test.FixturesServer(ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer test.TearDownDB(db)
+		defer test.TearDownDB(ctx, db)
 		defer server.Close()
 
 		salesforceClient, err := test.Client(ctx, server.URL)
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := newUserBuilder(salesforceClient, false, true)
+		c := newUserBuilder(salesforceClient, false, true, true)
 
 		resources := make([]*v2.Resource, 0)
 		pToken := pagination.Token{

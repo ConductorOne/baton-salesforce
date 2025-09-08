@@ -16,11 +16,11 @@ import (
 func TestGroupsList(t *testing.T) {
 	ctx := context.Background()
 
-	server, db, err := test.FixturesServer()
+	server, db, err := test.FixturesServer(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer test.TearDownDB(db)
+	defer test.TearDownDB(ctx, db)
 	defer server.Close()
 
 	salesforceClient, err := test.Client(ctx, server.URL)

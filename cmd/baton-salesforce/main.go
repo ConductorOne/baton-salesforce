@@ -47,17 +47,7 @@ func getConnector(ctx context.Context, cfg *config.Salesforce) (types.ConnectorS
 		return nil, err
 	}
 
-	cb, err := connector.New(
-		ctx,
-		cfg.InstanceUrl,
-		cfg.UserUsernameForEmail,
-		cfg.SalesforceUsername,
-		cfg.SalesforcePassword,
-		cfg.SecurityToken,
-		cfg.SyncConnectedApps,
-		cfg.SyncDeactivatedUsers,
-		cfg.GetLicenseToLeastPrivilegedProfileMapping(),
-	)
+	cb, err := connector.New(ctx, cfg)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err

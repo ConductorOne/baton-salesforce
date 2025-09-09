@@ -31,6 +31,7 @@ var (
 		"security-token",
 		field.WithDisplayName("Security Token"),
 		field.WithDescription("Salesforce security token (optional if trusted IP is configured)"),
+		field.WithIsSecret(true),
 	)
 	SyncConnectedApps = field.BoolField(
 		"sync-connected-apps",
@@ -49,6 +50,13 @@ var (
 		field.WithDescription("Mapping of Salesforce license types to least privileged profiles"),
 	)
 
+	fieldRelationships = []field.SchemaFieldRelationship{
+		field.FieldsRequiredTogether(
+			UsernameField,
+			PasswordField,
+		),
+	}
+
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
 		UseUsernameForEmailField,
@@ -62,6 +70,7 @@ var (
 
 	Configuration = field.NewConfiguration(
 		configurationFields,
+		field.WithConstraints(fieldRelationships...),
 		field.WithConnectorDisplayName("Salesforce"),
 		field.WithHelpUrl("/docs/baton/salesforce"),
 		field.WithIconUrl("/static/app-icons/salesforce.svg"),

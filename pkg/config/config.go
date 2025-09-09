@@ -59,8 +59,8 @@ var (
 
 	Configuration = field.NewConfiguration(
 		configurationFields,
-		field.WithConnectorDisplayName("Twingate"),
-		field.WithHelpUrl("/docs/baton/twingate"),
-		field.WithIconUrl("/static/app-icons/twingate.svg"),
+		field.WithConnectorDisplayName("Salesforce"),
+		field.WithHelpUrl("/docs/baton/salesforce"),
+		field.WithIconUrl("/static/app-icons/salesforce.svg"),
 	)
 )

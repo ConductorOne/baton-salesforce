@@ -5,9 +5,9 @@ import "reflect"
 
 type Salesforce struct {
 	InstanceUrl                            string         `mapstructure:"instance-url"`
-	UseUsernameForEmail                    bool           `mapstructure:"user-username-for-email"`
-	Username                               string         `mapstructure:"salesforce-username"`
-	Password                               string         `mapstructure:"salesforce-password"`
+	UserUsernameForEmail                   bool           `mapstructure:"user-username-for-email"`
+	SalesforceUsername                     string         `mapstructure:"salesforce-username"`
+	SalesforcePassword                     string         `mapstructure:"salesforce-password"`
 	SecurityToken                          string         `mapstructure:"security-token"`
 	SyncConnectedApps                      bool           `mapstructure:"sync-connected-apps"`
 	SyncDeactivatedUsers                   bool           `mapstructure:"sync-deactivated-users"`

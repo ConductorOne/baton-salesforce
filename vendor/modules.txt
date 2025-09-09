@@ -216,9 +216,6 @@ github.com/conductorone/baton-sdk/pkg/uotel
 github.com/conductorone/baton-sdk/pkg/us3
 github.com/conductorone/baton-sdk/pkg/ustrings
 github.com/conductorone/baton-sdk/pkg/utls
-# github.com/conductorone/baton-twingate v0.0.5
-## explicit; go 1.23.4
-github.com/conductorone/baton-twingate/pkg/config
 # github.com/conductorone/dpop v0.2.3
 ## explicit; go 1.23.4
 github.com/conductorone/dpop/pkg/dpop

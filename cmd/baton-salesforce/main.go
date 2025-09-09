@@ -49,14 +49,22 @@ func getConnector(ctx context.Context, cfg *config.Salesforce) (types.ConnectorS
 
 	cb, err := connector.New(
 		ctx,
-		cfg.GetString(config.InstanceUrlField.FieldName),
-		cfg.GetBool(config.UseUsernameForEmailField.FieldName),
-		cfg.GetString(config.UsernameField.FieldName),
-		cfg.GetString(config.PasswordField.FieldName),
-		cfg.GetString(config.SecurityTokenField.FieldName),
-		cfg.GetBool(config.SyncConnectedApps.FieldName),
-		cfg.GetBool(config.SyncDeactivatedUsers.FieldName),
-		cfg.GetStringMapString(config.LicenseToLeastPrivilegedProfileMapping.FieldName),
+		cfg.InstanceUrl,
+		cfg.UserUsernameForEmail,
+		cfg.SalesforceUsername,
+		cfg.SalesforcePassword,
+		cfg.SecurityToken,
+		cfg.SyncConnectedApps,
+		cfg.SyncDeactivatedUsers,
+		func(m map[string]any) map[string]string {
+			out := make(map[string]string, len(m))
+			for k, v := range m {
+				if s, ok := v.(string); ok {
+					out[k] = s
+				}
+			}
+			return out
+		}(cfg.LicenseToLeastPrivilegedProfileMapping),
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))

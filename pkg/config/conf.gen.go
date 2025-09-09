@@ -11,7 +11,6 @@ type Salesforce struct {
 	SecurityToken                          string         `mapstructure:"security-token"`
 	SyncConnectedApps                      bool           `mapstructure:"sync-connected-apps"`
 	SyncDeactivatedUsers                   bool           `mapstructure:"sync-deactivated-users"`
-	SyncNonStandardUsers                   bool           `mapstructure:"sync-non-standard-users"`
 	LicenseToLeastPrivilegedProfileMapping map[string]any `mapstructure:"license-to-least-privileged-profile-mapping"`
 }
 
@@ -88,16 +87,4 @@ func (c *Salesforce) GetStringMap(fieldName string) map[string]any {
 		panic("wrong type")
 	}
 	return t
-}
-
-// GetStringMapString returns a map[string]string for the given fieldName.
-func (c *Salesforce) GetStringMapString(fieldName string) map[string]string {
-	m := c.GetStringMap(fieldName)
-	out := make(map[string]string, len(m))
-	for k, v := range m {
-		if s, ok := v.(string); ok {
-			out[k] = s
-		}
-	}
-	return out
 }

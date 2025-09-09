@@ -56,15 +56,7 @@ func getConnector(ctx context.Context, cfg *config.Salesforce) (types.ConnectorS
 		cfg.SecurityToken,
 		cfg.SyncConnectedApps,
 		cfg.SyncDeactivatedUsers,
-		func(m map[string]any) map[string]string {
-			out := make(map[string]string, len(m))
-			for k, v := range m {
-				if s, ok := v.(string); ok {
-					out[k] = s
-				}
-			}
-			return out
-		}(cfg.LicenseToLeastPrivilegedProfileMapping),
+		cfg.GetLicenseToLeastPrivilegedProfileMapping(),
 	)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))

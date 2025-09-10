@@ -142,7 +142,7 @@ func (c *SalesforceClient) GetUserByEmail(
 		if err != nil {
 			return nil, err
 		}
-		if shouldSkipSyncingUserType(ctx, record, false) {
+		if shouldSkipSyncingUserType(ctx, record, true) {
 			continue
 		}
 

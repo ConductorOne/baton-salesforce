@@ -218,7 +218,11 @@ func getBoolField(record simpleforce.SObject, field string) (bool, error) {
 func shouldSkipSyncingUserType(
 	ctx context.Context,
 	user simpleforce.SObject,
+	syncNonStandardUsers bool,
 ) bool {
+	if syncNonStandardUsers {
+		return false
+	}
 	logger := ctxzap.Extract(ctx)
 
 	userType := user.StringField("UserType")
@@ -242,16 +246,23 @@ func (c *SalesforceClient) GetUsers(
 	pageToken string,
 	pageSize int,
 	syncDeactivatedUsers bool,
+	syncNonStandardUsers bool,
 ) (
 	[]*SalesforceUser,
 	string,
 	*v2.RateLimitDescription,
 	error,
 ) {
-	// Filter for Standard users only - these are full Salesforce users with standard licenses.
-	// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
-	// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
-	query := NewQuery(TableNameUsers).WhereEq("UserType", "Standard")
+	// Build the conditional query based on syncNonStandardUsers
+	var query *SalesforceQuery
+	if syncNonStandardUsers {
+		query = NewQuery(TableNameUsers) // No user type filter
+	} else {
+		// Filter for Standard users only - these are full Salesforce users with standard licenses.
+		// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
+		// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
+		query = NewQuery(TableNameUsers).WhereEq("UserType", "Standard")
+	}
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
 		query,
@@ -270,7 +281,7 @@ func (c *SalesforceClient) GetUsers(
 		if !syncDeactivatedUsers && !isActive {
 			continue
 		}
-		if shouldSkipSyncingUserType(ctx, record) {
+		if shouldSkipSyncingUserType(ctx, record, syncNonStandardUsers) {
 			continue
 		}
 

@@ -27,7 +27,7 @@ type profileBuilder struct {
 
 // profileResource convert a Salesforce profile into a Resource.
 func profileResource(
-	ctx context.Context,
+	_ context.Context,
 	profile *client.SalesforceProfile,
 ) (*v2.Resource, error) {
 	newProfileResource, err := resource.NewResource(

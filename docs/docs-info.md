@@ -22,7 +22,7 @@ While developing the connector, please fill out this form. This information is n
     - **Instance URL**: Your Salesforce domain (e.g., `acme.my.salesforce.com`).
     - **Salesforce Username**: The username for the Salesforce account.
     - **Salesforce Password**: The password for the Salesforce account.
-    - **Security Token**: The Salesforce security token, which is optional if your IP is configured as trusted.
+    - **Security Token (optional)**: Only required when logging in from untrusted networks or IP addresses.
 
 2. For each item in the list above: 
 
@@ -30,7 +30,7 @@ While developing the connector, please fill out this form. This information is n
 
         *   **Instance URL**: This is the domain of your Salesforce organization. You can find it in your browser's address bar when you are logged into Salesforce (e.g., `https://your-domain.my.salesforce.com`).
         *   **Salesforce Username & Password**: These are the standard login credentials for the Salesforce user account that will be used for the integration.
-        *   **Security Token**: Salesforce requires a security token to log in from untrusted networks. If the user's password is changed, Salesforce automatically sends a new security token via email.
+        *   **Security Token (optional)**: Salesforce requires a security token only when logging in from untrusted networks. If the user's password is changed, Salesforce automatically sends a new security token via email.
         *   [Salesforce Documentation: Reset Your Security Token](https://help.salesforce.com/s/articleView?id=sf.user_security_token.htm&type=5)
 
    * Does the credential need any specific scopes or permissions? If so, list them here. 

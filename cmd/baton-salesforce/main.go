@@ -52,10 +52,10 @@ func getConnector(ctx context.Context, cfg *config.Salesforce) (types.ConnectorS
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
 	}
-	c1Connector, err := connectorbuilder.NewConnector(ctx, cb)
+	connector, err := connectorbuilder.NewConnector(ctx, cb)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err
 	}
-	return c1Connector, nil
+	return connector, nil
 }

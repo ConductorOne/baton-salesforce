@@ -220,9 +220,6 @@ func shouldSkipSyncingUserType(
 	user simpleforce.SObject,
 	syncNonStandardUsers bool,
 ) bool {
-	if syncNonStandardUsers {
-		return false
-	}
 	logger := ctxzap.Extract(ctx)
 
 	userType := user.StringField("UserType")
@@ -235,6 +232,10 @@ func shouldSkipSyncingUserType(
 			zap.String("id", id),
 		)
 		return true
+	}
+
+	if syncNonStandardUsers {
+		return false
 	}
 
 	value, ok := userTypesToSkip[userType]
@@ -254,8 +255,10 @@ func (c *SalesforceClient) GetUsers(
 	error,
 ) {
 	// Build the conditional query based on syncNonStandardUsers
+	logger := ctxzap.Extract(ctx)
 	var query *SalesforceQuery
 	if syncNonStandardUsers {
+		logger.Debug("salesforce-client: syncing non-standard users")
 		query = NewQuery(TableNameUsers) // No user type filter
 	} else {
 		// Filter for Standard users only - these are full Salesforce users with standard licenses.

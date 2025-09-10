@@ -39,7 +39,7 @@ func getGroupName(group *client.SalesforceGroup) string {
 	return fmt.Sprintf("%s%s", group.Name, typeName)
 }
 
-func groupResource(ctx context.Context, group *client.SalesforceGroup) (*v2.Resource, error) {
+func groupResource(_ context.Context, group *client.SalesforceGroup) (*v2.Resource, error) {
 	displayName := getGroupName(group)
 
 	newGroupResource, err := resource.NewGroupResource(

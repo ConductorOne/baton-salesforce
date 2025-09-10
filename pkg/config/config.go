@@ -44,6 +44,12 @@ var (
 		field.WithDescription("Optionally sync deactivated users"),
 		field.WithDefaultValue(true),
 	)
+	SyncNonStandardUsers = field.BoolField(
+		"sync-non-standard-users",
+		field.WithDisplayName("Sync Non-Standard Users"),
+		field.WithDescription("Optionally sync non-standard user types (Customer Community, etc)"),
+		field.WithDefaultValue(false),
+	)
 	LicenseToLeastPrivilegedProfileMapping = field.StringMapField(
 		"license-to-least-privileged-profile-mapping",
 		field.WithDisplayName("License to Least Privileged Profile Mapping"),
@@ -66,6 +72,7 @@ var (
 		SyncConnectedApps,
 		SyncDeactivatedUsers,
 		LicenseToLeastPrivilegedProfileMapping,
+		SyncNonStandardUsers,
 	}
 
 	Configuration = field.NewConfiguration(

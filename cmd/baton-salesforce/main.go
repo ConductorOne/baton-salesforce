@@ -6,7 +6,7 @@ import (
 	"os"
 
 	config "github.com/conductorone/baton-salesforce/pkg/config"
-	"github.com/conductorone/baton-salesforce/pkg/connector"
+	connectorpkg "github.com/conductorone/baton-salesforce/pkg/connector"
 	sdkconfig "github.com/conductorone/baton-sdk/pkg/config"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/conductorone/baton-sdk/pkg/field"
@@ -47,7 +47,7 @@ func getConnector(ctx context.Context, cfg *config.Salesforce) (types.ConnectorS
 		return nil, err
 	}
 
-	cb, err := connector.New(ctx, cfg)
+	cb, err := connectorpkg.New(ctx, cfg)
 	if err != nil {
 		l.Error("error creating connector", zap.Error(err))
 		return nil, err

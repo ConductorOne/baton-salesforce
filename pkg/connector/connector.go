@@ -31,6 +31,7 @@ type Salesforce struct {
 	shouldUseUsernameForEmail    bool
 	syncConnectedApps            bool
 	syncDeactivatedUsers         bool
+	syncNonStandardUsers         bool
 	licenseToLeastProfileMapping map[string]string
 }
 
@@ -55,7 +56,7 @@ func fallBackToHTTPS(domain string) (string, error) {
 // be synced from the upstream service.
 func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
 	rv := []connectorbuilder.ResourceSyncer{
-		newUserBuilder(d.client, d.shouldUseUsernameForEmail, d.syncDeactivatedUsers),
+		newUserBuilder(d.client, d.shouldUseUsernameForEmail, d.syncDeactivatedUsers, d.syncNonStandardUsers),
 		newGroupBuilder(d.client),
 		newPermissionBuilder(d.client),
 		newProfileBuilder(d.client, d.licenseToLeastProfileMapping),
@@ -225,6 +226,7 @@ func New(ctx context.Context, cfg *config.Salesforce) (*Salesforce, error) {
 		zap.Bool("useUsernameForEmail", cfg.UserUsernameForEmail),
 		zap.Bool("syncConnectedApps", cfg.SyncConnectedApps),
 		zap.Bool("syncDeactivatedUsers", cfg.SyncDeactivatedUsers),
+		zap.Bool("syncNonStandardUsers", cfg.SyncNonStandardUsers),
 		zap.Any("licenseToLeastProfileMapping", cfg.GetLicenseToLeastPrivilegedProfileMapping()),
 	)
 
@@ -245,6 +247,7 @@ func New(ctx context.Context, cfg *config.Salesforce) (*Salesforce, error) {
 		instanceURL:                  instanceURL,
 		syncConnectedApps:            cfg.SyncConnectedApps,
 		syncDeactivatedUsers:         cfg.SyncDeactivatedUsers,
+		syncNonStandardUsers:         cfg.SyncNonStandardUsers,
 		licenseToLeastProfileMapping: cfg.GetLicenseToLeastPrivilegedProfileMapping(),
 	}
 	return &salesforce, nil

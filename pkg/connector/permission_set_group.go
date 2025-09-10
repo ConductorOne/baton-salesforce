@@ -22,7 +22,7 @@ type permissionSetGroupBuilder struct {
 }
 
 // roleResource convert a SalesforceRole into a Resource.
-func permissionSetGroupResource(ctx context.Context, permissionGroup *client.PermissionSetGroup) (*v2.Resource, error) {
+func permissionSetGroupResource(_ context.Context, permissionGroup *client.PermissionSetGroup) (*v2.Resource, error) {
 	newResource, err := rs.NewResource(
 		permissionGroup.MasterLabel,
 		resourceTypePermissionSetGroup,

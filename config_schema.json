@@ -1,0 +1,123 @@
+{
+  "fields": [
+    {
+      "name": "instance-url",
+      "displayName": "Instance URL",
+      "description": "Your Salesforce domain, ex: acme.my.salesforce.com",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "license-to-least-privileged-profile-mapping",
+      "displayName": "License to Least Privileged Profile Mapping",
+      "description": "Mapping of Salesforce license types to least privileged profiles",
+      "stringMapField": {}
+    },
+    {
+      "name": "log-level",
+      "description": "The log level: debug, info, warn, error",
+      "isOps": true,
+      "stringField": {
+        "defaultValue": "info"
+      }
+    },
+    {
+      "name": "log-level-debug-expires-at",
+      "description": "The timestamp indicating when debug-level logging should expire",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint",
+      "description": "The endpoint of the OpenTelemetry collector to send observability data to (used for both tracing and logging if specific endpoints are not provided)",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint-tls-cert",
+      "description": "A PEM-encoded certificate to use as a CA for TLS connections to the OpenTelemetry collector",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint-tls-cert-path",
+      "description": "Path to a file containing a PEM-encoded certificate to use as a CA for TLS connections to the OpenTelemetry collector",
+      "isOps": true,
+      "stringField": {}
+    },
+    {
+      "name": "otel-collector-endpoint-tls-insecure",
+      "description": "Allow insecure connections to the OpenTelemetry collector",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "otel-logging-disabled",
+      "description": "Disable OpenTelemetry logging",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "otel-tracing-disabled",
+      "description": "Disable OpenTelemetry tracing",
+      "isOps": true,
+      "boolField": {}
+    },
+    {
+      "name": "salesforce-password",
+      "displayName": "Salesforce Password",
+      "description": "Salesforce account password",
+      "isSecret": true,
+      "stringField": {}
+    },
+    {
+      "name": "salesforce-username",
+      "displayName": "Salesforce Username",
+      "description": "Salesforce account username",
+      "stringField": {}
+    },
+    {
+      "name": "security-token",
+      "displayName": "Security Token",
+      "description": "Salesforce security token (optional if trusted IP is configured)",
+      "isSecret": true,
+      "stringField": {}
+    },
+    {
+      "name": "sync-connected-apps",
+      "displayName": "Sync Connected Apps",
+      "description": "Optionally sync access to connected apps",
+      "boolField": {}
+    },
+    {
+      "name": "sync-deactivated-users",
+      "displayName": "Sync Deactivated Users",
+      "description": "Optionally sync deactivated users",
+      "boolField": {
+        "defaultValue": true
+      }
+    },
+    {
+      "name": "user-username-for-email",
+      "displayName": "Use Username for Email",
+      "description": "Use Salesforce usernames for email",
+      "boolField": {}
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "CONSTRAINT_KIND_REQUIRED_TOGETHER",
+      "fieldNames": [
+        "salesforce-username",
+        "salesforce-password"
+      ]
+    }
+  ],
+  "displayName": "Salesforce",
+  "helpUrl": "/docs/baton/salesforce",
+  "iconUrl": "/static/app-icons/salesforce.svg"
+}

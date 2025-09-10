@@ -82,9 +82,10 @@ func AssertNoRatelimitAnnotations(
 	}
 }
 
-func TearDownDB(db *sql.DB) {
+func TearDownDB(ctx context.Context, db *sql.DB) {
 	for key := range client.TableNamesToFieldsMapping {
-		_, err := db.Exec(
+		_, err := db.ExecContext(
+			ctx,
 			fmt.Sprintf("DROP TABLE %s", key),
 		)
 		if err != nil {
@@ -98,7 +99,7 @@ func TearDownDB(db *sql.DB) {
 	}
 }
 
-func seedDB() (*sql.DB, error) {
+func seedDB(ctx context.Context) (*sql.DB, error) {
 	data, _ := os.ReadFile("../../test/fixtures/dump.sql")
 
 	db, err := sql.Open("ramsql", "dump")
@@ -106,7 +107,7 @@ func seedDB() (*sql.DB, error) {
 		return nil, err
 	}
 
-	_, err = db.Exec(string(data))
+	_, err = db.ExecContext(ctx, string(data))
 	if err != nil {
 		return nil, fmt.Errorf("error in adding SQL data: %w", err)
 	}
@@ -114,11 +115,11 @@ func seedDB() (*sql.DB, error) {
 	return db, nil
 }
 
-func query(db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
+func query(ctx context.Context, db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
 	hackString := strings.ReplaceAll(queryString, ".Name", "")
 	hackString = strings.ReplaceAll(hackString, "Fields(standard)", "Id,*")
 
-	rows, err := db.Query(hackString)
+	rows, err := db.QueryContext(ctx, hackString)
 	if err != nil {
 		return nil, err
 	}
@@ -163,8 +164,8 @@ type QueryResult struct {
 	Records        []simpleforce.SObject `json:"records"`
 }
 
-func FixturesServer() (*httptest.Server, *sql.DB, error) {
-	db, err := seedDB()
+func FixturesServer(ctx context.Context) (*httptest.Server, *sql.DB, error) {
+	db, err := seedDB(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -180,16 +181,16 @@ func FixturesServer() (*httptest.Server, *sql.DB, error) {
 				case strings.Contains(path, "sobjects"):
 					switch request.Method {
 					case http.MethodGet:
-						output, err = handleShow(db, request)
+						output, err = handleShow(ctx, db, request)
 					case http.MethodPatch:
-						output, err = handlePatch(db, request)
+						output, err = handlePatch(ctx, db, request)
 					case http.MethodPost:
-						output, err = handleInsert(db, request)
+						output, err = handleInsert(ctx, db, request)
 					case http.MethodDelete:
-						err = handleDelete(db, request)
+						err = handleDelete(ctx, db, request)
 					}
 				case request.Method == http.MethodGet:
-					output, err = handleQuery(db, request)
+					output, err = handleQuery(ctx, db, request)
 				default:
 					err = fmt.Errorf(
 						"unsupported method/route: %s %s",
@@ -236,14 +237,15 @@ func getBody(request *http.Request) (map[string]interface{}, error) {
 	return requestBody, err
 }
 
-func handleDelete(db *sql.DB, request *http.Request) error {
-	_, err := handleShow(db, request)
+func handleDelete(ctx context.Context, db *sql.DB, request *http.Request) error {
+	_, err := handleShow(ctx, db, request)
 	if err != nil {
 		return fmt.Errorf("cannot delere noexisting resource")
 	}
 
 	tableName, id := parsePath(request)
-	result, err := db.Exec(
+	result, err := db.ExecContext(
+		ctx,
 		fmt.Sprintf(
 			"DELETE FROM %s WHERE Id = '%s'",
 			tableName,
@@ -264,7 +266,7 @@ func handleDelete(db *sql.DB, request *http.Request) error {
 	return err
 }
 
-func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
+func handlePatch(ctx context.Context, db *sql.DB, request *http.Request) ([]byte, error) {
 	tableName, id := parsePath(request)
 	body, err := getBody(request)
 	if err != nil {
@@ -295,7 +297,8 @@ func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
 	}
 
 	conditionsString := strings.Join(conditions, ",")
-	_, err = db.Exec(
+	_, err = db.ExecContext(
+		ctx,
 		fmt.Sprintf(
 			"UPDATE %s SET %s WHERE Id = '%s'",
 			tableName,
@@ -309,7 +312,7 @@ func handlePatch(db *sql.DB, request *http.Request) ([]byte, error) {
 	return json.Marshal(body)
 }
 
-func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
+func handleInsert(ctx context.Context, db *sql.DB, request *http.Request) ([]byte, error) {
 	tableName, _ := parsePath(request)
 	body, err := getBody(request)
 	if err != nil {
@@ -327,7 +330,7 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 			tableName,
 			conditionsString,
 		)
-		rows, err := query(db, queryString)
+		rows, err := query(ctx, db, queryString)
 		if err != nil {
 			return nil, err
 		}
@@ -367,7 +370,7 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	columnsString := "('" + strings.Join(columns, "','") + "')"
 	valuesString := "(" + strings.Join(values, ",") + ")"
 
-	_, err = db.Exec(fmt.Sprintf(
+	_, err = db.ExecContext(ctx, fmt.Sprintf(
 		"INSERT INTO %s %s VALUES %s",
 		tableName,
 		columnsString,
@@ -384,7 +387,7 @@ func handleInsert(db *sql.DB, request *http.Request) ([]byte, error) {
 	)
 }
 
-func getTotalSize(db *sql.DB, queryString string) (int, error) {
+func getTotalSize(ctx context.Context, db *sql.DB, queryString string) (int, error) {
 	parts := strings.Split(queryString, " ")
 	for i, part := range parts {
 		// get rid of limit and offset if they exist.
@@ -394,14 +397,14 @@ func getTotalSize(db *sql.DB, queryString string) (int, error) {
 		}
 	}
 	countQuery := strings.Join(parts, " ")
-	rows, err := query(db, countQuery)
+	rows, err := query(ctx, db, countQuery)
 	if err != nil {
 		return 0, err
 	}
 	return len(rows), nil
 }
 
-func find(db *sql.DB, request *http.Request) (simpleforce.SObject, error) {
+func find(ctx context.Context, db *sql.DB, request *http.Request) (simpleforce.SObject, error) {
 	tableName, id := parsePath(request)
 	selectors := strings.Join(client.TableNamesToFieldsMapping[tableName], ",")
 	sqlString := fmt.Sprintf(
@@ -411,7 +414,7 @@ func find(db *sql.DB, request *http.Request) (simpleforce.SObject, error) {
 		id,
 	)
 
-	rows, err := query(db, sqlString)
+	rows, err := query(ctx, db, sqlString)
 	if err != nil {
 		return nil, err
 	}
@@ -422,15 +425,15 @@ func find(db *sql.DB, request *http.Request) (simpleforce.SObject, error) {
 	return rows[0], nil
 }
 
-func handleShow(db *sql.DB, request *http.Request) ([]byte, error) {
-	found, err := find(db, request)
+func handleShow(ctx context.Context, db *sql.DB, request *http.Request) ([]byte, error) {
+	found, err := find(ctx, db, request)
 	if err != nil {
 		return nil, err
 	}
 	return json.Marshal(found)
 }
 
-func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
+func handleQuery(ctx context.Context, db *sql.DB, request *http.Request) ([]byte, error) {
 	queryString := request.URL.Query().Get("q")
 	var offset int
 	var totalSize int
@@ -446,14 +449,14 @@ func handleQuery(db *sql.DB, request *http.Request) ([]byte, error) {
 			return nil, err
 		}
 	} else {
-		totalSize, err = getTotalSize(db, queryString)
+		totalSize, err = getTotalSize(ctx, db, queryString)
 		if err != nil {
 			return nil, err
 		}
 		offset = 0
 	}
 
-	rows, err := query(db, queryString)
+	rows, err := query(ctx, db, queryString)
 	if err != nil {
 		return nil, err
 	}

@@ -6,8 +6,9 @@ import (
 	"io"
 	"net/url"
 
+	"github.com/conductorone/baton-salesforce/pkg/config"
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
-	config "github.com/conductorone/baton-sdk/pb/c1/config/v1"
+	configpb "github.com/conductorone/baton-sdk/pb/c1/config/v1"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
@@ -152,28 +153,28 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 
 var updateUserStatusActionSchema = &v2.BatonActionSchema{
 	Name: "update_user_status",
-	Arguments: []*config.Field{
+	Arguments: []*configpb.Field{
 		{
 			Name:        "resource_id",
 			DisplayName: "User Resource ID",
 			Description: "The ID of the user resource to update the status of",
-			Field:       &config.Field_StringField{},
+			Field:       &configpb.Field_StringField{},
 			IsRequired:  true,
 		},
 		{
 			Name:        "is_active",
 			DisplayName: "Is Active",
 			Description: "Update the user status to active or inactive",
-			Field:       &config.Field_BoolField{},
+			Field:       &configpb.Field_BoolField{},
 			IsRequired:  true,
 		},
 	},
-	ReturnTypes: []*config.Field{
+	ReturnTypes: []*configpb.Field{
 		{
 			Name:        "success",
 			DisplayName: "Success",
 			Description: "Whether the user resource status was updated successfully",
-			Field:       &config.Field_BoolField{},
+			Field:       &configpb.Field_BoolField{},
 		},
 	},
 }
@@ -207,20 +208,10 @@ func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
 	d.client.TokenSource = tokenSource
 }
 
-// New returns a new instance of the connector.
-func New(
-	ctx context.Context,
-	instanceURL string,
-	useUsernameForEmail bool,
-	username string,
-	password string,
-	securityToken string,
-	syncConnectedApps bool,
-	syncDeactivatedUsers bool,
-	licenseToLeastProfileMapping map[string]string,
-) (*Salesforce, error) {
+// New returns a new instance of the connector using the provided configuration.
+func New(ctx context.Context, cfg *config.Salesforce) (*Salesforce, error) {
 	logger := ctxzap.Extract(ctx)
-	instanceURL, err := fallBackToHTTPS(instanceURL)
+	instanceURL, err := fallBackToHTTPS(cfg.InstanceUrl)
 	if err != nil {
 		return nil, err
 	}
@@ -228,13 +219,13 @@ func New(
 	logger.Debug(
 		"New Salesforce connector",
 		zap.String("instanceURL", instanceURL),
-		zap.String("username", username),
-		zap.Bool("password?", password != ""),
-		zap.Bool("securityToken?", securityToken != ""),
-		zap.Bool("useUsernameForEmail", useUsernameForEmail),
-		zap.Bool("syncConnectedApps", syncConnectedApps),
-		zap.Bool("syncDeactivatedUsers", syncDeactivatedUsers),
-		zap.Any("licenseToLeastProfileMapping", licenseToLeastProfileMapping),
+		zap.String("username", cfg.SalesforceUsername),
+		zap.Bool("password?", cfg.SalesforcePassword != ""),
+		zap.Bool("securityToken?", cfg.SecurityToken != ""),
+		zap.Bool("useUsernameForEmail", cfg.UserUsernameForEmail),
+		zap.Bool("syncConnectedApps", cfg.SyncConnectedApps),
+		zap.Bool("syncDeactivatedUsers", cfg.SyncDeactivatedUsers),
+		zap.Any("licenseToLeastProfileMapping", cfg.GetLicenseToLeastPrivilegedProfileMapping()),
 	)
 
 	// Instantiate with a "broken" client. Client is later overwritten either
@@ -243,18 +234,18 @@ func New(
 	salesforceClient := client.New(
 		instanceURL,
 		tokenSource,
-		username,
-		password,
-		securityToken,
+		cfg.SalesforceUsername,
+		cfg.SalesforcePassword,
+		cfg.SecurityToken,
 	)
 	salesforce := Salesforce{
 		client:                       salesforceClient,
 		ctx:                          ctx,
-		shouldUseUsernameForEmail:    useUsernameForEmail,
+		shouldUseUsernameForEmail:    cfg.UserUsernameForEmail,
 		instanceURL:                  instanceURL,
-		syncConnectedApps:            syncConnectedApps,
-		syncDeactivatedUsers:         syncDeactivatedUsers,
-		licenseToLeastProfileMapping: licenseToLeastProfileMapping,
+		syncConnectedApps:            cfg.SyncConnectedApps,
+		syncDeactivatedUsers:         cfg.SyncDeactivatedUsers,
+		licenseToLeastProfileMapping: cfg.GetLicenseToLeastPrivilegedProfileMapping(),
 	}
 	return &salesforce, nil
 }

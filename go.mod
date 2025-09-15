@@ -1,9 +1,9 @@
 module github.com/conductorone/baton-salesforce
 
-go 1.23.4
+go 1.25
 
 require (
-	github.com/conductorone/baton-sdk v0.3.52
+	github.com/conductorone/baton-sdk v0.3.54
 	github.com/conductorone/simpleforce v0.0.7
 	github.com/ennyjfrick/ruleguard-logfatal v0.0.2
 	github.com/google/uuid v1.6.0

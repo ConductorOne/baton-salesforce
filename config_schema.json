@@ -102,6 +102,12 @@
       }
     },
     {
+      "name": "sync-non-standard-users",
+      "displayName": "Sync Non-Standard Users",
+      "description": "Optionally sync non-standard user types (Customer Community, etc)",
+      "boolField": {}
+    },
+    {
       "name": "user-username-for-email",
       "displayName": "Use Username for Email",
       "description": "Use Salesforce usernames for email",

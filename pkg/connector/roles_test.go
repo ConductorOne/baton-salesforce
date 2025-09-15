@@ -54,7 +54,7 @@ func TestRolesList(t *testing.T) {
 	})
 
 	t.Run("should grant and revoke entitlements", func(t *testing.T) {
-		role, _ := roleResource(ctx, &client.SalesforceRole{ID: "199X"})
+		role, _ := roleResource(&client.SalesforceRole{ID: "199X"})
 		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
 
 		entitlement := v2.Entitlement{

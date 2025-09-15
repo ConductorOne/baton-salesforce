@@ -18,7 +18,7 @@ func (o *connectedApplicationBuilder) ResourceType(ctx context.Context) *v2.Reso
 	return resourceTypeConnectedApplication
 }
 
-func connectedApplicationResource(ctx context.Context, app *client.ConnectedApplication) (*v2.Resource, error) {
+func connectedApplicationResource(_ context.Context, app *client.ConnectedApplication) (*v2.Resource, error) {
 	newAppResource, err := resource.NewResource(
 		app.Name,
 		resourceTypeConnectedApplication,

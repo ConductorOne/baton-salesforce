@@ -25,7 +25,7 @@ type roleBuilder struct {
 }
 
 // roleResource convert a SalesforceRole into a Resource.
-func roleResource(ctx context.Context, role *client.SalesforceRole) (*v2.Resource, error) {
+func roleResource(role *client.SalesforceRole) (*v2.Resource, error) {
 	newRoleResource, err := resource.NewRoleResource(
 		role.Name,
 		resourceTypeRole,
@@ -65,7 +65,7 @@ func (o *roleBuilder) List(
 
 	rv := make([]*v2.Resource, 0)
 	for _, role := range roles {
-		newResource, err := roleResource(ctx, role)
+		newResource, err := roleResource(role)
 		if err != nil {
 			return nil, "", outputAnnotations, err
 		}

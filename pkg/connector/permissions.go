@@ -24,7 +24,7 @@ type permissionBuilder struct {
 	client       *client.SalesforceClient
 }
 
-func permissionResource(ctx context.Context, permission *client.SalesforcePermission) (*v2.Resource, error) {
+func permissionResource(permission *client.SalesforcePermission) (*v2.Resource, error) {
 	newPermissionResource, err := resource.NewResource(
 		fmt.Sprintf("%s - %s", permission.Type, permission.Name),
 		resourceTypePermissionSet,
@@ -63,7 +63,7 @@ func (o *permissionBuilder) List(
 
 	rv := make([]*v2.Resource, 0)
 	for _, permission := range permissions {
-		newResource, err := permissionResource(ctx, permission)
+		newResource, err := permissionResource(permission)
 		if err != nil {
 			return nil, "", outputAnnotations, err
 		}

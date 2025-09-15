@@ -27,7 +27,6 @@ type profileBuilder struct {
 
 // profileResource convert a Salesforce profile into a Resource.
 func profileResource(
-	ctx context.Context,
 	profile *client.SalesforceProfile,
 ) (*v2.Resource, error) {
 	newProfileResource, err := resource.NewResource(
@@ -63,7 +62,7 @@ func (o *profileBuilder) List(
 
 	rv := make([]*v2.Resource, 0)
 	for _, profile := range profiles {
-		newResource, err := profileResource(ctx, profile)
+		newResource, err := profileResource(profile)
 		if err != nil {
 			return nil, "", outputAnnotations, err
 		}

@@ -54,7 +54,7 @@ func TestPermissionsList(t *testing.T) {
 	})
 
 	t.Run("should grant and revoke entitlements", func(t *testing.T) {
-		permission, _ := permissionResource(ctx, &client.SalesforcePermission{ID: "345X"})
+		permission, _ := permissionResource(&client.SalesforcePermission{ID: "345X"})
 		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
 
 		entitlement := v2.Entitlement{

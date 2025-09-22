@@ -214,6 +214,17 @@ func (c *Compactor) getLatestObjects(ctx context.Context, info *CompactableSync)
 	return latestAppliedSync.Sync, baseFile, baseC1Z, cleanup, nil
 }
 
+func unionSyncTypes(a, b connectorstore.SyncType) connectorstore.SyncType {
+	switch {
+	case a == connectorstore.SyncTypeFull || b == connectorstore.SyncTypeFull:
+		return connectorstore.SyncTypeFull
+	case a == connectorstore.SyncTypeResourcesOnly || b == connectorstore.SyncTypeResourcesOnly:
+		return connectorstore.SyncTypeResourcesOnly
+	default:
+		return connectorstore.SyncTypePartial
+	}
+}
+
 func (c *Compactor) doOneCompaction(ctx context.Context, base *CompactableSync, applied *CompactableSync) (*CompactableSync, error) {
 	ctx, span := tracer.Start(ctx, "Compactor.doOneCompaction")
 	defer span.End()
@@ -240,25 +251,28 @@ func (c *Compactor) doOneCompaction(ctx context.Context, base *CompactableSync, 
 	}
 	defer func() { _ = newFile.Close() }()
 
-	newSyncId, err := newFile.StartNewSyncV2(ctx, connectorstore.SyncTypeFull, "")
-	if err != nil {
-		return nil, err
-	}
-
-	_, baseFile, _, cleanupBase, err := c.getLatestObjects(ctx, base)
+	baseSync, baseFile, _, cleanupBase, err := c.getLatestObjects(ctx, base)
 	defer cleanupBase()
 	if err != nil {
 		return nil, err
 	}
 
-	_, appliedFile, _, cleanupApplied, err := c.getLatestObjects(ctx, applied)
+	appliedSync, appliedFile, _, cleanupApplied, err := c.getLatestObjects(ctx, applied)
 	defer cleanupApplied()
+	if err != nil {
+		return nil, err
+	}
+
+	syncType := unionSyncTypes(connectorstore.SyncType(baseSync.SyncType), connectorstore.SyncType(appliedSync.SyncType))
+
+	newSyncId, err := newFile.StartNewSync(ctx, syncType, "")
 	if err != nil {
 		return nil, err
 	}
 
 	switch c.compactorType {
 	case CompactorTypeNaive:
+		// TODO: Add support for syncID or remove naive compactor.
 		runner := naive.NewNaiveCompactor(baseFile, appliedFile, newFile)
 		if err := runner.Compact(ctx); err != nil {
 			l.Error("error running compaction", zap.Error(err))

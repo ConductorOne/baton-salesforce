@@ -22,6 +22,8 @@ type userBuilder struct {
 	syncNonStandardUsers      bool
 }
 
+var _ connectorbuilder.AccountManager = &userBuilder{}
+
 // userResource convert a SalesforceUser into a Resource.
 func userResource(
 	_ context.Context,

@@ -54,20 +54,13 @@ jobs:
           go-version-file: go.mod
       - name: Build baton-salesforce
         run: go build ./cmd/baton-salesforce
-      - name: Run baton-salesforce
-        run: ./baton-salesforce
-
-      - name: Install baton
-        uses: ConductorOne/github-workflows/actions/get-baton@v2
-
       - name: Test grant/revoking IAM entitlements
-        env:
-          BATON: /usr/local/bin/baton
-          BATON_ENTITLEMENT: "group:00G8a000003XHtmEAG:member"
-          BATON_PRINCIPAL: "0058a00000KGxQ8AAL"
-          BATON_PRINCIPAL_TYPE: "user"
-          COMMAND: ./baton-salesforce
-        run: ./test/grant-revoke.sh
+        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        with:
+          connector: ./baton-salesforce
+          baton-entitlement: "group:00G8a000003XHtmEAG:member"
+          baton-principal: "0058a00000KGxQ8AAL"
+          baton-principal-type: user
 
   test-grant-permission-set-group:
     needs: [go-test, go-lint]
@@ -87,17 +80,10 @@ jobs:
           go-version-file: go.mod
       - name: Build baton-salesforce
         run: go build ./cmd/baton-salesforce
-      - name: Run baton-salesforce
-        run: ./baton-salesforce
-
-      - name: Install baton
-        uses: ConductorOne/github-workflows/actions/get-baton@v2
-
       - name: Test grant/revoking IAM entitlements
-        env:
-          BATON: /usr/local/bin/baton
-          BATON_ENTITLEMENT: "permission_set_group:0PG8a000000KzpGGAS:assigned"
-          BATON_PRINCIPAL: "0PS8a000000DOGEGA4"
-          BATON_PRINCIPAL_TYPE: "permission"
-          COMMAND: ./baton-salesforce
-        run: ./test/grant-revoke.sh
+        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        with:
+          connector: ./baton-salesforce
+          baton-entitlement: "permission_set_group:0PG8a000000KzpGGAS:assigned"
+          baton-principal: "0PS8a000000DOGEGA4"
+          baton-principal-type: permission

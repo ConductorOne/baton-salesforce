@@ -229,7 +229,7 @@ func (c *SalesforceClient) setValue(
 
 	copySObject, err := c.copySObject(user, fieldName)
 	if err != nil {
-		return nil, err
+		return ratelimitData, err
 	}
 
 	return c.updateUser(ctx, copySObject, fieldName, fieldValue)
@@ -248,7 +248,7 @@ func (c *SalesforceClient) setOneValue(
 
 	copySObject, err := c.copySObject(user, fieldName)
 	if err != nil {
-		return nil, err
+		return ratelimitData, err
 	}
 
 	return c.updateUser(ctx, copySObject, fieldName, fieldValue)
@@ -271,7 +271,7 @@ func (c *SalesforceClient) clearValue(
 
 	copySObject, err := c.copySObject(user, fieldName)
 	if err != nil {
-		return nil, err
+		return ratelimitData, err
 	}
 
 	return c.updateUser(ctx, copySObject, fieldName, "")

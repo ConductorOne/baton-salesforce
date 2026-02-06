@@ -227,7 +227,12 @@ func (c *SalesforceClient) setValue(
 		return ratelimitData, err
 	}
 
-	return c.updateUser(ctx, user, fieldName, fieldValue)
+	copySObject, err := c.copySObject(user, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.updateUser(ctx, copySObject, fieldName, fieldValue)
 }
 
 func (c *SalesforceClient) setOneValue(
@@ -264,7 +269,12 @@ func (c *SalesforceClient) clearValue(
 		return nil, fmt.Errorf("missing %s: %s", fieldName, fieldValue)
 	}
 
-	return c.updateUser(ctx, user, fieldName, "")
+	copySObject, err := c.copySObject(user, fieldName)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.updateUser(ctx, copySObject, fieldName, "")
 }
 
 func (c *SalesforceClient) copySObject(obj *simpleforce.SObject, allowedFields ...string) (*simpleforce.SObject, error) {

@@ -180,17 +180,16 @@ var updateUserStatusActionSchema = &v2.BatonActionSchema{
 	},
 }
 
-func (d *Salesforce) RegisterActionManager(ctx context.Context) (connectorbuilder.CustomActionManager, error) {
+func (d *Salesforce) GlobalActions(ctx context.Context, registry actions.ActionRegistry) error {
 	l := ctxzap.Extract(ctx)
 
-	actionManager := actions.NewActionManager(ctx)
-	err := actionManager.RegisterAction(ctx, "update_user_status", updateUserStatusActionSchema, d.updateUserStatus)
+	err := registry.Register(ctx, updateUserStatusActionSchema, d.updateUserStatus)
 	if err != nil {
 		l.Error("failed to register action", zap.Error(err))
-		return nil, err
+		return err
 	}
 
-	return actionManager, nil
+	return nil
 }
 
 // Validate is called to ensure that the connector is properly configured. It

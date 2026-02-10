@@ -410,7 +410,7 @@ github.com/proullon/ramsql/engine/agnostic
 github.com/proullon/ramsql/engine/executor
 github.com/proullon/ramsql/engine/log
 github.com/proullon/ramsql/engine/parser
-# github.com/quasilyte/go-ruleguard/dsl v0.3.22
+# github.com/quasilyte/go-ruleguard/dsl v0.3.23
 ## explicit; go 1.15
 github.com/quasilyte/go-ruleguard/dsl
 github.com/quasilyte/go-ruleguard/dsl/types

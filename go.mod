@@ -10,7 +10,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/huandu/go-sqlbuilder v1.28.1
 	github.com/proullon/ramsql v0.1.4
-	github.com/quasilyte/go-ruleguard/dsl v0.3.22
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/spf13/viper v1.19.0 // indirect
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.1

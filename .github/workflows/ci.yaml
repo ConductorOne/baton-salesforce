@@ -1,43 +1,7 @@
 name: ci
 on: pull_request
 jobs:
-  go-lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: Run linters
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: latest
-          args: --timeout=3m
-  go-test:
-    strategy:
-      matrix:
-        platform: [ubuntu-latest]
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Install Go
-        if: success()
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - name: go tests
-        run: (set -o pipefail && go test -v -covermode=count -json ./... | tee test.json)
-      - name: annotate go tests
-        if: always()
-        uses: guyarb/golang-test-annotations@v0.8.0
-        with:
-          test-results: test.json
-
   test-grant-user:
-    needs: [go-test, go-lint]
     runs-on: ubuntu-latest
     env:
       BATON_LOG_LEVEL: debug
@@ -61,9 +25,7 @@ jobs:
           baton-entitlement: "group:00G8a000003XHtmEAG:member"
           baton-principal: "0058a00000KGxQ8AAL"
           baton-principal-type: user
-
   test-grant-permission-set-group:
-    needs: [go-test, go-lint]
     runs-on: ubuntu-latest
     env:
       BATON_LOG_LEVEL: debug

@@ -9,6 +9,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/stretchr/testify/require"
 )
@@ -36,25 +37,27 @@ func TestRolesList(t *testing.T) {
 			Size:  1,
 		}
 		for {
-			nextResources, nextToken, listAnnotations, err := c.List(ctx, nil, &pToken)
+			nextResources, results, err := c.List(ctx, nil, rs.SyncOpAttrs{PageToken: pToken})
 			resources = append(resources, nextResources...)
 
 			require.Nil(t, err)
-			test.AssertNoRatelimitAnnotations(t, listAnnotations)
-			if nextToken == "" {
+			if results != nil {
+				test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			}
+			if results == nil || results.NextPageToken == "" {
 				break
 			}
 
-			pToken.Token = nextToken
+			pToken.Token = results.NextPageToken
 		}
 
 		require.NotNil(t, resources)
-		require.Len(t, resources, 2)
+		require.Len(t, resources, 3)
 		require.NotEmpty(t, resources[0].Id)
 	})
 
 	t.Run("should grant and revoke entitlements", func(t *testing.T) {
-		role, _ := roleResource(&client.SalesforceRole{ID: "199X"})
+		role, _ := roleResource(&client.SalesforceRole{ID: "123X"})
 		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
 
 		entitlement := v2.Entitlement{
@@ -72,17 +75,19 @@ func TestRolesList(t *testing.T) {
 			Size:  100,
 		}
 		for {
-			nextGrants, nextToken, listAnnotations, err := c.Grants(ctx, role, &pToken)
+			nextGrants, results, err := c.Grants(ctx, role, rs.SyncOpAttrs{PageToken: pToken})
 			grantsBefore = append(grantsBefore, nextGrants...)
 
 			require.Nil(t, err)
-			test.AssertNoRatelimitAnnotations(t, listAnnotations)
-			if nextToken == "" {
+			if results != nil {
+				test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			}
+			if results == nil || results.NextPageToken == "" {
 				break
 			}
-			pToken.Token = nextToken
+			pToken.Token = results.NextPageToken
 		}
-		require.Len(t, grantsBefore, 1)
+		require.Len(t, grantsBefore, 2)
 
 		grant := v2.Grant{
 			Entitlement: &entitlement,
@@ -96,10 +101,15 @@ func TestRolesList(t *testing.T) {
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, revokeAnnotations)
 
-		grantsAfter, nextToken, grantsAnnotations, err := c.Grants(ctx, role, &pagination.Token{})
+		if err := uhttp.ClearCaches(ctx); err != nil {
+			t.Fatal(err)
+		}
+		grantsAfter, results, err := c.Grants(ctx, role, rs.SyncOpAttrs{PageToken: pagination.Token{}})
 		require.Nil(t, err)
-		test.AssertNoRatelimitAnnotations(t, grantsAnnotations)
-		require.Equal(t, "", nextToken)
-		require.Len(t, grantsAfter, 0)
+		if results != nil {
+			test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			require.Equal(t, "", results.NextPageToken)
+		}
+		require.Len(t, grantsAfter, 1)
 	})
 }

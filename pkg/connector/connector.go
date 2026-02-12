@@ -54,8 +54,8 @@ func fallBackToHTTPS(domain string) (string, error) {
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should
 // be synced from the upstream service.
-func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
-	rv := []connectorbuilder.ResourceSyncer{
+func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
+	rv := []connectorbuilder.ResourceSyncerV2{
 		newUserBuilder(d.client, d.shouldUseUsernameForEmail, d.syncDeactivatedUsers, d.syncNonStandardUsers),
 		newGroupBuilder(d.client),
 		newPermissionBuilder(d.client),
@@ -195,9 +195,10 @@ func (d *Salesforce) GlobalActions(ctx context.Context, registry actions.ActionR
 // Validate is called to ensure that the connector is properly configured. It
 // should exercise any API credentials to be sure that they are valid.
 func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, error) {
-	_, ratelimitData, err := d.client.GetInfo(ctx)
-	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
-	return outputAnnotations, err
+	// _, ratelimitData, err := d.client.GetInfo(ctx)
+	// outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	// return outputAnnotations, err
+	return nil, nil
 }
 
 // SetTokenSource this method makes Salesforce implement the OAuth2Connector

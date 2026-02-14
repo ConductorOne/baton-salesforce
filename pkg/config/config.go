@@ -1,7 +1,14 @@
+//go:generate go run ./gen
+
 package config
 
 import (
 	"github.com/conductorone/baton-sdk/pkg/field"
+)
+
+const (
+	SalesforceUsernamePasswordGroup = "username-password-group"
+	SalesforceOAuthGroup            = "oauth-group"
 )
 
 var (
@@ -20,12 +27,19 @@ var (
 		"salesforce-username",
 		field.WithDisplayName("Salesforce Username"),
 		field.WithDescription("Salesforce account username"),
+		field.WithRequired(true),
 	)
 	PasswordField = field.StringField(
 		"salesforce-password",
 		field.WithDisplayName("Salesforce Password"),
 		field.WithDescription("Salesforce account password"),
 		field.WithIsSecret(true),
+		field.WithRequired(true),
+	)
+	Oauth2TokenField = field.Oauth2Field(
+		"oauth2-token",
+		field.WithDisplayName("OAuth Authentication"),
+		field.WithDescription("The OAuth Authentication field"),
 	)
 	SecurityTokenField = field.StringField(
 		"security-token",
@@ -56,18 +70,12 @@ var (
 		field.WithDescription("Mapping of Salesforce license types to least privileged profiles"),
 	)
 
-	fieldRelationships = []field.SchemaFieldRelationship{
-		field.FieldsRequiredTogether(
-			UsernameField,
-			PasswordField,
-		),
-	}
-
 	configurationFields = []field.SchemaField{
 		InstanceUrlField,
 		UseUsernameForEmailField,
 		UsernameField,
 		PasswordField,
+		Oauth2TokenField,
 		SecurityTokenField,
 		SyncConnectedApps,
 		SyncDeactivatedUsers,
@@ -77,9 +85,24 @@ var (
 
 	Configuration = field.NewConfiguration(
 		configurationFields,
-		field.WithConstraints(fieldRelationships...),
 		field.WithConnectorDisplayName("Salesforce"),
 		field.WithHelpUrl("/docs/baton/salesforce"),
 		field.WithIconUrl("/static/app-icons/salesforce.svg"),
+		field.WithFieldGroups([]field.SchemaFieldGroup{
+			{
+				Name:        SalesforceUsernamePasswordGroup,
+				DisplayName: "Username and password-based authentication",
+				HelpText:    "Use a username and password for authentication.",
+				Fields:      []field.SchemaField{UsernameField, PasswordField, SecurityTokenField, InstanceUrlField, UseUsernameForEmailField, SyncConnectedApps, SyncDeactivatedUsers, SyncNonStandardUsers, LicenseToLeastPrivilegedProfileMapping},
+				Default:     false,
+			},
+			{
+				Name:        SalesforceOAuthGroup,
+				DisplayName: "OAuth authentication",
+				HelpText:    "Use OAuth for authentication.",
+				Fields:      []field.SchemaField{Oauth2TokenField, InstanceUrlField, UseUsernameForEmailField, SyncConnectedApps, SyncDeactivatedUsers, SyncNonStandardUsers, LicenseToLeastPrivilegedProfileMapping},
+				Default:     true,
+			},
+		}),
 	)
 )

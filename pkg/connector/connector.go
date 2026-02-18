@@ -195,9 +195,9 @@ func (d *Salesforce) GlobalActions(ctx context.Context, registry actions.ActionR
 // Validate is called to ensure that the connector is properly configured. It
 // should exercise any API credentials to be sure that they are valid.
 func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, error) {
-	_, ratelimitData, err := d.client.GetInfo(ctx)
-	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
-	return outputAnnotations, err
+	// Temporarily disable this because new salesforce trials
+	// have Github, not Chatter, so cannot use the APIs previously used here.
+	return nil, nil
 }
 
 // SetTokenSource this method makes Salesforce implement the OAuth2Connector

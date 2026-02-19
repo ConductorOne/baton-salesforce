@@ -246,6 +246,7 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 			"",
 		)
 	case config.SalesforceUsernamePasswordGroup:
+		fallthrough
 	default:
 		salesforceClient = client.New(
 			instanceURL,

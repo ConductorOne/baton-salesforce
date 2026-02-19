@@ -71,16 +71,16 @@ var (
 	)
 
 	configurationFields = []field.SchemaField{
-		InstanceUrlField,
-		UseUsernameForEmailField,
 		UsernameField,
 		PasswordField,
-		Oauth2TokenField,
 		SecurityTokenField,
+		InstanceUrlField,
+		UseUsernameForEmailField,
 		SyncConnectedApps,
 		SyncDeactivatedUsers,
-		LicenseToLeastPrivilegedProfileMapping,
 		SyncNonStandardUsers,
+		LicenseToLeastPrivilegedProfileMapping,
+		Oauth2TokenField,
 	}
 
 	Configuration = field.NewConfiguration(
@@ -91,7 +91,7 @@ var (
 		field.WithFieldGroups([]field.SchemaFieldGroup{
 			{
 				Name:        SalesforceUsernamePasswordGroup,
-				DisplayName: "Username and password-based authentication",
+				DisplayName: "Username and password",
 				HelpText:    "Use a username and password for authentication.",
 				Fields:      []field.SchemaField{
 					UsernameField,
@@ -107,16 +107,16 @@ var (
 			},
 			{
 				Name:        SalesforceOAuthGroup,
-				DisplayName: "OAuth authentication",
+				DisplayName: "OAuth",
 				HelpText:    "Use OAuth for authentication.",
 				Fields:      []field.SchemaField{
-					Oauth2TokenField,
 					InstanceUrlField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
-					LicenseToLeastPrivilegedProfileMapping},
+					LicenseToLeastPrivilegedProfileMapping,
+					Oauth2TokenField},
 				Default:     true,
 			},
 		}),

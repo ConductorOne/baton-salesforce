@@ -93,6 +93,36 @@
       }
     },
     {
+      "name": "salesforce-username",
+      "displayName": "Salesforce Username",
+      "description": "Salesforce account username",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-password",
+      "displayName": "Salesforce Password",
+      "description": "Salesforce account password",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "security-token",
+      "displayName": "Security Token",
+      "description": "Salesforce security token (optional if trusted IP is configured)",
+      "isSecret": true,
+      "stringField": {}
+    },
+    {
       "name": "instance-url",
       "displayName": "Instance URL",
       "description": "Your Salesforce domain, ex: acme.my.salesforce.com",
@@ -110,26 +140,6 @@
       "boolField": {}
     },
     {
-      "name": "salesforce-username",
-      "displayName": "Salesforce Username",
-      "description": "Salesforce account username",
-      "stringField": {}
-    },
-    {
-      "name": "salesforce-password",
-      "displayName": "Salesforce Password",
-      "description": "Salesforce account password",
-      "isSecret": true,
-      "stringField": {}
-    },
-    {
-      "name": "security-token",
-      "displayName": "Security Token",
-      "description": "Salesforce security token (optional if trusted IP is configured)",
-      "isSecret": true,
-      "stringField": {}
-    },
-    {
       "name": "sync-connected-apps",
       "displayName": "Sync Connected Apps",
       "description": "Optionally sync access to connected apps",
@@ -144,28 +154,60 @@
       }
     },
     {
+      "name": "sync-non-standard-users",
+      "displayName": "Sync Non-Standard Users",
+      "description": "Optionally sync non-standard user types (Customer Community, etc)",
+      "boolField": {}
+    },
+    {
       "name": "license-to-least-privileged-profile-mapping",
       "displayName": "License to Least Privileged Profile Mapping",
       "description": "Mapping of Salesforce license types to least privileged profiles",
       "stringMapField": {}
     },
     {
-      "name": "sync-non-standard-users",
-      "displayName": "Sync Non-Standard Users",
-      "description": "Optionally sync non-standard user types (Customer Community, etc)",
-      "boolField": {}
-    }
-  ],
-  "constraints": [
-    {
-      "kind": "CONSTRAINT_KIND_REQUIRED_TOGETHER",
-      "fieldNames": [
-        "salesforce-username",
-        "salesforce-password"
-      ]
+      "name": "oauth2-token",
+      "displayName": "OAuth Authentication",
+      "description": "The OAuth Authentication field",
+      "stringField": {
+        "type": "STRING_FIELD_TYPE_OAUTH2"
+      }
     }
   ],
   "displayName": "Salesforce",
   "helpUrl": "/docs/baton/salesforce",
-  "iconUrl": "/static/app-icons/salesforce.svg"
+  "iconUrl": "/static/app-icons/salesforce.svg",
+  "fieldGroups": [
+    {
+      "name": "username-password-group",
+      "displayName": "Username and password",
+      "helpText": "Use a username and password for authentication.",
+      "fields": [
+        "salesforce-username",
+        "salesforce-password",
+        "security-token",
+        "instance-url",
+        "user-username-for-email",
+        "sync-connected-apps",
+        "sync-deactivated-users",
+        "sync-non-standard-users",
+        "license-to-least-privileged-profile-mapping"
+      ]
+    },
+    {
+      "name": "oauth-group",
+      "displayName": "OAuth",
+      "helpText": "Use OAuth for authentication.",
+      "fields": [
+        "instance-url",
+        "user-username-for-email",
+        "sync-connected-apps",
+        "sync-deactivated-users",
+        "sync-non-standard-users",
+        "license-to-least-privileged-profile-mapping",
+        "oauth2-token"
+      ],
+      "default": true
+    }
+  ]
 }

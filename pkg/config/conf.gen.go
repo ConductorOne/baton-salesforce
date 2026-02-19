@@ -4,18 +4,19 @@ package config
 import "reflect" 
 
 type Salesforce struct {
-	InstanceUrl string `mapstructure:"instance-url"`
-	UserUsernameForEmail bool `mapstructure:"user-username-for-email"`
 	SalesforceUsername string `mapstructure:"salesforce-username"`
 	SalesforcePassword string `mapstructure:"salesforce-password"`
 	SecurityToken string `mapstructure:"security-token"`
+	InstanceUrl string `mapstructure:"instance-url"`
+	UserUsernameForEmail bool `mapstructure:"user-username-for-email"`
 	SyncConnectedApps bool `mapstructure:"sync-connected-apps"`
 	SyncDeactivatedUsers bool `mapstructure:"sync-deactivated-users"`
-	LicenseToLeastPrivilegedProfileMapping map[string]any `mapstructure:"license-to-least-privileged-profile-mapping"`
 	SyncNonStandardUsers bool `mapstructure:"sync-non-standard-users"`
+	LicenseToLeastPrivilegedProfileMapping map[string]any `mapstructure:"license-to-least-privileged-profile-mapping"`
+	Oauth2Token string `mapstructure:"oauth2-token"`
 }
 
-func (c* Salesforce) findFieldByTag(tagValue string) (any, bool) {
+func (c *Salesforce) findFieldByTag(tagValue string) (any, bool) {
 	v := reflect.ValueOf(c).Elem() // Dereference pointer to struct
 	t := v.Type()
 
@@ -47,11 +48,13 @@ func (c *Salesforce) GetString(fieldName string) string {
 	if !ok {
 		return ""
 	}
-	t, ok := v.(string)
-	if !ok {
-		panic("wrong type")
+	if t, ok := v.(string); ok {
+		return t
 	}
-	return t
+	if t, ok := v.([]byte); ok {
+		return string(t)
+	}
+	panic("wrong type")
 }
 
 func (c *Salesforce) GetInt(fieldName string) int {

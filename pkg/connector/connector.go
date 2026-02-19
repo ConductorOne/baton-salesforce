@@ -12,6 +12,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/actions"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/conductorone/baton-sdk/pkg/cli"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
@@ -54,8 +55,8 @@ func fallBackToHTTPS(domain string) (string, error) {
 
 // ResourceSyncers returns a ResourceSyncer for each resource type that should
 // be synced from the upstream service.
-func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncer {
-	rv := []connectorbuilder.ResourceSyncer{
+func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.ResourceSyncerV2 {
+	rv := []connectorbuilder.ResourceSyncerV2{
 		newUserBuilder(d.client, d.shouldUseUsernameForEmail, d.syncDeactivatedUsers, d.syncNonStandardUsers),
 		newGroupBuilder(d.client),
 		newPermissionBuilder(d.client),
@@ -200,24 +201,23 @@ func (d *Salesforce) Validate(ctx context.Context) (annotations.Annotations, err
 	return outputAnnotations, err
 }
 
-// SetTokenSource this method makes Salesforce implement the OAuth2Connector
-// interface. When an OAuth2Connector is created, this method gets called.
-func (d *Salesforce) SetTokenSource(tokenSource oauth2.TokenSource) {
-	logger := ctxzap.Extract(d.ctx)
-	logger.Debug("baton-salesforce: SetTokenSource start")
-	d.client.TokenSource = tokenSource
-}
-
 // New returns a new instance of the connector using the provided configuration.
-func New(ctx context.Context, cfg *config.Salesforce) (*Salesforce, error) {
+func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (connectorbuilder.ConnectorBuilderV2, []connectorbuilder.Opt, error) {
 	logger := ctxzap.Extract(ctx)
 	instanceURL, err := fallBackToHTTPS(cfg.InstanceUrl)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+
+	// Instantiate with a client depending upon the chosen auth method.
+	authMethod := ""
+	if opts != nil {
+		authMethod = opts.SelectedAuthMethod
 	}
 
 	logger.Debug(
 		"New Salesforce connector",
+		zap.String("authMethod", authMethod),
 		zap.String("instanceURL", instanceURL),
 		zap.String("username", cfg.SalesforceUsername),
 		zap.Bool("password?", cfg.SalesforcePassword != ""),
@@ -229,16 +229,34 @@ func New(ctx context.Context, cfg *config.Salesforce) (*Salesforce, error) {
 		zap.Any("licenseToLeastProfileMapping", cfg.GetLicenseToLeastPrivilegedProfileMapping()),
 	)
 
-	// Instantiate with a "broken" client. Client is later overwritten either
-	// when .SetTokenSource() or .LoginPassword() are called.
+	var salesforceClient *client.SalesforceClient
 	var tokenSource oauth2.TokenSource
-	salesforceClient := client.New(
-		instanceURL,
-		tokenSource,
-		cfg.SalesforceUsername,
-		cfg.SalesforcePassword,
-		cfg.SecurityToken,
-	)
+
+	switch authMethod {
+	case config.SalesforceOAuthGroup:
+		if opts != nil && opts.TokenSource != nil {
+			tokenSource = opts.TokenSource
+		}
+
+		salesforceClient = client.New(
+			instanceURL,
+			tokenSource,
+			"",
+			"",
+			"",
+		)
+	case config.SalesforceUsernamePasswordGroup:
+		fallthrough
+	default:
+		salesforceClient = client.New(
+			instanceURL,
+			tokenSource,
+			cfg.SalesforceUsername,
+			cfg.SalesforcePassword,
+			cfg.SecurityToken,
+		)
+	}
+
 	salesforce := Salesforce{
 		client:                       salesforceClient,
 		ctx:                          ctx,
@@ -249,5 +267,5 @@ func New(ctx context.Context, cfg *config.Salesforce) (*Salesforce, error) {
 		syncNonStandardUsers:         cfg.SyncNonStandardUsers,
 		licenseToLeastProfileMapping: cfg.GetLicenseToLeastPrivilegedProfileMapping(),
 	}
-	return &salesforce, nil
+	return &salesforce, nil, nil
 }

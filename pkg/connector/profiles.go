@@ -7,10 +7,9 @@ import (
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -29,7 +28,7 @@ type profileBuilder struct {
 func profileResource(
 	profile *client.SalesforceProfile,
 ) (*v2.Resource, error) {
-	newProfileResource, err := resource.NewResource(
+	newProfileResource, err := rs.NewResource(
 		profile.Name,
 		resourceTypeProfile,
 		profile.ID,
@@ -48,38 +47,41 @@ func (o *profileBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 func (o *profileBuilder) List(
 	ctx context.Context,
 	parentResourceID *v2.ResourceId,
-	pToken *pagination.Token,
-) ([]*v2.Resource, string, annotations.Annotations, error) {
+	attrs rs.SyncOpAttrs,
+) ([]*v2.Resource, *rs.SyncOpResults, error) {
+	token := &attrs.PageToken
 	profiles, nextToken, ratelimitData, err := o.client.GetProfiles(
 		ctx,
-		pToken.Token,
-		pToken.Size,
+		token.Token,
+		token.Size,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, "", outputAnnotations, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
 	rv := make([]*v2.Resource, 0)
 	for _, profile := range profiles {
 		newResource, err := profileResource(profile)
 		if err != nil {
-			return nil, "", outputAnnotations, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 		}
 
 		rv = append(rv, newResource)
 	}
-	return rv, nextToken, outputAnnotations, nil
+	return rv, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+		Annotations:   outputAnnotations,
+	}, nil
 }
 
 func (o *profileBuilder) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	_ *pagination.Token,
+	_ rs.SyncOpAttrs,
 ) (
 	[]*v2.Entitlement,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
 	logger := ctxzap.Extract(ctx)
@@ -102,28 +104,28 @@ func (o *profileBuilder) Entitlements(
 		),
 	}
 
-	return entitlements, "", nil, nil
+	return entitlements, nil, nil
 }
 
 func (o *profileBuilder) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	pToken *pagination.Token,
+	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Grant,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
+	token := &attrs.PageToken
 	assignments, nextToken, ratelimitData, err := o.client.GetProfileAssignments(
 		ctx,
 		resource.Id.Resource,
-		pToken.Token,
-		pToken.Size,
+		token.Token,
+		token.Size,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, "", outputAnnotations, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
 	grants := make([]*v2.Grant, 0)
@@ -137,7 +139,10 @@ func (o *profileBuilder) Grants(
 			},
 		))
 	}
-	return grants, nextToken, outputAnnotations, nil
+	return grants, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+		Annotations:   outputAnnotations,
+	}, nil
 }
 
 func (o *profileBuilder) Grant(

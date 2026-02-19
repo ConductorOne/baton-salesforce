@@ -9,6 +9,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/stretchr/testify/require"
 )
@@ -36,16 +37,17 @@ func TestRolesList(t *testing.T) {
 			Size:  1,
 		}
 		for {
-			nextResources, nextToken, listAnnotations, err := c.List(ctx, nil, &pToken)
+			nextResources, results, err := c.List(ctx, nil, rs.SyncOpAttrs{PageToken: pToken})
 			resources = append(resources, nextResources...)
 
 			require.Nil(t, err)
-			test.AssertNoRatelimitAnnotations(t, listAnnotations)
-			if nextToken == "" {
+			require.NotNil(t, results)
+			test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			if results.NextPageToken == "" {
 				break
 			}
 
-			pToken.Token = nextToken
+			pToken.Token = results.NextPageToken
 		}
 
 		require.NotNil(t, resources)
@@ -72,15 +74,16 @@ func TestRolesList(t *testing.T) {
 			Size:  100,
 		}
 		for {
-			nextGrants, nextToken, listAnnotations, err := c.Grants(ctx, role, &pToken)
+			nextGrants, results, err := c.Grants(ctx, role, rs.SyncOpAttrs{PageToken: pToken})
 			grantsBefore = append(grantsBefore, nextGrants...)
 
 			require.Nil(t, err)
-			test.AssertNoRatelimitAnnotations(t, listAnnotations)
-			if nextToken == "" {
+			require.NotNil(t, results)
+			test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			if results.NextPageToken == "" {
 				break
 			}
-			pToken.Token = nextToken
+			pToken.Token = results.NextPageToken
 		}
 		require.Len(t, grantsBefore, 1)
 
@@ -96,10 +99,11 @@ func TestRolesList(t *testing.T) {
 		require.Nil(t, err)
 		test.AssertNoRatelimitAnnotations(t, revokeAnnotations)
 
-		grantsAfter, nextToken, grantsAnnotations, err := c.Grants(ctx, role, &pagination.Token{})
+		grantsAfter, results, err := c.Grants(ctx, role, rs.SyncOpAttrs{PageToken: pagination.Token{}})
 		require.Nil(t, err)
-		test.AssertNoRatelimitAnnotations(t, grantsAnnotations)
-		require.Equal(t, "", nextToken)
+		require.NotNil(t, results)
+		test.AssertNoRatelimitAnnotations(t, results.Annotations)
+		require.Equal(t, "", results.NextPageToken)
 		require.Len(t, grantsAfter, 0)
 	})
 }

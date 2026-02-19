@@ -7,7 +7,6 @@ import (
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/types/entitlement"
 	"github.com/conductorone/baton-sdk/pkg/types/grant"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
@@ -39,30 +38,34 @@ func (p *permissionSetGroupBuilder) ResourceType(ctx context.Context) *v2.Resour
 	return resourceTypePermissionSetGroup
 }
 
-func (p *permissionSetGroupBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, pToken *pagination.Token) ([]*v2.Resource, string, annotations.Annotations, error) {
+func (p *permissionSetGroupBuilder) List(ctx context.Context, parentResourceID *v2.ResourceId, attrs rs.SyncOpAttrs) ([]*v2.Resource, *rs.SyncOpResults, error) {
+	token := &attrs.PageToken
 	roles, nextToken, ratelimitData, err := p.client.GetPermissionSetGroups(
 		ctx,
-		pToken.Token,
-		pToken.Size,
+		token.Token,
+		token.Size,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, "", outputAnnotations, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
 	rv := make([]*v2.Resource, 0)
 	for _, role := range roles {
 		newResource, err := permissionSetGroupResource(role)
 		if err != nil {
-			return nil, "", outputAnnotations, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 		}
 
 		rv = append(rv, newResource)
 	}
-	return rv, nextToken, outputAnnotations, nil
+	return rv, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+		Annotations:   outputAnnotations,
+	}, nil
 }
 
-func (p *permissionSetGroupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Entitlement, string, annotations.Annotations, error) {
+func (p *permissionSetGroupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, attrs rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
 	v2entitlement := entitlement.NewAssignmentEntitlement(
 		resource,
 		permissionSetGroupAssignmentEntitlementName,
@@ -75,26 +78,27 @@ func (p *permissionSetGroupBuilder) Entitlements(ctx context.Context, resource *
 		),
 	)
 
-	return []*v2.Entitlement{v2entitlement}, "", nil, nil
+	return []*v2.Entitlement{v2entitlement}, nil, nil
 }
 
-func (p *permissionSetGroupBuilder) Grants(ctx context.Context, resource *v2.Resource, pToken *pagination.Token) ([]*v2.Grant, string, annotations.Annotations, error) {
+func (p *permissionSetGroupBuilder) Grants(ctx context.Context, resource *v2.Resource, attrs rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
+	token := &attrs.PageToken
 	assignments, nextToken, ratelimitData, err := p.client.GetPermissionSetGroupComponent(
 		ctx,
 		resource.Id.Resource,
-		pToken.Token,
-		pToken.Size,
+		token.Token,
+		token.Size,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, "", outputAnnotations, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
 	grants := make([]*v2.Grant, 0)
 	for _, assignment := range assignments {
 		id, err := rs.NewResourceID(resourceTypePermissionSet, assignment.PermissionSetID)
 		if err != nil {
-			return nil, "", outputAnnotations, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 		}
 
 		grants = append(grants, grant.NewGrant(
@@ -103,7 +107,10 @@ func (p *permissionSetGroupBuilder) Grants(ctx context.Context, resource *v2.Res
 			id,
 		))
 	}
-	return grants, nextToken, outputAnnotations, nil
+	return grants, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+		Annotations:   outputAnnotations,
+	}, nil
 }
 
 func newPermissionSetGroupBuilder(client *client.SalesforceClient) *permissionSetGroupBuilder {

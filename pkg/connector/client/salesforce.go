@@ -194,7 +194,11 @@ func getIsActive(record simpleforce.SObject) (bool, error) {
 		return v, nil
 	case string:
 		return v == trueConst, nil
-	case int, float64:
+	case int:
+		return v == 1, nil
+	case int64:
+		return v == 1, nil
+	case float64:
 		return v == 1, nil
 	default:
 		return false, fmt.Errorf("salesforce-connector: unexpected is active type, %s", value)
@@ -208,7 +212,11 @@ func getBoolField(record simpleforce.SObject, field string) (bool, error) {
 		return v, nil
 	case string:
 		return v == trueConst, nil
-	case int, float64:
+	case int:
+		return v == 1, nil
+	case int64:
+		return v == 1, nil
+	case float64:
 		return v == 1, nil
 	default:
 		return false, fmt.Errorf("salesforce-connector: unexpected field %s type, %s", field, value)

@@ -7,6 +7,7 @@ import (
 	"github.com/conductorone/baton-salesforce/test"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,16 +34,17 @@ func TestUsersList(t *testing.T) {
 			Size:  1,
 		}
 		for {
-			nextResources, nextToken, listAnnotations, err := c.List(ctx, nil, &pToken)
+			nextResources, results, err := c.List(ctx, nil, rs.SyncOpAttrs{PageToken: pToken})
 			resources = append(resources, nextResources...)
 
 			require.Nil(t, err)
-			test.AssertNoRatelimitAnnotations(t, listAnnotations)
-			if nextToken == "" {
+			require.NotNil(t, results)
+			test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			if results.NextPageToken == "" {
 				break
 			}
 
-			pToken.Token = nextToken
+			pToken.Token = results.NextPageToken
 		}
 
 		require.NotNil(t, resources)

@@ -5,9 +5,7 @@ import (
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
-	"github.com/conductorone/baton-sdk/pkg/annotations"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 )
 
 type connectedApplicationBuilder struct {
@@ -19,11 +17,11 @@ func (o *connectedApplicationBuilder) ResourceType(ctx context.Context) *v2.Reso
 }
 
 func connectedApplicationResource(_ context.Context, app *client.ConnectedApplication) (*v2.Resource, error) {
-	newAppResource, err := resource.NewResource(
+	newAppResource, err := rs.NewResource(
 		app.Name,
 		resourceTypeConnectedApplication,
 		app.ID,
-		resource.WithAppTrait(),
+		rs.WithAppTrait(),
 	)
 	if err != nil {
 		return nil, err
@@ -35,59 +33,60 @@ func connectedApplicationResource(_ context.Context, app *client.ConnectedApplic
 func (o *connectedApplicationBuilder) List(
 	ctx context.Context,
 	parentResourceID *v2.ResourceId,
-	pToken *pagination.Token,
+	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Resource,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
+	token := &attrs.PageToken
 	applications, nextToken, ratelimitData, err := o.client.GetConnectedApplications(
 		ctx,
-		pToken.Token,
-		pToken.Size,
+		token.Token,
+		token.Size,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, "", outputAnnotations, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
 	rv := make([]*v2.Resource, 0, len(applications))
 	for _, application := range applications {
 		newResource, err := connectedApplicationResource(ctx, application)
 		if err != nil {
-			return nil, "", outputAnnotations, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 		}
 
 		rv = append(rv, newResource)
 	}
-	return rv, nextToken, outputAnnotations, nil
+	return rv, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+		Annotations:   outputAnnotations,
+	}, nil
 }
 
 func (o *connectedApplicationBuilder) Entitlements(
 	ctx context.Context,
 	resource *v2.Resource,
-	_ *pagination.Token,
+	_ rs.SyncOpAttrs,
 ) (
 	[]*v2.Entitlement,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
-	return nil, "", nil, nil
+	return nil, nil, nil
 }
 
 func (o *connectedApplicationBuilder) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	pToken *pagination.Token,
+	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Grant,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
-	return nil, "", nil, nil
+	return nil, nil, nil
 }
 
 func newConnectedApplicationBuilder(client *client.SalesforceClient) *connectedApplicationBuilder {

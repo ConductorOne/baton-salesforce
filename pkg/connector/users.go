@@ -8,8 +8,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/types/resource"
+	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 )
@@ -22,7 +21,7 @@ type userBuilder struct {
 	syncNonStandardUsers      bool
 }
 
-var _ connectorbuilder.AccountManager = &userBuilder{}
+var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
 // userResource convert a SalesforceUser into a Resource.
 func userResource(
@@ -59,18 +58,18 @@ func userResource(
 		"id":           user.ID,
 	}
 
-	userTraitOptions := []resource.UserTraitOption{
-		resource.WithUserProfile(profile),
-		resource.WithEmail(email, true),
-		resource.WithStatus(status),
-		resource.WithUserLogin(user.Username),
+	userTraitOptions := []rs.UserTraitOption{
+		rs.WithUserProfile(profile),
+		rs.WithEmail(email, true),
+		rs.WithStatus(status),
+		rs.WithUserLogin(user.Username),
 	}
 
 	if user.LastLoginDate != nil {
-		userTraitOptions = append(userTraitOptions, resource.WithLastLogin(*user.LastLoginDate))
+		userTraitOptions = append(userTraitOptions, rs.WithLastLogin(*user.LastLoginDate))
 	}
 
-	newUserResource, err := resource.NewUserResource(
+	newUserResource, err := rs.NewUserResource(
 		displayName,
 		resourceTypeUser,
 		user.ID,
@@ -92,30 +91,30 @@ func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 func (o *userBuilder) List(
 	ctx context.Context,
 	parentResourceID *v2.ResourceId,
-	pToken *pagination.Token,
+	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Resource,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
+	token := &attrs.PageToken
 	users, nextToken, ratelimitData, err := o.client.GetUsers(
 		ctx,
-		pToken.Token,
-		pToken.Size,
+		token.Token,
+		token.Size,
 		o.syncDeactivatedUsers,
 		o.syncNonStandardUsers,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, "", outputAnnotations, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
 	rv := make([]*v2.Resource, 0)
 	for _, user := range users {
 		userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
 		if err != nil {
-			return nil, "", nil, err
+			return nil, nil, err
 		}
 
 		newResource, err := userResource(
@@ -125,69 +124,70 @@ func (o *userBuilder) List(
 			o.shouldUseUsernameForEmail,
 		)
 		if err != nil {
-			return nil, "", outputAnnotations, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 		}
 
 		rv = append(rv, newResource)
 	}
-	return rv, nextToken, outputAnnotations, nil
+	return rv, &rs.SyncOpResults{
+		NextPageToken: nextToken,
+		Annotations:   outputAnnotations,
+	}, nil
 }
 
 // Entitlements always returns an empty slice for users.
 func (o *userBuilder) Entitlements(
 	_ context.Context,
 	resource *v2.Resource,
-	_ *pagination.Token,
+	_ rs.SyncOpAttrs,
 ) (
 	[]*v2.Entitlement,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
-	return nil, "", nil, nil
+	return nil, nil, nil
 }
 
 // Grants always returns an empty slice for users since they don't have any entitlements.
 func (o *userBuilder) Grants(
 	ctx context.Context,
 	resource *v2.Resource,
-	pToken *pagination.Token,
+	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Grant,
-	string,
-	annotations.Annotations,
+	*rs.SyncOpResults,
 	error,
 ) {
-	return nil, "", nil, nil
+	return nil, nil, nil
 }
 
 func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreateRequest, error) {
-	email, ok := resource.GetProfileStringValue(accountInfo.Profile, "email")
+	email, ok := rs.GetProfileStringValue(accountInfo.Profile, "email")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing email in account info")
 	}
 
-	alias, ok := resource.GetProfileStringValue(accountInfo.Profile, "alias")
+	alias, ok := rs.GetProfileStringValue(accountInfo.Profile, "alias")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing alias in account info")
 	}
 
-	firstName, ok := resource.GetProfileStringValue(accountInfo.Profile, "first_name")
+	firstName, ok := rs.GetProfileStringValue(accountInfo.Profile, "first_name")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing first_name in account info")
 	}
 
-	lastName, ok := resource.GetProfileStringValue(accountInfo.Profile, "last_name")
+	lastName, ok := rs.GetProfileStringValue(accountInfo.Profile, "last_name")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing last_name in account info")
 	}
 
-	profileId, ok := resource.GetProfileStringValue(accountInfo.Profile, "profileId")
+	profileId, ok := rs.GetProfileStringValue(accountInfo.Profile, "profileId")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing profileId in account info")
 	}
 
-	timezone, ok := resource.GetProfileStringValue(accountInfo.Profile, "timezone")
+	timezone, ok := rs.GetProfileStringValue(accountInfo.Profile, "timezone")
 	if !ok {
 		return nil, fmt.Errorf("baton-salesforce: missing timezone in account info")
 	}

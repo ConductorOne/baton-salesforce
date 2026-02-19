@@ -8,6 +8,7 @@ type Salesforce struct {
 	UserUsernameForEmail bool `mapstructure:"user-username-for-email"`
 	SalesforceUsername string `mapstructure:"salesforce-username"`
 	SalesforcePassword string `mapstructure:"salesforce-password"`
+	Oauth2Token string `mapstructure:"oauth2-token"`
 	SecurityToken string `mapstructure:"security-token"`
 	SyncConnectedApps bool `mapstructure:"sync-connected-apps"`
 	SyncDeactivatedUsers bool `mapstructure:"sync-deactivated-users"`
@@ -15,7 +16,7 @@ type Salesforce struct {
 	SyncNonStandardUsers bool `mapstructure:"sync-non-standard-users"`
 }
 
-func (c* Salesforce) findFieldByTag(tagValue string) (any, bool) {
+func (c *Salesforce) findFieldByTag(tagValue string) (any, bool) {
 	v := reflect.ValueOf(c).Elem() // Dereference pointer to struct
 	t := v.Type()
 
@@ -47,11 +48,13 @@ func (c *Salesforce) GetString(fieldName string) string {
 	if !ok {
 		return ""
 	}
-	t, ok := v.(string)
-	if !ok {
-		panic("wrong type")
+	if t, ok := v.(string); ok {
+		return t
 	}
-	return t
+	if t, ok := v.([]byte); ok {
+		return string(t)
+	}
+	panic("wrong type")
 }
 
 func (c *Salesforce) GetInt(fieldName string) int {

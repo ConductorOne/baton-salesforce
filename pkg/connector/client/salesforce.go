@@ -34,7 +34,7 @@ type SalesforceClient struct {
 	salesforceTransport *salesforceHttpTransport
 	TokenSource         oauth2.TokenSource
 	Username            string
-	Password            string
+	password            string
 	securityToken       string
 	initialized         bool
 }
@@ -63,7 +63,7 @@ func New(
 ) *SalesforceClient {
 	return &SalesforceClient{
 		baseUrl:       baseUrl,
-		Password:      password,
+		password:      password,
 		securityToken: securityToken,
 		TokenSource:   tokenSource,
 		Username:      username,
@@ -132,7 +132,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		err = simpleClient.LoginPassword(
 			ctx,
 			c.Username,
-			c.Password,
+			c.password,
 			c.securityToken,
 		)
 		if err != nil {

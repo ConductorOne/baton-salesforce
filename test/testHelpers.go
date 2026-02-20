@@ -209,7 +209,7 @@ func FixturesServer(ctx context.Context) (*httptest.Server, *sql.DB, error) {
 				writer.Header().Set(client.RateLimitHeaderKey, fmt.Sprintf(client.RateLimitFmt, limit, remaining))
 				writer.WriteHeader(http.StatusOK)
 
-				_, err = writer.Write(output)
+				_, err = writer.Write(output) //nolint:gosec // this is a test helper
 				if err != nil {
 					writer.WriteHeader(http.StatusInternalServerError)
 					return

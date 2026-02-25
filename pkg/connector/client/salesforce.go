@@ -154,7 +154,7 @@ func (c *SalesforceClient) Ping(ctx context.Context) (
 ) {
 	err := c.Initialize(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("salesforce-connector: failed to initialize client: %w", err)
 	}
 
 	_, err = c.client.ApexREST(
@@ -165,7 +165,7 @@ func (c *SalesforceClient) Ping(ctx context.Context) (
 	)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
-		return ratelimitData, fmt.Errorf("baton-salesforce: error validating credentials: %w", err)
+		return ratelimitData, fmt.Errorf("salesforce-connector: error validating credentials: %w", err)
 	}
 
 	return ratelimitData, nil

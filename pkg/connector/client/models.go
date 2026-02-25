@@ -13,15 +13,6 @@ type SalesforceUser struct {
 	LastLoginDate *time.Time `json:"last_login_date"`
 }
 
-type SalesforceCompany struct {
-	Name string
-}
-
-type Info struct {
-	User    *SalesforceUser
-	Company *SalesforceCompany
-}
-
 type SalesforceGroupMembership struct {
 	ID          string
 	GroupID     string
@@ -59,14 +50,6 @@ type SalesforceProfile struct {
 type SalesforceUserLicense struct {
 	ID   string
 	Name string
-}
-
-type ChatterUser struct {
-	CompanyName string `json:"companyName"`
-	Email       string `json:"email"`
-	ID          string `json:"id"`
-	FirstName   string `json:"firstName"`
-	LastName    string `json:"lastName"`
 }
 
 type PermissionSetAssignment struct {

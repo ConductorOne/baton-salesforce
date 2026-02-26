@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	InfoPath           = "/services/data/v64.0/chatter/users/me"
+	LimitsPath         = "/services/data/v64.0/limits"
 	ResetPasswordPath  = "/services/data/v64.0/sobjects/User/%s/password"
 	PageSizeDefault    = 100
 	SalesforceClientID = "ConductorOne"
@@ -146,45 +145,30 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	return nil
 }
 
-func (c *SalesforceClient) GetInfo(ctx context.Context) (
-	*Info,
+// Ping verifies that the configured credentials are valid by calling the
+// Salesforce limits endpoint. The /limits endpoint is available to any
+// authenticated user with API access.
+func (c *SalesforceClient) Ping(ctx context.Context) (
 	*v2.RateLimitDescription,
 	error,
 ) {
 	err := c.Initialize(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, fmt.Errorf("salesforce-connector: failed to initialize client: %w", err)
 	}
 
-	response, err := c.client.ApexREST(
+	_, err = c.client.ApexREST(
 		ctx,
 		http.MethodGet,
-		InfoPath,
+		LimitsPath,
 		nil,
 	)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
-		return nil, ratelimitData, fmt.Errorf("error getting info from connectorClient: %w", err)
+		return ratelimitData, fmt.Errorf("salesforce-connector: error validating credentials: %w", err)
 	}
 
-	chatterUser := &ChatterUser{}
-	err = json.Unmarshal(response, chatterUser)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error decoding chatter user froms connectorClient")
-	}
-
-	info := Info{
-		User: &SalesforceUser{
-			ID:        chatterUser.ID,
-			Email:     chatterUser.Email,
-			FirstName: chatterUser.FirstName,
-			LastName:  chatterUser.LastName,
-		},
-		Company: &SalesforceCompany{
-			Name: chatterUser.CompanyName,
-		},
-	}
-	return &info, ratelimitData, nil
+	return ratelimitData, nil
 }
 
 func getIsActive(record simpleforce.SObject) (bool, error) {

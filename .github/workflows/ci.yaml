@@ -22,8 +22,8 @@ jobs:
         uses: ConductorOne/github-workflows/actions/sync-test@v2
         with:
           connector: ./baton-salesforce
-          baton-entitlement: "group:00G8a000003XHtmEAG:member"
-          baton-principal: "0058a00000KGxQ8AAL"
+          baton-entitlement: ${{ vars.BATON_ENTITLEMENT_GROUP }}
+          baton-principal: ${{ vars.BATON_PRINCIPAL_USER }}
           baton-principal-type: user
   test-grant-permission-set-group:
     runs-on: ubuntu-latest
@@ -46,6 +46,6 @@ jobs:
         uses: ConductorOne/github-workflows/actions/sync-test@v2
         with:
           connector: ./baton-salesforce
-          baton-entitlement: "permission_set_group:0PG8a000000KzpGGAS:assigned"
-          baton-principal: "0PS8a000000DOGEGA4"
+          baton-entitlement: ${{ vars.BATON_ENTITLEMENT_PSG }}
+          baton-principal: ${{ vars.BATON_PRINCIPAL_PERMISSION }}
           baton-principal-type: permission

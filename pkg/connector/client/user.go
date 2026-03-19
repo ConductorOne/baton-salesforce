@@ -13,12 +13,17 @@ import (
 )
 
 type UserCreateRequest struct {
-	Email       string
-	Alias       string
-	LastName    string
-	FirstName   string
-	ProfileId   string
-	TimeZoneSid string
+	Email             string
+	Alias             string
+	LastName          string
+	FirstName         string
+	ProfileId         string
+	TimeZoneSid       string
+	ContactId         string
+	EmailEncodingKey  string
+	LocaleSidKey      string
+	LanguageLocaleKey string
+	CurrencyIsoCode   string
 }
 
 func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateRequest) error {
@@ -32,6 +37,21 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		return fmt.Errorf("baton-salesforce: invalid timezone: %w", err)
 	}
 
+	emailEncodingKey := request.EmailEncodingKey
+	if emailEncodingKey == "" {
+		emailEncodingKey = "UTF-8"
+	}
+
+	localeSidKey := request.LocaleSidKey
+	if localeSidKey == "" {
+		localeSidKey = "en_US"
+	}
+
+	languageLocaleKey := request.LanguageLocaleKey
+	if languageLocaleKey == "" {
+		languageLocaleKey = "en_US"
+	}
+
 	userData := map[string]interface{}{
 		"Username":          request.Email,
 		"Alias":             request.Alias,
@@ -40,10 +60,17 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		"FirstName":         request.FirstName,
 		"TimeZoneSidKey":    request.TimeZoneSid,
 		"ProfileId":         request.ProfileId,
-		"EmailEncodingKey":  "UTF-8",
-		"LocaleSidKey":      "en_US",
-		"LanguageLocaleKey": "en_US",
-		"ContactId":         nil,
+		"EmailEncodingKey":  emailEncodingKey,
+		"LocaleSidKey":      localeSidKey,
+		"LanguageLocaleKey": languageLocaleKey,
+	}
+
+	if request.ContactId != "" {
+		userData["ContactId"] = request.ContactId
+	}
+
+	if request.CurrencyIsoCode != "" {
+		userData["CurrencyIsoCode"] = request.CurrencyIsoCode
 	}
 
 	// We dont need rate limit data since err returns the rate limit data by uhttp

@@ -80,6 +80,9 @@ func (d *Salesforce) Asset(ctx context.Context, asset *v2.AssetRef) (string, io.
 // Metadata returns metadata about the connector.
 func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error) {
 	defaultTimeZone := "America/New_York"
+	defaultEmailEncoding := "UTF-8"
+	defaultLocale := "en_US"
+	defaultLanguage := "en_US"
 
 	return &v2.ConnectorMetadata{
 		DisplayName: "Salesforce",
@@ -147,6 +150,62 @@ func (d *Salesforce) Metadata(ctx context.Context) (*v2.ConnectorMetadata, error
 					},
 					Placeholder: "TimeZone",
 					Order:       6,
+				},
+				"contactId": {
+					DisplayName: "Contact ID",
+					Required:    false,
+					Description: "Salesforce Contact ID. Required for Community/Experience Cloud users.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "ContactId",
+					Order:       7,
+				},
+				"emailEncodingKey": {
+					DisplayName: "Email Encoding Key",
+					Required:    false,
+					Description: "Email encoding for the user. Defaults to UTF-8.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{
+							DefaultValue: &defaultEmailEncoding,
+						},
+					},
+					Placeholder: "EmailEncodingKey",
+					Order:       8,
+				},
+				"localeSidKey": {
+					DisplayName: "Locale",
+					Required:    false,
+					Description: "User locale. Defaults to en_US.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{
+							DefaultValue: &defaultLocale,
+						},
+					},
+					Placeholder: "LocaleSidKey",
+					Order:       9,
+				},
+				"languageLocaleKey": {
+					DisplayName: "Language",
+					Required:    false,
+					Description: "User language. Defaults to en_US.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{
+							DefaultValue: &defaultLanguage,
+						},
+					},
+					Placeholder: "LanguageLocaleKey",
+					Order:       10,
+				},
+				"currencyIsoCode": {
+					DisplayName: "Currency ISO Code",
+					Required:    false,
+					Description: "Currency ISO code for the user (e.g., USD, EUR). Only applicable for multi-currency organizations.",
+					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+					},
+					Placeholder: "CurrencyIsoCode",
+					Order:       11,
 				},
 			},
 		},

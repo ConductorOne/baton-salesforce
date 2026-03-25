@@ -99,11 +99,22 @@ func TestPermissionsList(t *testing.T) {
 		if err := uhttp.ClearCaches(ctx); err != nil {
 			t.Fatal(err)
 		}
-		grantsAfter, results, err := c.Grants(ctx, permission, rs.SyncOpAttrs{PageToken: pagination.Token{}})
-		require.Nil(t, err)
-		require.NotNil(t, results)
-		test.AssertNoRatelimitAnnotations(t, results.Annotations)
-		require.Equal(t, "", results.NextPageToken)
+		grantsAfter := make([]*v2.Grant, 0)
+		pTokenAfter := pagination.Token{
+			Token: "",
+			Size:  100,
+		}
+		for {
+			nextGrants, results, err := c.Grants(ctx, permission, rs.SyncOpAttrs{PageToken: pTokenAfter})
+			grantsAfter = append(grantsAfter, nextGrants...)
+			require.Nil(t, err)
+			require.NotNil(t, results)
+			test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			if results.NextPageToken == "" {
+				break
+			}
+			pTokenAfter.Token = results.NextPageToken
+		}
 		require.Len(t, grantsAfter, 1)
 	})
 }

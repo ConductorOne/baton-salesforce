@@ -14,6 +14,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPermissionsGrantsPhase2PSGComponents(t *testing.T) {
+	ctx := context.Background()
+
+	server, db, err := test.FixturesServer(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer test.TearDownDB(ctx, db)
+	defer server.Close()
+
+	salesforceClient, err := test.Client(ctx, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newPermissionBuilder(salesforceClient)
+
+	t.Run("should return PSG component grants with GrantExpandable annotation in phase 2", func(t *testing.T) {
+		permission, _ := permissionResource(&client.SalesforcePermission{ID: "PS2X"})
+
+		grants := make([]*v2.Grant, 0)
+		pToken := pagination.Token{Token: "", Size: 100}
+		for {
+			nextGrants, results, err := c.Grants(ctx, permission, rs.SyncOpAttrs{PageToken: pToken})
+			grants = append(grants, nextGrants...)
+			require.Nil(t, err)
+			require.NotNil(t, results)
+			test.AssertNoRatelimitAnnotations(t, results.Annotations)
+			if results.NextPageToken == "" {
+				break
+			}
+			pToken.Token = results.NextPageToken
+		}
+
+		// Expect one PSG component grant for PSG1X
+		require.Len(t, grants, 1)
+		require.Equal(t, resourceTypePermissionSetGroup.Id, grants[0].Principal.Id.ResourceType)
+		require.Equal(t, "PSG1X", grants[0].Principal.Id.Resource)
+
+		// Verify GrantExpandable annotation is present
+		var expandable v2.GrantExpandable
+		found, err := test.UnmarshalFromAnys(&expandable, grants[0].Annotations)
+		require.Nil(t, err)
+		require.True(t, found, "expected GrantExpandable annotation on PSG component grant")
+		require.Len(t, expandable.EntitlementIds, 1)
+	})
+}
+
 func TestPermissionsList(t *testing.T) {
 	ctx := context.Background()
 
@@ -51,7 +98,7 @@ func TestPermissionsList(t *testing.T) {
 		}
 
 		require.NotNil(t, resources)
-		require.Len(t, resources, 1)
+		require.Len(t, resources, 2)
 		require.NotEmpty(t, resources[0].Id)
 	})
 

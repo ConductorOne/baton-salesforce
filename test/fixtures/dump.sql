@@ -17,10 +17,11 @@ CREATE TABLE "Group"
 
 CREATE TABLE PermissionSetAssignment
 (
-    Id              TEXT PRIMARY KEY,
-    PermissionSetId TEXT,
-    AssigneeId      TEXT,
-    IsActive        INT DEFAULT 1
+    Id                   TEXT PRIMARY KEY,
+    PermissionSetId      TEXT,
+    PermissionSetGroupId TEXT DEFAULT '',
+    AssigneeId           TEXT,
+    IsActive             INT DEFAULT 1
 );
 
 CREATE TABLE PermissionSet
@@ -149,8 +150,8 @@ INSERT INTO GroupMember (Id, GroupId, UserOrGroupId)
 VALUES ('1X', '00G1X', '0051X');
 INSERT INTO PermissionSet (Id, Name, Label, Type, ProfileId, "Profile")
 VALUES ('345X', 'name', 'label', 'type', '1', '{"Name": "profile name"}');
-INSERT INTO PermissionSetAssignment (Id, PermissionSetId, AssigneeId, IsActive)
-VALUES ('1X', '345X', '0051X', 1);
+INSERT INTO PermissionSetAssignment (Id, PermissionSetId, PermissionSetGroupId, AssigneeId, IsActive)
+VALUES ('1X', '345X', '', '0051X', 1);
 INSERT INTO Profile (Id, Name, UserLicenseId)
 VALUES ('198X', 'name', '1'),
        ('298X', 'name', '2');

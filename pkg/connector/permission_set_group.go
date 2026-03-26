@@ -120,7 +120,7 @@ func newPermissionSetGroupBuilder(client *client.SalesforceClient) *permissionSe
 
 func (p *permissionSetGroupBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
 	if resource.Id.ResourceType != resourceTypeUser.Id {
-		return nil, nil, fmt.Errorf("resource type %s is not supported", resource.Id.ResourceType)
+		return nil, nil, fmt.Errorf("baton-salesforce: resource type %s is not supported", resource.Id.ResourceType)
 	}
 
 	userID := resource.Id.Resource
@@ -151,7 +151,7 @@ func (p *permissionSetGroupBuilder) Grant(ctx context.Context, resource *v2.Reso
 
 func (p *permissionSetGroupBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
 	if grant.Principal.Id.ResourceType != resourceTypeUser.Id {
-		return nil, fmt.Errorf("resource type %s is not supported", grant.Principal.Id.ResourceType)
+		return nil, fmt.Errorf("baton-salesforce: resource type %s is not supported", grant.Principal.Id.ResourceType)
 	}
 
 	userID := grant.Principal.Id.Resource

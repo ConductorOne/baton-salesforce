@@ -982,17 +982,9 @@ func (c *SalesforceClient) AddUserToPermissionSetGroup(
 
 func (c *SalesforceClient) RemoveUserFromPermissionSetGroup(
 	ctx context.Context,
-	userId string,
-	permissionSetGroupId string,
+	assignmentID string,
 ) (*v2.RateLimitDescription, error) {
-	assignment, err := c.GetOnePermissionSetGroupAssignment(ctx, userId, permissionSetGroupId)
-	if err != nil {
-		return nil, err
-	}
-	if assignment == nil {
-		return nil, nil
-	}
-	return c.DeleteObject(ctx, TableNamePermissionAssignments, assignment.ID)
+	return c.DeleteObject(ctx, TableNamePermissionAssignments, assignmentID)
 }
 
 func (c *SalesforceClient) GetConnectedApplications(

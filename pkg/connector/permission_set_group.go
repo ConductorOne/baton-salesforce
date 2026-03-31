@@ -166,7 +166,7 @@ func (p *permissionSetGroupBuilder) Revoke(ctx context.Context, grant *v2.Grant)
 		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 	}
 
-	_, err = p.client.RemoveUserFromPermissionSetGroup(ctx, userID, permissionSetGroupID)
+	_, err = p.client.RemoveUserFromPermissionSetGroup(ctx, existing.ID)
 	if err != nil {
 		return nil, err
 	}

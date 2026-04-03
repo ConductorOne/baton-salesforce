@@ -13,17 +13,13 @@ import (
 )
 
 type UserCreateRequest struct {
-	Email             string
-	Alias             string
-	LastName          string
-	FirstName         string
-	ProfileId         string
-	TimeZoneSid       string
-	ContactId         string
-	EmailEncodingKey  string
-	LocaleSidKey      string
-	LanguageLocaleKey string
-	CurrencyIsoCode   string
+	Email       string
+	Alias       string
+	LastName    string
+	FirstName   string
+	ProfileId   string
+	TimeZoneSid string
+	ContactID   string
 }
 
 func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateRequest) error {
@@ -37,40 +33,18 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		return fmt.Errorf("baton-salesforce: invalid timezone: %w", err)
 	}
 
-	emailEncodingKey := request.EmailEncodingKey
-	if emailEncodingKey == "" {
-		emailEncodingKey = "UTF-8"
-	}
-
-	localeSidKey := request.LocaleSidKey
-	if localeSidKey == "" {
-		localeSidKey = "en_US"
-	}
-
-	languageLocaleKey := request.LanguageLocaleKey
-	if languageLocaleKey == "" {
-		languageLocaleKey = "en_US"
-	}
-
 	userData := map[string]interface{}{
-		"Username":          request.Email,
-		"Alias":             request.Alias,
-		"Email":             request.Email,
-		"LastName":          request.LastName,
-		"FirstName":         request.FirstName,
-		"TimeZoneSidKey":    request.TimeZoneSid,
-		"ProfileId":         request.ProfileId,
-		"EmailEncodingKey":  emailEncodingKey,
-		"LocaleSidKey":      localeSidKey,
-		"LanguageLocaleKey": languageLocaleKey,
+		"Username":       request.Email,
+		"Alias":          request.Alias,
+		"Email":          request.Email,
+		"LastName":       request.LastName,
+		"FirstName":      request.FirstName,
+		"TimeZoneSidKey": request.TimeZoneSid,
+		"ProfileId":      request.ProfileId,
 	}
 
-	if request.ContactId != "" {
-		userData["ContactId"] = request.ContactId
-	}
-
-	if request.CurrencyIsoCode != "" {
-		userData["CurrencyIsoCode"] = request.CurrencyIsoCode
+	if request.ContactID != "" {
+		userData["ContactId"] = request.ContactID
 	}
 
 	// We dont need rate limit data since err returns the rate limit data by uhttp

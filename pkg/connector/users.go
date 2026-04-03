@@ -192,24 +192,16 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		return nil, fmt.Errorf("baton-salesforce: missing timezone in account info")
 	}
 
-	contactId, _ := rs.GetProfileStringValue(accountInfo.Profile, "contactId")
-	emailEncodingKey, _ := rs.GetProfileStringValue(accountInfo.Profile, "emailEncodingKey")
-	localeSidKey, _ := rs.GetProfileStringValue(accountInfo.Profile, "localeSidKey")
-	languageLocaleKey, _ := rs.GetProfileStringValue(accountInfo.Profile, "languageLocaleKey")
-	currencyIsoCode, _ := rs.GetProfileStringValue(accountInfo.Profile, "currencyIsoCode")
+	contactID, _ := rs.GetProfileStringValue(accountInfo.Profile, "contactID")
 
 	return &client.UserCreateRequest{
-		Email:             email,
-		Alias:             alias,
-		TimeZoneSid:       timezone,
-		ProfileId:         profileId,
-		FirstName:         firstName,
-		LastName:          lastName,
-		ContactId:         contactId,
-		EmailEncodingKey:  emailEncodingKey,
-		LocaleSidKey:      localeSidKey,
-		LanguageLocaleKey: languageLocaleKey,
-		CurrencyIsoCode:   currencyIsoCode,
+		Email:       email,
+		Alias:       alias,
+		TimeZoneSid: timezone,
+		ProfileId:   profileId,
+		FirstName:   firstName,
+		LastName:    lastName,
+		ContactID:   contactID,
 	}, nil
 }
 
@@ -243,7 +235,7 @@ func (o *userBuilder) Delete(
 func (o *userBuilder) CreateAccount(
 	ctx context.Context,
 	accountInfo *v2.AccountInfo,
-	credentialOptions *v2.LocalCredentialOptions,
+	_ *v2.LocalCredentialOptions,
 ) (
 	connectorbuilder.CreateAccountResponse,
 	[]*v2.PlaintextData,

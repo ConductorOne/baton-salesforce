@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	permissionSetGroupAssignmentEntitlementName = "assigned"
+	permissionSetGroupMemberEntitlementName = "member"
 )
 
 type permissionSetGroupBuilder struct {
@@ -66,24 +66,24 @@ func (p *permissionSetGroupBuilder) List(ctx context.Context, parentResourceID *
 }
 
 func (p *permissionSetGroupBuilder) Entitlements(ctx context.Context, resource *v2.Resource, attrs rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
-	v2entitlement := entitlement.NewAssignmentEntitlement(
+	memberEntitlement := entitlement.NewAssignmentEntitlement(
 		resource,
-		permissionSetGroupAssignmentEntitlementName,
-		entitlement.WithGrantableTo(resourceTypePermissionSet),
+		permissionSetGroupMemberEntitlementName,
+		entitlement.WithGrantableTo(resourceTypeUser),
 		entitlement.WithDisplayName(
-			fmt.Sprintf("%s Permission Set Group", resource.DisplayName),
+			fmt.Sprintf("%s Permission Set Group Member", resource.DisplayName),
 		),
 		entitlement.WithDescription(
-			fmt.Sprintf("Has the %s permission set in Salesforce", resource.DisplayName),
+			fmt.Sprintf("Assigned to the %s permission set group in Salesforce", resource.DisplayName),
 		),
 	)
 
-	return []*v2.Entitlement{v2entitlement}, nil, nil
+	return []*v2.Entitlement{memberEntitlement}, nil, nil
 }
 
 func (p *permissionSetGroupBuilder) Grants(ctx context.Context, resource *v2.Resource, attrs rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
 	token := &attrs.PageToken
-	assignments, nextToken, ratelimitData, err := p.client.GetPermissionSetGroupComponent(
+	assignments, nextToken, ratelimitData, err := p.client.GetPermissionSetGroupAssignments(
 		ctx,
 		resource.Id.Resource,
 		token.Token,
@@ -96,17 +96,16 @@ func (p *permissionSetGroupBuilder) Grants(ctx context.Context, resource *v2.Res
 
 	grants := make([]*v2.Grant, 0)
 	for _, assignment := range assignments {
-		id, err := rs.NewResourceID(resourceTypePermissionSet, assignment.PermissionSetID)
-		if err != nil {
-			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
-		}
-
 		grants = append(grants, grant.NewGrant(
 			resource,
-			permissionSetGroupAssignmentEntitlementName,
-			id,
+			permissionSetGroupMemberEntitlementName,
+			&v2.ResourceId{
+				ResourceType: resourceTypeUser.Id,
+				Resource:     assignment.UserID,
+			},
 		))
 	}
+
 	return grants, &rs.SyncOpResults{
 		NextPageToken: nextToken,
 		Annotations:   outputAnnotations,
@@ -120,70 +119,57 @@ func newPermissionSetGroupBuilder(client *client.SalesforceClient) *permissionSe
 }
 
 func (p *permissionSetGroupBuilder) Grant(ctx context.Context, resource *v2.Resource, entitlement *v2.Entitlement) ([]*v2.Grant, annotations.Annotations, error) {
-	if resource.Id.ResourceType == resourceTypePermissionSet.Id {
-		permissionSetID := resource.Id.Resource
-		permissionSetGroupID := entitlement.Resource.Id.Resource
-
-		component, err := p.client.GetOnePermissionSetGroupComponent(ctx, permissionSetGroupID, permissionSetID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if component != nil {
-			return nil, annotations.New(&v2.GrantAlreadyExists{}), nil
-		}
-
-		_, err = p.client.CreatePermissionSetGroupComponent(
-			ctx,
-			permissionSetGroupID,
-			permissionSetID,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		permissionSetResourceID, err := rs.NewResourceID(resourceTypePermissionSet, permissionSetID)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		permissionGrant := grant.NewGrant(
-			entitlement.Resource,
-			permissionSetGroupAssignmentEntitlementName,
-			permissionSetResourceID,
-		)
-
-		return []*v2.Grant{permissionGrant}, nil, nil
+	if resource.Id.ResourceType != resourceTypeUser.Id {
+		return nil, nil, fmt.Errorf("baton-salesforce: resource type %s is not supported", resource.Id.ResourceType)
 	}
 
-	return nil, nil, fmt.Errorf("resource type %s is not supported", resource.Id.ResourceType)
+	userID := resource.Id.Resource
+	permissionSetGroupID := entitlement.Resource.Id.Resource
+
+	existing, err := p.client.GetOnePermissionSetGroupAssignment(ctx, userID, permissionSetGroupID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if existing != nil {
+		return nil, annotations.New(&v2.GrantAlreadyExists{}), nil
+	}
+
+	_, err = p.client.AddUserToPermissionSetGroup(ctx, userID, permissionSetGroupID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	userGrant := grant.NewGrant(
+		entitlement.Resource,
+		permissionSetGroupMemberEntitlementName,
+		resource.Id,
+	)
+
+	return []*v2.Grant{userGrant}, nil, nil
 }
 
 func (p *permissionSetGroupBuilder) Revoke(ctx context.Context, grant *v2.Grant) (annotations.Annotations, error) {
-	if grant.Principal.Id.ResourceType == resourceTypePermissionSet.Id {
-		permissionSetID := grant.Principal.Id.Resource
-		permissionSetGroupID := grant.Entitlement.Resource.Id.Resource
-
-		component, err := p.client.GetOnePermissionSetGroupComponent(ctx, permissionSetGroupID, permissionSetID)
-		if err != nil {
-			return nil, err
-		}
-
-		if component == nil {
-			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
-		}
-
-		_, err = p.client.DeleteObject(
-			ctx,
-			client.TablePermissionSetGroupComponent,
-			component.ID,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, nil
+	if grant.Principal.Id.ResourceType != resourceTypeUser.Id {
+		return nil, fmt.Errorf("baton-salesforce: resource type %s is not supported", grant.Principal.Id.ResourceType)
 	}
 
-	return nil, fmt.Errorf("resource type %s is not supported", grant.Principal.Id.ResourceType)
+	userID := grant.Principal.Id.Resource
+	permissionSetGroupID := grant.Entitlement.Resource.Id.Resource
+
+	existing, err := p.client.GetOnePermissionSetGroupAssignment(ctx, userID, permissionSetGroupID)
+	if err != nil {
+		return nil, err
+	}
+
+	if existing == nil {
+		return annotations.New(&v2.GrantAlreadyRevoked{}), nil
+	}
+
+	_, err = p.client.RemoveUserFromPermissionSetGroup(ctx, existing.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }

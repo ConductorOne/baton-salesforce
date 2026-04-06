@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -16,6 +17,7 @@ import (
 
 const (
 	permissionSetAssignmentEntitlementName = "assigned"
+	permPsgPageTokenPrefix                 = "psg:"
 )
 
 type permissionBuilder struct {
@@ -94,7 +96,7 @@ func (o *permissionBuilder) Entitlements(
 		entitlement.NewAssignmentEntitlement(
 			resource,
 			permissionSetAssignmentEntitlementName,
-			entitlement.WithGrantableTo(resourceTypeUser),
+			entitlement.WithGrantableTo(resourceTypeUser, resourceTypePermissionSetGroup),
 			entitlement.WithDisplayName(
 				fmt.Sprintf("%s Permission Set", resource.DisplayName),
 			),
@@ -117,10 +119,58 @@ func (o *permissionBuilder) Grants(
 	error,
 ) {
 	token := &attrs.PageToken
-	assignments, nextToken, ratelimitData, err := o.client.GetPermissionSetAssignments(
+	pageToken := token.Token
+
+	grants := make([]*v2.Grant, 0)
+
+	if strings.HasPrefix(pageToken, permPsgPageTokenPrefix) {
+		// Phase 2: PSG components that include this permission set
+		psgToken := strings.TrimPrefix(pageToken, permPsgPageTokenPrefix)
+		components, nextPsgToken, ratelimitData, err := o.client.GetPermissionSetGroupComponentsByPermissionSet(
+			ctx,
+			resource.Id.Resource,
+			psgToken,
+			token.Size,
+		)
+		outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+		if err != nil {
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		}
+
+		for _, component := range components {
+			memberEntitlementID := fmt.Sprintf("%s:%s:%s",
+				resourceTypePermissionSetGroup.Id,
+				component.PermissionSetGroupID,
+				permissionSetGroupMemberEntitlementName,
+			)
+			grants = append(grants, grant.NewGrant(
+				resource,
+				permissionSetAssignmentEntitlementName,
+				&v2.ResourceId{
+					ResourceType: resourceTypePermissionSetGroup.Id,
+					Resource:     component.PermissionSetGroupID,
+				},
+				grant.WithAnnotation(&v2.GrantExpandable{
+					EntitlementIds: []string{memberEntitlementID},
+				}),
+			))
+		}
+
+		var nextToken string
+		if nextPsgToken != "" {
+			nextToken = permPsgPageTokenPrefix + nextPsgToken
+		}
+		return grants, &rs.SyncOpResults{
+			NextPageToken: nextToken,
+			Annotations:   outputAnnotations,
+		}, nil
+	}
+
+	// Phase 1: direct user assignments
+	assignments, nextUserToken, ratelimitData, err := o.client.GetPermissionSetAssignments(
 		ctx,
 		resource.Id.Resource,
-		token.Token,
+		pageToken,
 		token.Size,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
@@ -128,7 +178,6 @@ func (o *permissionBuilder) Grants(
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
-	grants := make([]*v2.Grant, 0)
 	for _, assignment := range assignments {
 		grants = append(grants, grant.NewGrant(
 			resource,
@@ -138,6 +187,13 @@ func (o *permissionBuilder) Grants(
 				Resource:     assignment.UserID,
 			},
 		))
+	}
+
+	var nextToken string
+	if nextUserToken != "" {
+		nextToken = nextUserToken
+	} else {
+		nextToken = permPsgPageTokenPrefix
 	}
 	return grants, &rs.SyncOpResults{
 		NextPageToken: nextToken,
@@ -173,6 +229,10 @@ func (o *permissionBuilder) Revoke(
 	ctx context.Context,
 	grant *v2.Grant,
 ) (annotations.Annotations, error) {
+	if grant.Principal.Id.ResourceType != resourceTypeUser.Id {
+		return nil, fmt.Errorf("salesforce-connector: only users can have permission set grants revoked")
+	}
+
 	ratelimitData, err := o.client.RemoveUserFromPermissionSet(
 		ctx,
 		grant.Principal.Id.Resource,

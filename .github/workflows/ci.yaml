@@ -47,5 +47,5 @@ jobs:
         with:
           connector: ./baton-salesforce
           baton-entitlement: ${{ vars.BATON_ENTITLEMENT_PSG }}
-          baton-principal: ${{ vars.BATON_PRINCIPAL_PERMISSION }}
-          baton-principal-type: permission
+          baton-principal: ${{ vars.BATON_PRINCIPAL_USER }}
+          baton-principal-type: user

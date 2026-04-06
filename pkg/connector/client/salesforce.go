@@ -873,9 +873,9 @@ func (c *SalesforceClient) GetPermissionSetGroups(
 	return permissionSetGroups, paginationUrl, ratelimitData, nil
 }
 
-func (c *SalesforceClient) GetPermissionSetGroupComponent(
+func (c *SalesforceClient) GetPermissionSetGroupComponentsByPermissionSet(
 	ctx context.Context,
-	permissionSetGroupId string,
+	permissionSetId string,
 	pageToken string,
 	pageSize int,
 ) (
@@ -885,14 +885,9 @@ func (c *SalesforceClient) GetPermissionSetGroupComponent(
 	error,
 ) {
 	query := NewQuery(TablePermissionSetGroupComponent).
-		WhereEq("PermissionSetGroupId", permissionSetGroupId)
+		WhereEq("PermissionSetId", permissionSetId)
 
-	records, paginationUrl, ratelimitData, err := c.query(
-		ctx,
-		query,
-		pageToken,
-		pageSize,
-	)
+	records, paginationUrl, ratelimitData, err := c.query(ctx, query, pageToken, pageSize)
 	if err != nil {
 		return nil, "", ratelimitData, err
 	}
@@ -902,7 +897,6 @@ func (c *SalesforceClient) GetPermissionSetGroupComponent(
 		if err != nil {
 			return nil, "", ratelimitData, err
 		}
-
 		permissionSetGroupComponents = append(permissionSetGroupComponents, &PermissionSetGroupComponent{
 			ID:                   record.ID(),
 			IsDeleted:            isDeleted,
@@ -913,24 +907,49 @@ func (c *SalesforceClient) GetPermissionSetGroupComponent(
 	return permissionSetGroupComponents, paginationUrl, ratelimitData, nil
 }
 
-func (c *SalesforceClient) GetOnePermissionSetGroupComponent(
+func (c *SalesforceClient) GetPermissionSetGroupAssignments(
 	ctx context.Context,
 	permissionSetGroupId string,
-	permissionSetId string,
+	pageToken string,
+	pageSize int,
 ) (
-	*PermissionSetGroupComponent,
+	[]*PermissionSetAssignment,
+	string,
+	*v2.RateLimitDescription,
 	error,
 ) {
-	query := NewQuery(TablePermissionSetGroupComponent).
-		WhereEq("PermissionSetGroupId", permissionSetGroupId).
-		WhereEq("PermissionSetId", permissionSetId)
+	query := NewQuery(TableNamePermissionAssignments, "PermissionSetGroupId", "AssigneeId").
+		WhereEq("PermissionSetGroupId", permissionSetGroupId)
 
-	records, _, _, err := c.query(
-		ctx,
-		query,
-		"",
-		1,
-	)
+	records, paginationUrl, ratelimitData, err := c.query(ctx, query, pageToken, pageSize)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+
+	assignments := make([]*PermissionSetAssignment, 0)
+	for _, record := range records {
+		assignments = append(assignments, &PermissionSetAssignment{
+			ID:                   record.ID(),
+			PermissionSetGroupID: record.StringField("PermissionSetGroupId"),
+			UserID:               record.StringField("AssigneeId"),
+		})
+	}
+	return assignments, paginationUrl, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetOnePermissionSetGroupAssignment(
+	ctx context.Context,
+	userId string,
+	permissionSetGroupId string,
+) (
+	*PermissionSetAssignment,
+	error,
+) {
+	query := NewQuery(TableNamePermissionAssignments, "PermissionSetGroupId", "AssigneeId").
+		WhereEq("AssigneeId", userId).
+		WhereEq("PermissionSetGroupId", permissionSetGroupId)
+
+	records, _, _, err := c.query(ctx, query, "", 1)
 	if err != nil {
 		return nil, err
 	}
@@ -939,51 +958,33 @@ func (c *SalesforceClient) GetOnePermissionSetGroupComponent(
 		return nil, nil
 	}
 
-	if len(records) != 1 {
-		return nil, fmt.Errorf("expected 1 record, got %d", len(records))
-	}
-
-	record := records[0]
-
-	isDeleted, err := getBoolField(record, "IsDeleted")
-	if err != nil {
-		return nil, err
-	}
-
-	permission := &PermissionSetGroupComponent{
-		ID:                   record.ID(),
-		IsDeleted:            isDeleted,
-		PermissionSetGroupID: record.StringField("PermissionSetGroupId"),
-		PermissionSetID:      record.StringField("PermissionSetId"),
-	}
-
-	return permission, nil
+	return &PermissionSetAssignment{
+		ID:                   records[0].ID(),
+		PermissionSetGroupID: records[0].StringField("PermissionSetGroupId"),
+		UserID:               records[0].StringField("AssigneeId"),
+	}, nil
 }
 
-func (c *SalesforceClient) CreatePermissionSetGroupComponent(
+func (c *SalesforceClient) AddUserToPermissionSetGroup(
 	ctx context.Context,
+	userId string,
 	permissionSetGroupId string,
-	permissionSetId string,
 ) (*v2.RateLimitDescription, error) {
 	return c.CreateObject(
 		ctx,
-		TablePermissionSetGroupComponent,
+		TableNamePermissionAssignments,
 		map[string]interface{}{
+			"AssigneeId":           userId,
 			"PermissionSetGroupId": permissionSetGroupId,
-			"PermissionSetId":      permissionSetId,
 		},
 	)
 }
 
-func (c *SalesforceClient) DeletePermissionSetGroupComponent(
+func (c *SalesforceClient) RemoveUserFromPermissionSetGroup(
 	ctx context.Context,
-	permissionSetGroupComponentId string,
+	assignmentID string,
 ) (*v2.RateLimitDescription, error) {
-	return c.DeleteObject(
-		ctx,
-		TablePermissionSetGroupComponent,
-		permissionSetGroupComponentId,
-	)
+	return c.DeleteObject(ctx, TableNamePermissionAssignments, assignmentID)
 }
 
 func (c *SalesforceClient) GetConnectedApplications(

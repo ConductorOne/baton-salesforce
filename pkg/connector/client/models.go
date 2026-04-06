@@ -53,10 +53,11 @@ type SalesforceUserLicense struct {
 }
 
 type PermissionSetAssignment struct {
-	ID              string
-	UserID          string
-	PermissionSetID string
-	IsActive        bool
+	ID                   string
+	UserID               string
+	PermissionSetID      string
+	PermissionSetGroupID string
+	IsActive             bool
 }
 
 type PermissionSetGroup struct {

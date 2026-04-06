@@ -17,10 +17,11 @@ CREATE TABLE "Group"
 
 CREATE TABLE PermissionSetAssignment
 (
-    Id              TEXT PRIMARY KEY,
-    PermissionSetId TEXT,
-    AssigneeId      TEXT,
-    IsActive        INT DEFAULT 1
+    Id                   TEXT PRIMARY KEY,
+    PermissionSetId      TEXT DEFAULT '',
+    PermissionSetGroupId TEXT DEFAULT '',
+    AssigneeId           TEXT,
+    IsActive             INT DEFAULT 1
 );
 
 CREATE TABLE PermissionSet
@@ -149,14 +150,21 @@ INSERT INTO GroupMember (Id, GroupId, UserOrGroupId)
 VALUES ('1X', '00G1X', '0051X');
 INSERT INTO PermissionSet (Id, Name, Label, Type, ProfileId, "Profile")
 VALUES ('345X', 'name', 'label', 'type', '1', '{"Name": "profile name"}');
-INSERT INTO PermissionSetAssignment (Id, PermissionSetId, AssigneeId, IsActive)
-VALUES ('1X', '345X', '0051X', 1);
+INSERT INTO PermissionSetAssignment (Id, PermissionSetId, PermissionSetGroupId, AssigneeId, IsActive)
+VALUES ('1X', '345X', '', '0051X', 1),
+       ('PSA1X', '', 'PSG1X', '0051X', 1);
 INSERT INTO Profile (Id, Name, UserLicenseId)
 VALUES ('198X', 'name', '1'),
        ('298X', 'name', '2');
 INSERT INTO UserRole (Id, Name)
 VALUES ('199X', 'name'),
        ('299X', 'name');
+INSERT INTO PermissionSet (Id, Name, Label, Type, ProfileId, "Profile")
+VALUES ('PS2X', 'ps2', 'PS2 Label', 'type', '', '');
+INSERT INTO PermissionSetGroup (Id, IsDeleted, DeveloperName, Language, MasterLabel, NamespacePrefix, Description, HasActivationRequired)
+VALUES ('PSG1X', '', 'TestPSG', 'en_US', 'Test PSG', '', 'Test permission set group', '');
+INSERT INTO PermissionSetGroupComponent (Id, IsDeleted, PermissionSetGroupId, PermissionSetId)
+VALUES ('PSGC1X', '', 'PSG1X', 'PS2X');
 
 CREATE TABLE ConnectedApplication
 (

@@ -49,36 +49,37 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 Configuring the connector requires you to pass in credentials generated in Salesforce. Gather these credentials before you move on. 
 
 <Warning>
-The owner of a Salesforce user account with a profile that includes the **API Enabled**, **View Setup and Configuration**, and **View All Users** permissions must perform this task. If using provisioning, additional permissions are required. See [Troubleshooting](#when-i-try-to-sync-i-see-an-insufficient-access-rights-on-cross-reference-id-error) for the complete list of required permissions.
+The connector user must have the **API Enabled** and **Manage Users** system permissions. If using provisioning, additional permissions are required. See [Troubleshooting](#when-i-try-to-sync-i-see-an-insufficient-access-rights-on-cross-reference-id-error) for the complete list of required permissions.
 </Warning>
 
-### Enable API access for your Salesforce user
+### Enable API access and permissions for your Salesforce user
 
-Before you begin, make sure that the Salesforce user who will set up the integration with C1 has a profile that includes the **API Enabled** and **View Setup and Configuration** permissions. 
-
-To edit a profile so that it includes the **API Enabled** and **View Setup and Configuration** permissions: 
+Before you begin, make sure that the Salesforce user who will set up the integration with C1 has the required system permissions. The recommended approach is to create a Permission Set and assign it to the connector user.
 
 <Steps>
 <Step>
-Log into Salesforce as an Administrator. 
+Log into Salesforce as an Administrator. Click the gear icon and select **Setup**. 
 </Step>
 <Step>
-Click the gear icon and select **Setup**. 
+Search for "permission sets" and select **Permission Sets**.
 </Step>
 <Step>
-Search for "profiles" and select **Profiles** from the search results. 
+Click **New** to create a permission set (e.g., "ConductorOne Connector Access").
 </Step>
 <Step>
-In the **User Profiles** list, locate the user profile you want to add the permission to and click **Edit**. 
+In the permission set, click **System Permissions**, then click **Edit**.
 </Step>
 <Step>
-Find the **Administrative Permissions** section of the page and click to select **API Enabled** and **View Setup and Configuration**. 
+Enable **API Enabled** and **Manage Users**. If using provisioning, also enable **Manage Roles and Role Hierarchy** and **Manage Groups**.
 </Step>
 <Step>
-Click **Save**. 
+Click **Save**.
+</Step>
+<Step>
+Click **Manage Assignments**, then **Add Assignment** to assign the permission set to the connector user.
 </Step>
 </Steps>
-Your user's profile can now access Salesforce APIs. 
+Your connector user now has the required permissions to sync Salesforce data. 
 
 ### Locate your Salesforce domain
 
@@ -354,13 +355,16 @@ Salesforce returns this error if the connector user does not have sufficient per
 
 The connector queries setup objects (User, Profile, UserRole, Group, PermissionSet, etc.) that are controlled by **administrative permissions**, not standard object-level CRUD permissions. The connector user's profile or an assigned permission set must include the following administrative permissions:
 
-**Required administrative permissions for sync:**
+**Required system permissions for sync:**
 
 | Permission | Purpose |
 | :--- | :--- |
 | API Enabled | Access Salesforce APIs |
-| View Setup and Configuration | Read setup objects (Profiles, Roles, Permission Sets, Groups) |
-| View All Users | Read all user records and related data |
+| Manage Users | Read user login status, user records, and related setup objects. This permission automatically includes View Setup and Configuration, View All Users, and other related permissions. |
+
+<Tip>
+**Why is Manage Users required for sync?** The connector queries the UserLogin object to read user frozen/locked status, and Salesforce requires "Manage Users" to access UserLogin even for read-only operations. "Manage Users" also includes "View Setup and Configuration" and "View All Users", which are needed to read Profiles, Roles, Permission Sets, and Groups.
+</Tip>
 
 **Additional permissions required for provisioning:**
 
@@ -368,30 +372,11 @@ If you're using the connector for provisioning (granting/revoking access), the c
 
 | Permission | Purpose |
 | :--- | :--- |
-| Manage Users | Create and edit user records, assign profiles |
 | Manage Roles and Role Hierarchy | Assign and revoke role assignments |
-| Assign Permission Sets | Assign and revoke permission sets and permission set groups |
 | Manage Groups | Add and remove users from public groups |
 
-To fix this error, create a Permission Set with the required permissions and assign it to the connector user:
+<Tip>
+"Manage Users" already includes "Assign Permission Sets" and "Manage Profiles and Permission Sets", so no additional permissions are needed for provisioning permission sets or profiles.
+</Tip>
 
-<Steps>
-<Step>
-Log into Salesforce as an Administrator. Click the gear icon and select **Setup**.
-</Step>
-<Step>
-Search for "permission sets" and select **Permission Sets**.
-</Step>
-<Step>
-Click **New** to create a permission set (e.g., "ConductorOne Connector Access").
-</Step>
-<Step>
-In the permission set, click **System Permissions**, then click **Edit**.
-</Step>
-<Step>
-Enable the required permissions listed above and click **Save**.
-</Step>
-<Step>
-Click **Manage Assignments**, then **Add Assignment** to assign the permission set to the connector user.
-</Step>
-</Steps> 
+To fix this error, follow the instructions to [Enable API access and permissions for your Salesforce user](/baton/salesforce#enable-api-access-and-permissions-for-your-salesforce-user) to create a Permission Set with the required permissions and assign it to the connector user. 

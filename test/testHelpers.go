@@ -119,7 +119,7 @@ func query(ctx context.Context, db *sql.DB, queryString string) ([]simpleforce.S
 	hackString := strings.ReplaceAll(queryString, ".Name", "")
 	hackString = strings.ReplaceAll(hackString, "Fields(standard)", "Id,*")
 
-	rows, err := db.QueryContext(ctx, hackString) //nolint:gosec // test server only
+	rows, err := db.QueryContext(ctx, hackString) //nolint:gosec // test-only mock server; query is built from internal fixture data, not user input
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func handleDelete(ctx context.Context, db *sql.DB, request *http.Request) error 
 	}
 
 	tableName, id := parsePath(request)
-	result, err := db.ExecContext( //nolint:gosec // test server only
+	result, err := db.ExecContext( //nolint:gosec // test-only mock server; tableName and id come from internal test routing, not user input
 		ctx,
 		fmt.Sprintf(
 			"DELETE FROM %s WHERE Id = '%s'",
@@ -297,7 +297,7 @@ func handlePatch(ctx context.Context, db *sql.DB, request *http.Request) ([]byte
 	}
 
 	conditionsString := strings.Join(conditions, ",")
-	_, err = db.ExecContext( //nolint:gosec // test server only
+	_, err = db.ExecContext( //nolint:gosec // test-only mock server; tableName, conditionsString, and id come from internal test routing, not user input
 		ctx,
 		fmt.Sprintf(
 			"UPDATE %s SET %s WHERE Id = '%s'",
@@ -370,7 +370,7 @@ func handleInsert(ctx context.Context, db *sql.DB, request *http.Request) ([]byt
 	columnsString := "('" + strings.Join(columns, "','") + "')"
 	valuesString := "(" + strings.Join(values, ",") + ")"
 
-	_, err = db.ExecContext(ctx, fmt.Sprintf( //nolint:gosec // test server only
+	_, err = db.ExecContext(ctx, fmt.Sprintf( //nolint:gosec // test-only mock server; tableName and values come from internal fixture data, not user input
 		"INSERT INTO %s %s VALUES %s",
 		tableName,
 		columnsString,

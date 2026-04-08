@@ -192,6 +192,8 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		return nil, fmt.Errorf("baton-salesforce: missing timezone in account info")
 	}
 
+	contactID, _ := rs.GetProfileStringValue(accountInfo.Profile, "contactID")
+
 	return &client.UserCreateRequest{
 		Email:       email,
 		Alias:       alias,
@@ -199,6 +201,7 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 		ProfileId:   profileId,
 		FirstName:   firstName,
 		LastName:    lastName,
+		ContactID:   contactID,
 	}, nil
 }
 
@@ -232,7 +235,7 @@ func (o *userBuilder) Delete(
 func (o *userBuilder) CreateAccount(
 	ctx context.Context,
 	accountInfo *v2.AccountInfo,
-	credentialOptions *v2.LocalCredentialOptions,
+	_ *v2.LocalCredentialOptions,
 ) (
 	connectorbuilder.CreateAccountResponse,
 	[]*v2.PlaintextData,

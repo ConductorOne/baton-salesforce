@@ -19,6 +19,7 @@ type UserCreateRequest struct {
 	FirstName   string
 	ProfileId   string
 	TimeZoneSid string
+	ContactID   string
 }
 
 func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateRequest) error {
@@ -43,7 +44,10 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		"EmailEncodingKey":  "UTF-8",
 		"LocaleSidKey":      "en_US",
 		"LanguageLocaleKey": "en_US",
-		"ContactId":         nil,
+	}
+
+	if request.ContactID != "" {
+		userData["ContactId"] = request.ContactID
 	}
 
 	// We dont need rate limit data since err returns the rate limit data by uhttp

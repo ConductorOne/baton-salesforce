@@ -36,6 +36,18 @@ This connector does not support account deprovisioning. You must deprovision acc
 
 *You have the option to sync user accounts that use non-standard licenses. 
 
+### Permission set group grants
+
+The connector syncs two types of grant relationships for Permission Set Groups (PSGs):
+
+- **PSG → User grants**: If a user is assigned to a Permission Set Group (via a `PermissionSetAssignment` record in Salesforce), C1 emits a `member` grant linking that user to the PSG. These grants appear on the PSG resource's Grants tab in C1.
+
+- **PSG → Permission Set grants**: If a Permission Set is a component of a Permission Set Group (via a `PermissionSetGroupComponent` record), C1 emits an `assigned` grant on the Permission Set resource with the PSG as the principal. These grants support transitive access expansion: users who are members of a PSG are automatically shown as having access to all Permission Sets within that PSG, enabling access reviews at the PSG level.
+
+<Note>
+PSG → User grants require at least one `PermissionSetAssignment` record in Salesforce where the target is a Permission Set Group. If your Salesforce instance assigns access only through individual Permission Sets, PSG grants will not appear.
+</Note>
+
 ### Connector actions
 
 Connector actions are custom capabilities that extend C1 automations with app-specific operations. You can use connector actions in the [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) automation step.

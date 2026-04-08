@@ -49,7 +49,7 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 Configuring the connector requires you to pass in credentials generated in Salesforce. Gather these credentials before you move on. 
 
 <Warning>
-The owner of a Salesforce user account with a profile that includes the **API Enabled** and **View Setup and Configuration** permissions must perform this task. Additionally, the connector user must have read access to all Salesforce objects that the connector queries. See [Troubleshooting](#when-i-try-to-sync-i-see-an-insufficient-access-rights-on-cross-reference-id-error) for the complete list of required object permissions.
+The owner of a Salesforce user account with a profile that includes the **API Enabled**, **View Setup and Configuration**, and **View All Users** permissions must perform this task. If using provisioning, additional permissions are required. See [Troubleshooting](#when-i-try-to-sync-i-see-an-insufficient-access-rights-on-cross-reference-id-error) for the complete list of required permissions.
 </Warning>
 
 ### Enable API access for your Salesforce user
@@ -346,42 +346,36 @@ If you see this message, follow the instructions to [Enable API access for your 
 
 ### When I try to sync, I see an "insufficient access rights on cross-reference id" error
 
-Salesforce returns this error if the user who is syncing does not have read access to all the Salesforce objects that the connector needs to query:
+Salesforce returns this error if the connector user does not have sufficient permissions to query the Salesforce objects that the connector needs:
 
 ```bash
 {"error": "error: listing resources failed: rpc error: code = InvalidArgument desc = 400 Bad Request\n[simpleforce] Error. http code: 400 Error Message:  insufficient access rights on cross-reference id Error Code: INSUFFICIENT_ACCESS"}
 ```
 
-This error typically occurs when the connector user has **API Enabled** but lacks object-level read permissions. The connector queries multiple Salesforce objects and their relationships, so the connector user's profile must have read access to all of them.
+The connector queries setup objects (User, Profile, UserRole, Group, PermissionSet, etc.) that are controlled by **administrative permissions**, not standard object-level CRUD permissions. The connector user's profile or an assigned permission set must include the following administrative permissions:
 
-**Required object permissions for sync:**
+**Required administrative permissions for sync:**
 
-| Object | Required Access |
+| Permission | Purpose |
 | :--- | :--- |
-| User | Read |
-| UserRole | Read |
-| Profile | Read |
-| UserLicense | Read |
-| PermissionSet | Read |
-| PermissionSetAssignment | Read |
-| PermissionSetGroup | Read |
-| PermissionSetGroupComponent | Read |
-| Group | Read |
-| GroupMember | Read |
-| UserLogin | Read |
-| ConnectedApplication | Read (only if using `--sync-connected-apps`) |
+| API Enabled | Access Salesforce APIs |
+| View Setup and Configuration | Read setup objects (Profiles, Roles, Permission Sets, Groups) |
+| View All Users | Read all user records and related data |
 
 **Additional permissions required for provisioning:**
 
 If you're using the connector for provisioning (granting/revoking access), the connector user also needs:
 
-| Object | Required Access |
+| Permission | Purpose |
 | :--- | :--- |
-| User | Read, Edit |
-| GroupMember | Read, Create, Delete |
-| PermissionSetAssignment | Read, Create, Delete |
+| Manage Users | Create and edit user records, assign profiles |
+| Manage Roles and Role Hierarchy | Assign and revoke role assignments |
+| Assign Permission Sets | Assign and revoke permission sets and permission set groups |
+| Manage Groups | Add and remove users from public groups |
 
-To fix this error:
+To fix this error, grant these permissions via the connector user's **Profile** or by assigning a **Permission Set**:
+
+**Option 1: Edit the connector user's Profile**
 
 <Steps>
 <Step>
@@ -397,16 +391,26 @@ Search for "profiles" and select **Profiles** from the search results.
 Locate the profile used by your connector user and click **Edit**.
 </Step>
 <Step>
-Scroll to the **Standard Object Permissions** section and ensure **Read** access is enabled for all required objects listed above.
-</Step>
-<Step>
-If using provisioning, also enable **Edit**, **Create**, and **Delete** permissions as listed above.
+In the **Administrative Permissions** section, enable the required permissions listed above.
 </Step>
 <Step>
 Click **Save**.
 </Step>
 </Steps>
 
-<Tip>
-If you cannot find an object in Standard Object Permissions, it may be in the **Custom Object Permissions** section, or you may need to use a Permission Set to grant access to that specific object.
-</Tip> 
+**Option 2: Create and assign a Permission Set**
+
+<Steps>
+<Step>
+In Salesforce Setup, search for "permission sets" and select **Permission Sets**.
+</Step>
+<Step>
+Click **New** to create a permission set (e.g., "ConductorOne Connector Access").
+</Step>
+<Step>
+Under **System Permissions**, enable the required permissions listed above.
+</Step>
+<Step>
+Save the permission set, then assign it to the connector user.
+</Step>
+</Steps> 

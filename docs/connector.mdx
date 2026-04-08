@@ -49,7 +49,7 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 Configuring the connector requires you to pass in credentials generated in Salesforce. Gather these credentials before you move on. 
 
 <Warning>
-The owner of a Salesforce user account with a profile that includes the **API Enabled** and **View Setup and Configuration** permissions must perform this task.
+The owner of a Salesforce user account with a profile that includes the **API Enabled** and **View Setup and Configuration** permissions must perform this task. Additionally, the connector user must have read access to all Salesforce objects that the connector queries. See [Troubleshooting](#when-i-try-to-sync-i-see-an-insufficient-access-rights-on-cross-reference-id-error) for the complete list of required object permissions.
 </Warning>
 
 ### Enable API access for your Salesforce user
@@ -342,4 +342,71 @@ Salesforce returns this error if the user who is logging in with OAuth does not 
 {"code":2, "message":"error getting info from connectorClient: [simpleforce] Error. http code: 403 Error Message:  This feature is not currently enabled for this user. Error Code: FUNCTIONALITY_NOT_ENABLED"}
 ```
 
-If you see this message, follow the instructions to [Enable API access for your Salesforce user](/baton/salesforce#enable-api-access-for-your-salesforce-user) and then try logging in again. 
+If you see this message, follow the instructions to [Enable API access for your Salesforce user](/baton/salesforce#enable-api-access-for-your-salesforce-user) and then try logging in again.
+
+### When I try to sync, I see an "insufficient access rights on cross-reference id" error
+
+Salesforce returns this error if the user who is syncing does not have read access to all the Salesforce objects that the connector needs to query:
+
+```bash
+{"error": "error: listing resources failed: rpc error: code = InvalidArgument desc = 400 Bad Request\n[simpleforce] Error. http code: 400 Error Message:  insufficient access rights on cross-reference id Error Code: INSUFFICIENT_ACCESS"}
+```
+
+This error typically occurs when the connector user has **API Enabled** but lacks object-level read permissions. The connector queries multiple Salesforce objects and their relationships, so the connector user's profile must have read access to all of them.
+
+**Required object permissions for sync:**
+
+| Object | Required Access |
+| :--- | :--- |
+| User | Read |
+| UserRole | Read |
+| Profile | Read |
+| UserLicense | Read |
+| PermissionSet | Read |
+| PermissionSetAssignment | Read |
+| PermissionSetGroup | Read |
+| PermissionSetGroupComponent | Read |
+| Group | Read |
+| GroupMember | Read |
+| UserLogin | Read |
+| ConnectedApplication | Read (only if using `--sync-connected-apps`) |
+
+**Additional permissions required for provisioning:**
+
+If you're using the connector for provisioning (granting/revoking access), the connector user also needs:
+
+| Object | Required Access |
+| :--- | :--- |
+| User | Read, Edit |
+| GroupMember | Read, Create, Delete |
+| PermissionSetAssignment | Read, Create, Delete |
+
+To fix this error:
+
+<Steps>
+<Step>
+Log into Salesforce as an Administrator.
+</Step>
+<Step>
+Click the gear icon and select **Setup**.
+</Step>
+<Step>
+Search for "profiles" and select **Profiles** from the search results.
+</Step>
+<Step>
+Locate the profile used by your connector user and click **Edit**.
+</Step>
+<Step>
+Scroll to the **Standard Object Permissions** section and ensure **Read** access is enabled for all required objects listed above.
+</Step>
+<Step>
+If using provisioning, also enable **Edit**, **Create**, and **Delete** permissions as listed above.
+</Step>
+<Step>
+Click **Save**.
+</Step>
+</Steps>
+
+<Tip>
+If you cannot find an object in Standard Object Permissions, it may be in the **Custom Object Permissions** section, or you may need to use a Permission Set to grant access to that specific object.
+</Tip> 

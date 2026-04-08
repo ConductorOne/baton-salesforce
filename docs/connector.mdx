@@ -373,44 +373,25 @@ If you're using the connector for provisioning (granting/revoking access), the c
 | Assign Permission Sets | Assign and revoke permission sets and permission set groups |
 | Manage Groups | Add and remove users from public groups |
 
-To fix this error, grant these permissions via the connector user's **Profile** or by assigning a **Permission Set**:
-
-**Option 1: Edit the connector user's Profile**
+To fix this error, create a Permission Set with the required permissions and assign it to the connector user:
 
 <Steps>
 <Step>
-Log into Salesforce as an Administrator.
+Log into Salesforce as an Administrator. Click the gear icon and select **Setup**.
 </Step>
 <Step>
-Click the gear icon and select **Setup**.
-</Step>
-<Step>
-Search for "profiles" and select **Profiles** from the search results.
-</Step>
-<Step>
-Locate the profile used by your connector user and click **Edit**.
-</Step>
-<Step>
-In the **Administrative Permissions** section, enable the required permissions listed above.
-</Step>
-<Step>
-Click **Save**.
-</Step>
-</Steps>
-
-**Option 2: Create and assign a Permission Set**
-
-<Steps>
-<Step>
-In Salesforce Setup, search for "permission sets" and select **Permission Sets**.
+Search for "permission sets" and select **Permission Sets**.
 </Step>
 <Step>
 Click **New** to create a permission set (e.g., "ConductorOne Connector Access").
 </Step>
 <Step>
-Under **System Permissions**, enable the required permissions listed above.
+In the permission set, click **System Permissions**, then click **Edit**.
 </Step>
 <Step>
-Save the permission set, then assign it to the connector user.
+Enable the required permissions listed above and click **Save**.
+</Step>
+<Step>
+Click **Manage Assignments**, then **Add Assignment** to assign the permission set to the connector user.
 </Step>
 </Steps> 

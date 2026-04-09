@@ -49,7 +49,7 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 Configuring the connector requires you to pass in credentials generated in Salesforce. Gather these credentials before you move on. 
 
 <Warning>
-The connector user must have the **API Enabled** and **Manage Users** system permissions. If using provisioning, additional permissions are required. See [Troubleshooting](#when-i-try-to-sync-i-see-an-insufficient-access-rights-on-cross-reference-id-error) for the complete list of required permissions.
+The connector user must have the **API Enabled** and **Manage Users** system permissions. If syncing connected apps, also add **Customize Application**. If using provisioning, also add **Manage Roles and Role Hierarchy** and **Manage Groups**.
 </Warning>
 
 ### Enable API access and permissions for your Salesforce user
@@ -347,37 +347,27 @@ If you see this message, follow the instructions to [Enable API access for your 
 
 ### When I try to sync, I see an "insufficient access rights on cross-reference id" error
 
-Salesforce returns this error if the connector user does not have sufficient permissions to query the Salesforce objects that the connector needs:
+Salesforce returns this error if the connector user does not have sufficient permissions:
 
 ```bash
 {"error": "error: listing resources failed: rpc error: code = InvalidArgument desc = 400 Bad Request\n[simpleforce] Error. http code: 400 Error Message:  insufficient access rights on cross-reference id Error Code: INSUFFICIENT_ACCESS"}
 ```
 
-The connector queries setup objects (User, Profile, UserRole, Group, PermissionSet, etc.) that are controlled by **administrative permissions**, not standard object-level CRUD permissions. The connector user's profile or an assigned permission set must include the following administrative permissions:
+Create a Permission Set with the following system permissions and assign it to the connector user:
 
 **Required system permissions for sync:**
 
 | Permission | Purpose |
 | :--- | :--- |
 | API Enabled | Access Salesforce APIs |
-| Manage Users | Read user login status, user records, and related setup objects. This permission automatically includes View Setup and Configuration, View All Users, and other related permissions. |
-| Customize Application | Required only if syncing connected apps (`--sync-connected-apps`). Grants access to query the ConnectedApplication object. |
-
-<Tip>
-**Why is Manage Users required for sync?** The connector queries the UserLogin object to read user frozen/locked status, and Salesforce requires "Manage Users" to access UserLogin even for read-only operations. "Manage Users" also includes "View Setup and Configuration" and "View All Users", which are needed to read Profiles, Roles, Permission Sets, and Groups.
-</Tip>
+| Manage Users | Read users and setup objects |
+| Customize Application | Required only if syncing connected apps |
 
 **Additional permissions required for provisioning:**
-
-If you're using the connector for provisioning (granting/revoking access), the connector user also needs:
 
 | Permission | Purpose |
 | :--- | :--- |
 | Manage Roles and Role Hierarchy | Assign and revoke role assignments |
 | Manage Groups | Add and remove users from public groups |
-
-<Tip>
-"Manage Users" already includes "Assign Permission Sets" and "Manage Profiles and Permission Sets", so no additional permissions are needed for provisioning permission sets or profiles.
-</Tip>
 
 To fix this error, follow the instructions to [Enable API access and permissions for your Salesforce user](/baton/salesforce#enable-api-access-and-permissions-for-your-salesforce-user) to create a Permission Set with the required permissions and assign it to the connector user. 

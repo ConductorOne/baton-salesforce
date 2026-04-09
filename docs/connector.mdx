@@ -70,7 +70,7 @@ Click **New** to create a permission set (e.g., "ConductorOne Connector Access")
 In the permission set, click **System Permissions**, then click **Edit**.
 </Step>
 <Step>
-Enable **API Enabled** and **Manage Users**. If using provisioning, also enable **Manage Roles and Role Hierarchy** and **Manage Groups**.
+Enable **API Enabled** and **Manage Users**. If syncing connected apps, also enable **Customize Application**. If using provisioning, also enable **Manage Roles and Role Hierarchy** and **Manage Groups**.
 </Step>
 <Step>
 Click **Save**.
@@ -361,6 +361,7 @@ The connector queries setup objects (User, Profile, UserRole, Group, PermissionS
 | :--- | :--- |
 | API Enabled | Access Salesforce APIs |
 | Manage Users | Read user login status, user records, and related setup objects. This permission automatically includes View Setup and Configuration, View All Users, and other related permissions. |
+| Customize Application | Required only if syncing connected apps (`--sync-connected-apps`). Grants access to query the ConnectedApplication object. |
 
 <Tip>
 **Why is Manage Users required for sync?** The connector queries the UserLogin object to read user frozen/locked status, and Salesforce requires "Manage Users" to access UserLogin even for read-only operations. "Manage Users" also includes "View Setup and Configuration" and "View All Users", which are needed to read Profiles, Roles, Permission Sets, and Groups.

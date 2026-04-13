@@ -20,6 +20,7 @@ type UserCreateRequest struct {
 	ProfileId   string
 	TimeZoneSid string
 	ContactID   string
+	ExtraFields map[string]any
 }
 
 func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateRequest) error {
@@ -33,18 +34,21 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		return fmt.Errorf("baton-salesforce: invalid timezone: %w", err)
 	}
 
-	userData := map[string]interface{}{
-		"Username":          request.Email,
-		"Alias":             request.Alias,
-		"Email":             request.Email,
-		"LastName":          request.LastName,
-		"FirstName":         request.FirstName,
-		"TimeZoneSidKey":    request.TimeZoneSid,
-		"ProfileId":         request.ProfileId,
-		"EmailEncodingKey":  "UTF-8",
-		"LocaleSidKey":      "en_US",
-		"LanguageLocaleKey": "en_US",
+	userData := map[string]interface{}{}
+	for key, value := range request.ExtraFields {
+		userData[key] = value
 	}
+
+	userData["Username"] = request.Email
+	userData["Alias"] = request.Alias
+	userData["Email"] = request.Email
+	userData["LastName"] = request.LastName
+	userData["FirstName"] = request.FirstName
+	userData["TimeZoneSidKey"] = request.TimeZoneSid
+	userData["ProfileId"] = request.ProfileId
+	userData["EmailEncodingKey"] = "UTF-8"
+	userData["LocaleSidKey"] = "en_US"
+	userData["LanguageLocaleKey"] = "en_US"
 
 	if request.ContactID != "" {
 		userData["ContactId"] = request.ContactID

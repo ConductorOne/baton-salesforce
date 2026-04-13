@@ -206,8 +206,10 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 					extraFields[key] = v.NumberValue
 				case *structpb.Value_BoolValue:
 					extraFields[key] = v.BoolValue
+				case *structpb.Value_NullValue:
+					// null carries no meaningful data, skip silently
 				default:
-					return nil, fmt.Errorf("baton-salesforce: extra field %q has unsupported value type", key)
+					return nil, fmt.Errorf("baton-salesforce: extra field %q has unsupported value type %T", key, val.GetKind())
 				}
 			}
 		}

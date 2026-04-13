@@ -252,11 +252,6 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 	case config.SalesforceOAuthGroup:
 		if opts != nil && opts.TokenSource != nil {
 			tokenSource = opts.TokenSource
-		} else if cfg.Oauth2Token != "" {
-			tokenSource = oauth2.StaticTokenSource(&oauth2.Token{
-				AccessToken: cfg.Oauth2Token,
-				TokenType:   "Bearer",
-			})
 		}
 
 		salesforceClient = client.New(

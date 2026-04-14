@@ -34,11 +34,19 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		return fmt.Errorf("baton-salesforce: invalid timezone: %w", err)
 	}
 
-	userData := map[string]interface{}{}
+	// 1. Default fields — can be overridden by extra fields.
+	userData := map[string]interface{}{
+		"EmailEncodingKey":  "UTF-8",
+		"LocaleSidKey":      "en_US",
+		"LanguageLocaleKey": "en_US",
+	}
+
+	// 2. Extra fields — override defaults, but not core fields.
 	for key, value := range request.ExtraFields {
 		userData[key] = value
 	}
 
+	// 3. Core fields — always take precedence.
 	userData["Username"] = request.Email
 	userData["Alias"] = request.Alias
 	userData["Email"] = request.Email
@@ -46,9 +54,6 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 	userData["FirstName"] = request.FirstName
 	userData["TimeZoneSidKey"] = request.TimeZoneSid
 	userData["ProfileId"] = request.ProfileId
-	userData["EmailEncodingKey"] = "UTF-8"
-	userData["LocaleSidKey"] = "en_US"
-	userData["LanguageLocaleKey"] = "en_US"
 
 	if request.ContactID != "" {
 		userData["ContactId"] = request.ContactID

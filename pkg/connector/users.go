@@ -196,21 +196,19 @@ func getUserCreateRequestParams(accountInfo *v2.AccountInfo) (*client.UserCreate
 	contactID, _ := rs.GetProfileStringValue(accountInfo.Profile, "contactID")
 
 	extraFields := make(map[string]any)
-	if accountInfo.Profile != nil {
-		for key, val := range accountInfo.Profile.Fields {
-			if _, isSchemaField := accountCreationSchema.FieldMap[key]; !isSchemaField {
-				switch v := val.GetKind().(type) {
-				case *structpb.Value_StringValue:
-					extraFields[key] = v.StringValue
-				case *structpb.Value_NumberValue:
-					extraFields[key] = v.NumberValue
-				case *structpb.Value_BoolValue:
-					extraFields[key] = v.BoolValue
-				case *structpb.Value_NullValue:
-					// null carries no meaningful data, skip silently
-				default:
-					return nil, fmt.Errorf("baton-salesforce: extra field %q has unsupported value type %T", key, val.GetKind())
-				}
+	for key, val := range accountInfo.Profile.Fields {
+		if _, isSchemaField := accountCreationSchema.FieldMap[key]; !isSchemaField {
+			switch v := val.GetKind().(type) {
+			case *structpb.Value_StringValue:
+				extraFields[key] = v.StringValue
+			case *structpb.Value_NumberValue:
+				extraFields[key] = v.NumberValue
+			case *structpb.Value_BoolValue:
+				extraFields[key] = v.BoolValue
+			case *structpb.Value_NullValue:
+				// null carries no meaningful data, skip silently
+			default:
+				return nil, fmt.Errorf("baton-salesforce: extra field %q has unsupported value type %T", key, val.GetKind())
 			}
 		}
 	}

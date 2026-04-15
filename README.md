@@ -39,6 +39,16 @@ baton resources
 `baton-salesforce` will pull down information about the following resources:
 - Users
 
+## Account provisioning
+
+`baton-salesforce` supports creating Salesforce user accounts through C1. When creating an account, the following fields are available: `email`, `profileId`, `alias`, `first_name`, `last_name`, `timezone`, and `contactID`.
+
+### Optional fields for custom validation rules
+
+Some Salesforce orgs have custom validation rules that require additional fields to be set when creating a user (for example, a rule that requires `FederationIdentifier` for SSO).
+
+To add an optional field mapping in C1, use the exact Salesforce field API name as the mapping key (for example, `FederationIdentifier`, `Department`, `CommunityNickname`) allowing you to satisfy any validation rule.
+
 # Contributing, Support and Issues
 
 We started Baton because we were tired of taking screenshots and manually

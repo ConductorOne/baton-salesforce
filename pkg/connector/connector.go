@@ -19,6 +19,8 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var defaultAccountCreationTimezone = "America/New_York"
+
 func annotationsForUserResourceType() annotations.Annotations {
 	annos := annotations.Annotations{}
 	annos.Update(&v2.SkipEntitlementsAndGrants{})
@@ -77,89 +79,93 @@ func (d *Salesforce) Asset(_ context.Context, _ *v2.AssetRef) (string, io.ReadCl
 	return "", nil, nil
 }
 
-// Metadata returns metadata about the connector.
-func (d *Salesforce) Metadata(_ context.Context) (*v2.ConnectorMetadata, error) {
-	defaultTimeZone := "America/New_York"
-
-	return &v2.ConnectorMetadata{
-		DisplayName: "Salesforce",
-		Description: "Connector syncing Salesforce users",
-		AccountCreationSchema: &v2.ConnectorAccountCreationSchema{
-			FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
-				"email": {
-					DisplayName: "Email",
-					Required:    true,
-					Description: "This email will be used as the login for the user.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "Email",
-					Order:       1,
-				},
-				"profileId": {
-					DisplayName: "Profile ID",
-					Required:    true,
-					Description: "Salesforce Profile ID",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "ProfileId",
-					Order:       2,
-				},
-				"alias": {
-					DisplayName: "Alias",
-					Required:    true,
-					Description: "User Alias",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "Alias",
-					Order:       3,
-				},
-				"first_name": {
-					DisplayName: "First Name",
-					Required:    true,
-					Description: "User first name",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "FirstName",
-					Order:       5,
-				},
-				"last_name": {
-					DisplayName: "Last Name",
-					Required:    true,
-					Description: "User last name",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "LastName",
-					Order:       4,
-				},
-				"timezone": {
-					DisplayName: "Time Zone",
-					Required:    true,
-					Description: "User time zone",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{
-							DefaultValue: &defaultTimeZone,
-						},
-					},
-					Placeholder: "TimeZone",
-					Order:       6,
-				},
-				"contactID": {
-					DisplayName: "Contact ID",
-					Required:    false,
-					Description: "Salesforce Contact ID. Required for Community/Experience Cloud users.",
-					Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
-						StringField: &v2.ConnectorAccountCreationSchema_StringField{},
-					},
-					Placeholder: "ContactID",
-					Order:       7,
+// accountCreationSchema defines the fields required to create a Salesforce user account.
+// It is the single source of truth for which profile fields are "known" — any field
+// present in the C1 mapping that is NOT in this schema is treated as an extra Salesforce
+// field and passed through to the API verbatim.
+var accountCreationSchema = &v2.ConnectorAccountCreationSchema{
+	FieldMap: map[string]*v2.ConnectorAccountCreationSchema_Field{
+		"email": {
+			DisplayName: "Email",
+			Required:    true,
+			Description: "This email will be used as the login for the user.",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+			},
+			Placeholder: "Email",
+			Order:       1,
+		},
+		"profileId": {
+			DisplayName: "Profile ID",
+			Required:    true,
+			Description: "Salesforce Profile ID",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+			},
+			Placeholder: "ProfileId",
+			Order:       2,
+		},
+		"alias": {
+			DisplayName: "Alias",
+			Required:    true,
+			Description: "User Alias",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+			},
+			Placeholder: "Alias",
+			Order:       3,
+		},
+		"first_name": {
+			DisplayName: "First Name",
+			Required:    true,
+			Description: "User first name",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+			},
+			Placeholder: "FirstName",
+			Order:       5,
+		},
+		"last_name": {
+			DisplayName: "Last Name",
+			Required:    true,
+			Description: "User last name",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+			},
+			Placeholder: "LastName",
+			Order:       4,
+		},
+		"timezone": {
+			DisplayName: "Time Zone",
+			Required:    true,
+			Description: "User time zone",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{
+					DefaultValue: &defaultAccountCreationTimezone,
 				},
 			},
+			Placeholder: "TimeZone",
+			Order:       6,
 		},
+		"contactID": {
+			DisplayName: "Contact ID",
+			Required:    false,
+			Description: "Salesforce Contact ID. Required for Community/Experience Cloud users.",
+			Field: &v2.ConnectorAccountCreationSchema_Field_StringField{
+				StringField: &v2.ConnectorAccountCreationSchema_StringField{},
+			},
+			Placeholder: "ContactID",
+			Order:       7,
+		},
+	},
+}
+
+// Metadata returns metadata about the connector.
+func (d *Salesforce) Metadata(_ context.Context) (*v2.ConnectorMetadata, error) {
+	return &v2.ConnectorMetadata{
+		DisplayName:           "Salesforce",
+		Description:           "Connector syncing Salesforce users",
+		AccountCreationSchema: accountCreationSchema,
 	}, nil
 }
 

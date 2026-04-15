@@ -20,6 +20,7 @@ type UserCreateRequest struct {
 	ProfileId   string
 	TimeZoneSid string
 	ContactID   string
+	ExtraFields map[string]any
 }
 
 func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateRequest) error {
@@ -33,18 +34,26 @@ func (c *SalesforceClient) CreateUser(ctx context.Context, request UserCreateReq
 		return fmt.Errorf("baton-salesforce: invalid timezone: %w", err)
 	}
 
+	// 1. Default fields — can be overridden by extra fields.
 	userData := map[string]interface{}{
-		"Username":          request.Email,
-		"Alias":             request.Alias,
-		"Email":             request.Email,
-		"LastName":          request.LastName,
-		"FirstName":         request.FirstName,
-		"TimeZoneSidKey":    request.TimeZoneSid,
-		"ProfileId":         request.ProfileId,
 		"EmailEncodingKey":  "UTF-8",
 		"LocaleSidKey":      "en_US",
 		"LanguageLocaleKey": "en_US",
 	}
+
+	// 2. Extra fields — override defaults, but not core fields.
+	for key, value := range request.ExtraFields {
+		userData[key] = value
+	}
+
+	// 3. Core fields — always take precedence.
+	userData["Username"] = request.Email
+	userData["Alias"] = request.Alias
+	userData["Email"] = request.Email
+	userData["LastName"] = request.LastName
+	userData["FirstName"] = request.FirstName
+	userData["TimeZoneSidKey"] = request.TimeZoneSid
+	userData["ProfileId"] = request.ProfileId
 
 	if request.ContactID != "" {
 		userData["ContactId"] = request.ContactID

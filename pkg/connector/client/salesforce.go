@@ -125,7 +125,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		logger.Debug("Salesforce client using token source")
 		token, err := c.TokenSource.Token()
 		if err != nil {
-			return status.Errorf(codes.Unauthenticated, "failed to get oauth token: %s", err.Error())
+			return err
 		}
 		simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
 	} else {

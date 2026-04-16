@@ -14,6 +14,8 @@ import (
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -123,7 +125,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		logger.Debug("Salesforce client using token source")
 		token, err := c.TokenSource.Token()
 		if err != nil {
-			return err
+			return status.Errorf(codes.Unauthenticated, "failed to get oauth token: %s", err.Error())
 		}
 		simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
 	} else {
@@ -136,7 +138,7 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		)
 		if err != nil {
 			logger.Error("could not login", zap.Error(err))
-			return err
+			return status.Errorf(codes.Unauthenticated, "could not login: %s", err.Error())
 		}
 	}
 	c.client = simpleClient

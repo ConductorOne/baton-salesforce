@@ -26,7 +26,7 @@ var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
 // userResource convert a SalesforceUser into a Resource.
 func userResource(
-	_ context.Context,
+	ctx context.Context,
 	user *client.SalesforceUser,
 	userLogin *client.UserLogin,
 	shouldUseUsernameForEmail bool,
@@ -41,6 +41,10 @@ func userResource(
 	if user.IsActive {
 		if userLogin != nil && userLogin.IsFrozen {
 			status = v2.UserTrait_Status_STATUS_DISABLED
+			ctxzap.Extract(ctx).Debug(
+				"salesforce-connector: marking active user disabled because UserLogin.IsFrozen is true",
+				zap.String("user_id", user.ID),
+			)
 		} else {
 			status = v2.UserTrait_Status_STATUS_ENABLED
 		}

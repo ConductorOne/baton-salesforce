@@ -1101,6 +1101,13 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 				return nil, ratelimitData, err
 			}
 			userId := record.StringField("UserId")
+			if isFrozen {
+				logger.Debug(
+					"salesforce-client: UserLogin returned IsFrozen=true",
+					zap.String("user_id", userId),
+					zap.String("user_login_id", record.ID()),
+				)
+			}
 			result[userId] = &UserLogin{
 				ID:               record.ID(),
 				UserId:           userId,

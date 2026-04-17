@@ -1030,37 +1030,37 @@ const userLoginInClauseChunkSize = 500
 // GetUserLoginsByUserIDs fetches UserLogin records for many users using
 // WHERE UserId IN (...) and returns them keyed by UserId. Prefer this over
 // calling GetUserLogin in a loop: it turns an N+1 into at most
-// ceil(len(userIds) / userLoginInClauseChunkSize) round trips.
+// ceil(len(userIDs) / userLoginInClauseChunkSize) round trips.
 //
 // Users without a UserLogin record are absent from the returned map; callers
 // should treat a missing key as "no UserLogin" (equivalent to GetUserLogin
 // returning nil).
 func (c *SalesforceClient) GetUserLoginsByUserIDs(
 	ctx context.Context,
-	userIds []string,
+	userIDs []string,
 ) (
 	map[string]*UserLogin,
 	*v2.RateLimitDescription,
 	error,
 ) {
 	logger := ctxzap.Extract(ctx)
-	result := make(map[string]*UserLogin, len(userIds))
-	if len(userIds) == 0 {
+	result := make(map[string]*UserLogin, len(userIDs))
+	if len(userIDs) == 0 {
 		return result, nil, nil
 	}
 
-	totalChunks := (len(userIds) + userLoginInClauseChunkSize - 1) / userLoginInClauseChunkSize
+	totalChunks := (len(userIDs) + userLoginInClauseChunkSize - 1) / userLoginInClauseChunkSize
 	logger.Debug(
 		"salesforce-client: fetching UserLogin records in batches",
-		zap.Int("user_count", len(userIds)),
+		zap.Int("user_count", len(userIDs)),
 		zap.Int("chunk_size", userLoginInClauseChunkSize),
 		zap.Int("total_chunks", totalChunks),
 	)
 
 	var ratelimitData *v2.RateLimitDescription
-	for start := 0; start < len(userIds); start += userLoginInClauseChunkSize {
-		end := min(start+userLoginInClauseChunkSize, len(userIds))
-		chunk := userIds[start:end]
+	for start := 0; start < len(userIDs); start += userLoginInClauseChunkSize {
+		end := min(start+userLoginInClauseChunkSize, len(userIDs))
+		chunk := userIDs[start:end]
 		chunkIndex := start/userLoginInClauseChunkSize + 1
 
 		logger.Debug(

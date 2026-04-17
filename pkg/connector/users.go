@@ -111,11 +111,11 @@ func (o *userBuilder) List(
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
-	userIds := make([]string, 0, len(users))
+	userIDs := make([]string, 0, len(users))
 	for _, user := range users {
-		userIds = append(userIds, user.ID)
+		userIDs = append(userIDs, user.ID)
 	}
-	userLogins, _, err := o.client.GetUserLoginsByUserIDs(ctx, userIds)
+	userLogins, _, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
 	if err != nil {
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}

@@ -1020,6 +1020,53 @@ func (c *SalesforceClient) GetConnectedApplications(
 	return apps, paginationUrl, ratelimitData, nil
 }
 
+// GetUserLoginsByUserIDs fetches UserLogin records for many users in a single
+// SOQL request and returns them keyed by UserId. Prefer this over calling
+// GetUserLogin in a loop: the Salesforce /query endpoint supports WHERE UserId
+// IN (...) with the full list, turning an N+1 into one round trip.
+//
+// Users without a UserLogin record are absent from the returned map; callers
+// should treat a missing key as "no UserLogin" (equivalent to GetUserLogin
+// returning nil).
+func (c *SalesforceClient) GetUserLoginsByUserIDs(
+	ctx context.Context,
+	userIds []string,
+) (
+	map[string]*UserLogin,
+	*v2.RateLimitDescription,
+	error,
+) {
+	result := make(map[string]*UserLogin, len(userIds))
+	if len(userIds) == 0 {
+		return result, nil, nil
+	}
+
+	query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", userIds)
+	records, _, ratelimitData, err := c.query(ctx, query, "", len(userIds))
+	if err != nil {
+		return nil, ratelimitData, err
+	}
+
+	for _, record := range records {
+		isFrozen, err := getBoolField(record, "IsFrozen")
+		if err != nil {
+			return nil, ratelimitData, err
+		}
+		isPasswordLocked, err := getBoolField(record, "IsPasswordLocked")
+		if err != nil {
+			return nil, ratelimitData, err
+		}
+		userId := record.StringField("UserId")
+		result[userId] = &UserLogin{
+			ID:               record.ID(),
+			UserId:           userId,
+			IsFrozen:         isFrozen,
+			IsPasswordLocked: isPasswordLocked,
+		}
+	}
+	return result, ratelimitData, nil
+}
+
 func (c *SalesforceClient) GetUserLogin(
 	ctx context.Context,
 	userId string,

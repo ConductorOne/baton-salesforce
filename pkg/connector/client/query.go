@@ -130,6 +130,20 @@ func (q *SalesforceQuery) WhereInSubQuery(field string, sq *SalesforceQuery) *Sa
 	return q
 }
 
+func (q *SalesforceQuery) WhereInStrings(field string, values []string) *SalesforceQuery {
+	if len(values) == 0 {
+		// IN () is invalid SOQL; force no-match so callers don't need to branch.
+		q.sb.Where("1 = 0")
+		return q
+	}
+	args := make([]interface{}, len(values))
+	for i, v := range values {
+		args[i] = v
+	}
+	q.sb.Where(q.sb.In(field, args...))
+	return q
+}
+
 func (q *SalesforceQuery) OrderBy(field string) *SalesforceQuery {
 	q.sb.OrderBy(field)
 	return q

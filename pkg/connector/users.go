@@ -111,17 +111,21 @@ func (o *userBuilder) List(
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
-	rv := make([]*v2.Resource, 0)
+	userIds := make([]string, 0, len(users))
 	for _, user := range users {
-		userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
-		if err != nil {
-			return nil, nil, err
-		}
+		userIds = append(userIds, user.ID)
+	}
+	userLogins, _, err := o.client.GetUserLoginsByUserIDs(ctx, userIds)
+	if err != nil {
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+	}
 
+	rv := make([]*v2.Resource, 0, len(users))
+	for _, user := range users {
 		newResource, err := userResource(
 			ctx,
 			user,
-			userLogin,
+			userLogins[user.ID],
 			o.shouldUseUsernameForEmail,
 		)
 		if err != nil {

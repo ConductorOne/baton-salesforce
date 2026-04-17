@@ -1023,9 +1023,10 @@ func (c *SalesforceClient) GetConnectedApplications(
 
 // userLoginInClauseChunkSize bounds the number of UserIds packed into a single
 // WHERE UserId IN (...) clause. Salesforce's GET /query endpoint enforces a
-// URL length limit (~16 KB); at ~28 URL-encoded chars per ID, 500 keeps the
-// request comfortably under the limit regardless of page size.
-const userLoginInClauseChunkSize = 500
+// URL length limit (~16 KB); at ~28 URL-encoded chars per ID, 250 keeps the
+// request well under the limit with generous headroom. Safe to raise once
+// the path is proven out on a large tenant.
+const userLoginInClauseChunkSize = 250
 
 // GetUserLoginsByUserIDs fetches UserLogin records for many users using
 // WHERE UserId IN (...) and returns them keyed by UserId. Prefer this over

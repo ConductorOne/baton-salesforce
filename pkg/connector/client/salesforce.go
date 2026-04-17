@@ -72,7 +72,6 @@ func New(
 func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	logger := ctxzap.Extract(ctx)
 	if c.initialized {
-		logger.Debug("Salesforce client already initialized")
 		return nil
 	}
 	logger.Debug("Initializing Salesforce client")

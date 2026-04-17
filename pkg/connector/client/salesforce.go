@@ -1020,10 +1020,16 @@ func (c *SalesforceClient) GetConnectedApplications(
 	return apps, paginationUrl, ratelimitData, nil
 }
 
-// GetUserLoginsByUserIDs fetches UserLogin records for many users in a single
-// SOQL request and returns them keyed by UserId. Prefer this over calling
-// GetUserLogin in a loop: the Salesforce /query endpoint supports WHERE UserId
-// IN (...) with the full list, turning an N+1 into one round trip.
+// userLoginInClauseChunkSize bounds the number of UserIds packed into a single
+// WHERE UserId IN (...) clause. Salesforce's GET /query endpoint enforces a
+// URL length limit (~16 KB); at ~28 URL-encoded chars per ID, 500 keeps the
+// request comfortably under the limit regardless of page size.
+const userLoginInClauseChunkSize = 500
+
+// GetUserLoginsByUserIDs fetches UserLogin records for many users using
+// WHERE UserId IN (...) and returns them keyed by UserId. Prefer this over
+// calling GetUserLogin in a loop: it turns an N+1 into at most
+// ceil(len(userIds) / userLoginInClauseChunkSize) round trips.
 //
 // Users without a UserLogin record are absent from the returned map; callers
 // should treat a missing key as "no UserLogin" (equivalent to GetUserLogin
@@ -1041,27 +1047,36 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 		return result, nil, nil
 	}
 
-	query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", userIds)
-	records, _, ratelimitData, err := c.query(ctx, query, "", len(userIds))
-	if err != nil {
-		return nil, ratelimitData, err
-	}
+	var ratelimitData *v2.RateLimitDescription
+	for start := 0; start < len(userIds); start += userLoginInClauseChunkSize {
+		end := min(start+userLoginInClauseChunkSize, len(userIds))
+		chunk := userIds[start:end]
 
-	for _, record := range records {
-		isFrozen, err := getBoolField(record, "IsFrozen")
+		query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", chunk)
+		records, _, rl, err := c.query(ctx, query, "", len(chunk))
+		// Carry the most recent rate-limit info forward even on error so the
+		// caller can still surface it as an annotation.
+		ratelimitData = rl
 		if err != nil {
 			return nil, ratelimitData, err
 		}
-		isPasswordLocked, err := getBoolField(record, "IsPasswordLocked")
-		if err != nil {
-			return nil, ratelimitData, err
-		}
-		userId := record.StringField("UserId")
-		result[userId] = &UserLogin{
-			ID:               record.ID(),
-			UserId:           userId,
-			IsFrozen:         isFrozen,
-			IsPasswordLocked: isPasswordLocked,
+
+		for _, record := range records {
+			isFrozen, err := getBoolField(record, "IsFrozen")
+			if err != nil {
+				return nil, ratelimitData, err
+			}
+			isPasswordLocked, err := getBoolField(record, "IsPasswordLocked")
+			if err != nil {
+				return nil, ratelimitData, err
+			}
+			userId := record.StringField("UserId")
+			result[userId] = &UserLogin{
+				ID:               record.ID(),
+				UserId:           userId,
+				IsFrozen:         isFrozen,
+				IsPasswordLocked: isPasswordLocked,
+			}
 		}
 	}
 	return result, ratelimitData, nil

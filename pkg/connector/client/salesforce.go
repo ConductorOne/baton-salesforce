@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -1070,7 +1069,6 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 			zap.Int("total_chunks", totalChunks),
 			zap.Int("chunk_user_count", len(chunk)),
 		)
-		chunkStart := time.Now()
 
 		query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", chunk)
 		records, _, rl, err := c.query(ctx, query, "", len(chunk))
@@ -1082,7 +1080,6 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 				"salesforce-client: UserLogin chunk failed",
 				zap.Int("chunk_index", chunkIndex),
 				zap.Int("total_chunks", totalChunks),
-				zap.Duration("elapsed", time.Since(chunkStart)),
 				zap.Error(err),
 			)
 			return nil, ratelimitData, err
@@ -1093,7 +1090,6 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 			zap.Int("chunk_index", chunkIndex),
 			zap.Int("total_chunks", totalChunks),
 			zap.Int("records_returned", len(records)),
-			zap.Duration("elapsed", time.Since(chunkStart)),
 		)
 
 		for _, record := range records {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -1042,15 +1043,33 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 	*v2.RateLimitDescription,
 	error,
 ) {
+	logger := ctxzap.Extract(ctx)
 	result := make(map[string]*UserLogin, len(userIds))
 	if len(userIds) == 0 {
 		return result, nil, nil
 	}
 
+	totalChunks := (len(userIds) + userLoginInClauseChunkSize - 1) / userLoginInClauseChunkSize
+	logger.Debug(
+		"salesforce-client: fetching UserLogin records in batches",
+		zap.Int("user_count", len(userIds)),
+		zap.Int("chunk_size", userLoginInClauseChunkSize),
+		zap.Int("total_chunks", totalChunks),
+	)
+
 	var ratelimitData *v2.RateLimitDescription
 	for start := 0; start < len(userIds); start += userLoginInClauseChunkSize {
 		end := min(start+userLoginInClauseChunkSize, len(userIds))
 		chunk := userIds[start:end]
+		chunkIndex := start/userLoginInClauseChunkSize + 1
+
+		logger.Debug(
+			"salesforce-client: UserLogin chunk start",
+			zap.Int("chunk_index", chunkIndex),
+			zap.Int("total_chunks", totalChunks),
+			zap.Int("chunk_user_count", len(chunk)),
+		)
+		chunkStart := time.Now()
 
 		query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", chunk)
 		records, _, rl, err := c.query(ctx, query, "", len(chunk))
@@ -1058,8 +1077,23 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 		// caller can still surface it as an annotation.
 		ratelimitData = rl
 		if err != nil {
+			logger.Debug(
+				"salesforce-client: UserLogin chunk failed",
+				zap.Int("chunk_index", chunkIndex),
+				zap.Int("total_chunks", totalChunks),
+				zap.Duration("elapsed", time.Since(chunkStart)),
+				zap.Error(err),
+			)
 			return nil, ratelimitData, err
 		}
+
+		logger.Debug(
+			"salesforce-client: UserLogin chunk complete",
+			zap.Int("chunk_index", chunkIndex),
+			zap.Int("total_chunks", totalChunks),
+			zap.Int("records_returned", len(records)),
+			zap.Duration("elapsed", time.Since(chunkStart)),
+		)
 
 		for _, record := range records {
 			isFrozen, err := getBoolField(record, "IsFrozen")

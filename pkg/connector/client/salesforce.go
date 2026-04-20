@@ -1049,25 +1049,12 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 	}
 
 	totalChunks := (len(userIDs) + userLoginInClauseChunkSize - 1) / userLoginInClauseChunkSize
-	logger.Debug(
-		"salesforce-client: fetching UserLogin records in batches",
-		zap.Int("user_count", len(userIDs)),
-		zap.Int("chunk_size", userLoginInClauseChunkSize),
-		zap.Int("total_chunks", totalChunks),
-	)
 
 	var ratelimitData *v2.RateLimitDescription
 	for start := 0; start < len(userIDs); start += userLoginInClauseChunkSize {
 		end := min(start+userLoginInClauseChunkSize, len(userIDs))
 		chunk := userIDs[start:end]
 		chunkIndex := start/userLoginInClauseChunkSize + 1
-
-		logger.Debug(
-			"salesforce-client: UserLogin chunk start",
-			zap.Int("chunk_index", chunkIndex),
-			zap.Int("total_chunks", totalChunks),
-			zap.Int("chunk_user_count", len(chunk)),
-		)
 
 		query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", chunk)
 		records, _, rl, err := c.query(ctx, query, "", len(chunk))
@@ -1088,6 +1075,7 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 			"salesforce-client: UserLogin chunk complete",
 			zap.Int("chunk_index", chunkIndex),
 			zap.Int("total_chunks", totalChunks),
+			zap.Int("chunk_user_count", len(chunk)),
 			zap.Int("records_returned", len(records)),
 		)
 

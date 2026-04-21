@@ -72,7 +72,6 @@ func New(
 func (c *SalesforceClient) Initialize(ctx context.Context) error {
 	logger := ctxzap.Extract(ctx)
 	if c.initialized {
-		logger.Debug("Salesforce client already initialized")
 		return nil
 	}
 	logger.Debug("Initializing Salesforce client")
@@ -1018,6 +1017,112 @@ func (c *SalesforceClient) GetConnectedApplications(
 		apps = append(apps, permissionSet)
 	}
 	return apps, paginationUrl, ratelimitData, nil
+}
+
+// userLoginInClauseChunkSize bounds the number of UserIds packed into a single
+// WHERE UserId IN (...) clause. Salesforce's GET /query endpoint enforces a
+// URL length limit (~16 KB); at ~28 URL-encoded chars per ID, 250 keeps the
+// request well under the limit with generous headroom. Safe to raise once
+// the path is proven out on a large tenant.
+const userLoginInClauseChunkSize = 250
+
+// GetUserLoginsByUserIDs fetches UserLogin records for many users using
+// WHERE UserId IN (...) and returns them keyed by UserId. Prefer this over
+// calling GetUserLogin in a loop: it turns an N+1 into at most
+// ceil(len(userIDs) / userLoginInClauseChunkSize) round trips.
+//
+// Users without a UserLogin record are absent from the returned map; callers
+// should treat a missing key as "no UserLogin" (equivalent to GetUserLogin
+// returning nil).
+func (c *SalesforceClient) GetUserLoginsByUserIDs(
+	ctx context.Context,
+	userIDs []string,
+) (
+	map[string]*UserLogin,
+	*v2.RateLimitDescription,
+	error,
+) {
+	logger := ctxzap.Extract(ctx)
+	result := make(map[string]*UserLogin, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil, nil
+	}
+
+	totalChunks := (len(userIDs) + userLoginInClauseChunkSize - 1) / userLoginInClauseChunkSize
+
+	var ratelimitData *v2.RateLimitDescription
+	for start := 0; start < len(userIDs); start += userLoginInClauseChunkSize {
+		end := min(start+userLoginInClauseChunkSize, len(userIDs))
+		chunk := userIDs[start:end]
+		chunkIndex := start/userLoginInClauseChunkSize + 1
+
+		query := NewQuery(TableNameUserLogin)
+		inArgs := make([]interface{}, len(chunk))
+		for i, v := range chunk {
+			inArgs[i] = v
+		}
+		query.sb.Where(query.sb.In("UserId", inArgs...))
+		records, nextPage, rl, err := c.query(ctx, query, "", len(chunk))
+		// Carry the most recent rate-limit info forward even on error so the
+		// caller can still surface it as an annotation.
+		ratelimitData = rl
+		if err != nil {
+			logger.Debug(
+				"salesforce-client: UserLogin chunk failed",
+				zap.Int("chunk_index", chunkIndex),
+				zap.Int("total_chunks", totalChunks),
+				zap.Error(err),
+			)
+			return nil, ratelimitData, err
+		}
+		// Guard: this code assumes each IN-clause chunk fits in a single
+		// Salesforce query response. Chunk size (250) is well below the REST
+		// API's default server-side batch (2000), so pagination should never
+		// occur here. If the org's batch size is ever lowered below the
+		// chunk size, records past the first page would be silently dropped
+		// and frozen users would appear unfrozen — turn that into a loud
+		// error instead.
+		if nextPage != "" {
+			return nil, ratelimitData, fmt.Errorf(
+				"baton-salesforce: UserLogin batch query was paginated unexpectedly (chunk size: %d)",
+				len(chunk),
+			)
+		}
+
+		logger.Debug(
+			"salesforce-client: UserLogin chunk complete",
+			zap.Int("chunk_index", chunkIndex),
+			zap.Int("total_chunks", totalChunks),
+			zap.Int("chunk_user_count", len(chunk)),
+			zap.Int("records_returned", len(records)),
+		)
+
+		for _, record := range records {
+			isFrozen, err := getBoolField(record, "IsFrozen")
+			if err != nil {
+				return nil, ratelimitData, err
+			}
+			isPasswordLocked, err := getBoolField(record, "IsPasswordLocked")
+			if err != nil {
+				return nil, ratelimitData, err
+			}
+			userId := record.StringField("UserId")
+			if isFrozen {
+				logger.Debug(
+					"salesforce-client: UserLogin returned IsFrozen=true",
+					zap.String("user_id", userId),
+					zap.String("user_login_id", record.ID()),
+				)
+			}
+			result[userId] = &UserLogin{
+				ID:               record.ID(),
+				UserId:           userId,
+				IsFrozen:         isFrozen,
+				IsPasswordLocked: isPasswordLocked,
+			}
+		}
+	}
+	return result, ratelimitData, nil
 }
 
 func (c *SalesforceClient) GetUserLogin(

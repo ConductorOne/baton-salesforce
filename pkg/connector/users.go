@@ -26,7 +26,7 @@ var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
 // userResource convert a SalesforceUser into a Resource.
 func userResource(
-	_ context.Context,
+	ctx context.Context,
 	user *client.SalesforceUser,
 	userLogin *client.UserLogin,
 	shouldUseUsernameForEmail bool,
@@ -41,6 +41,10 @@ func userResource(
 	if user.IsActive {
 		if userLogin != nil && userLogin.IsFrozen {
 			status = v2.UserTrait_Status_STATUS_DISABLED
+			ctxzap.Extract(ctx).Debug(
+				"salesforce-connector: marking active user disabled because UserLogin.IsFrozen is true",
+				zap.String("user_id", user.ID),
+			)
 		} else {
 			status = v2.UserTrait_Status_STATUS_ENABLED
 		}
@@ -99,29 +103,33 @@ func (o *userBuilder) List(
 	error,
 ) {
 	token := &attrs.PageToken
-	users, nextToken, ratelimitData, err := o.client.GetUsers(
+	users, nextToken, usersRL, err := o.client.GetUsers(
 		ctx,
 		token.Token,
 		token.Size,
 		o.syncDeactivatedUsers,
 		o.syncNonStandardUsers,
 	)
-	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	if err != nil {
+		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(usersRL)}, err
+	}
+
+	userIDs := make([]string, 0, len(users))
+	for _, user := range users {
+		userIDs = append(userIDs, user.ID)
+	}
+	userLogins, loginsRL, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
+	outputAnnotations := client.WithRateLimitAnnotations(usersRL, loginsRL)
 	if err != nil {
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
-	rv := make([]*v2.Resource, 0)
+	rv := make([]*v2.Resource, 0, len(users))
 	for _, user := range users {
-		userLogin, _, err := o.client.GetUserLogin(ctx, user.ID)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		newResource, err := userResource(
 			ctx,
 			user,
-			userLogin,
+			userLogins[user.ID],
 			o.shouldUseUsernameForEmail,
 		)
 		if err != nil {

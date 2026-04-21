@@ -103,23 +103,23 @@ func (o *userBuilder) List(
 	error,
 ) {
 	token := &attrs.PageToken
-	users, nextToken, ratelimitData, err := o.client.GetUsers(
+	users, nextToken, usersRL, err := o.client.GetUsers(
 		ctx,
 		token.Token,
 		token.Size,
 		o.syncDeactivatedUsers,
 		o.syncNonStandardUsers,
 	)
-	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(usersRL)}, err
 	}
 
 	userIDs := make([]string, 0, len(users))
 	for _, user := range users {
 		userIDs = append(userIDs, user.ID)
 	}
-	userLogins, _, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
+	userLogins, loginsRL, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
+	outputAnnotations := client.WithRateLimitAnnotations(usersRL, loginsRL)
 	if err != nil {
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}

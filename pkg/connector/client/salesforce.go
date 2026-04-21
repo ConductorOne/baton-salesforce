@@ -1056,7 +1056,12 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 		chunk := userIDs[start:end]
 		chunkIndex := start/userLoginInClauseChunkSize + 1
 
-		query := NewQuery(TableNameUserLogin).WhereInStrings("UserId", chunk)
+		query := NewQuery(TableNameUserLogin)
+		inArgs := make([]interface{}, len(chunk))
+		for i, v := range chunk {
+			inArgs[i] = v
+		}
+		query.sb.Where(query.sb.In("UserId", inArgs...))
 		records, _, rl, err := c.query(ctx, query, "", len(chunk))
 		// Carry the most recent rate-limit info forward even on error so the
 		// caller can still surface it as an annotation.

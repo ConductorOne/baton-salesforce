@@ -1062,7 +1062,7 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 			inArgs[i] = v
 		}
 		query.sb.Where(query.sb.In("UserId", inArgs...))
-		records, _, rl, err := c.query(ctx, query, "", len(chunk))
+		records, nextPage, rl, err := c.query(ctx, query, "", len(chunk))
 		// Carry the most recent rate-limit info forward even on error so the
 		// caller can still surface it as an annotation.
 		ratelimitData = rl
@@ -1074,6 +1074,19 @@ func (c *SalesforceClient) GetUserLoginsByUserIDs(
 				zap.Error(err),
 			)
 			return nil, ratelimitData, err
+		}
+		// Guard: this code assumes each IN-clause chunk fits in a single
+		// Salesforce query response. Chunk size (250) is well below the REST
+		// API's default server-side batch (2000), so pagination should never
+		// occur here. If the org's batch size is ever lowered below the
+		// chunk size, records past the first page would be silently dropped
+		// and frozen users would appear unfrozen — turn that into a loud
+		// error instead.
+		if nextPage != "" {
+			return nil, ratelimitData, fmt.Errorf(
+				"baton-salesforce: UserLogin batch query was paginated unexpectedly (chunk size: %d)",
+				len(chunk),
+			)
 		}
 
 		logger.Debug(

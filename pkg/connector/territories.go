@@ -201,7 +201,7 @@ func (t *territoryBuilder) Revoke(
 
 	ratelimitData, err := t.client.ClearUserTerritoryRole(ctx, userID, territoryID)
 	if err != nil {
-		if errors.Is(err, client.ErrObjectNotFound) {
+		if errors.Is(err, client.ErrObjectNotFound) || errors.Is(err, client.ErrRoleAlreadyCleared) {
 			return annotations.New(&v2.GrantAlreadyRevoked{}), nil
 		}
 		return client.WithRateLimitAnnotations(ratelimitData), err

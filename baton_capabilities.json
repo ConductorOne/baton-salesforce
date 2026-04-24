@@ -64,6 +64,22 @@
     },
     {
       "resourceType": {
+        "id": "territory",
+        "displayName": "Territory",
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlements"
+          }
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC",
+        "CAPABILITY_PROVISION"
+      ],
+      "permissions": {}
+    },
+    {
+      "resourceType": {
         "id": "user",
         "displayName": "User",
         "traits": [

@@ -13,6 +13,7 @@ import (
 
 var ErrObjectNotFound = errors.New("salesforce object does not exist")
 var ErrObjectAlreadyExists = errors.New("salesforce object already exists")
+var ErrRoleAlreadyCleared = errors.New("salesforce territory role is already empty")
 
 func isSalesforceDuplicateError(err error) bool {
 	var sfErr simpleforce.SalesforceError

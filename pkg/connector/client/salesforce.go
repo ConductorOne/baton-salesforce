@@ -1342,8 +1342,7 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 		return ratelimitData, err
 	}
 	if record.StringField("RoleInTerritory2") == "" {
-		// The association exists but has no role assigned — treat as already revoked.
-		return ratelimitData, ErrObjectNotFound
+		return ratelimitData, ErrRoleAlreadyCleared
 	}
 	return c.UpdateObject(ctx, TableNameUserTerritory2Assoc, record.ID(), map[string]interface{}{
 		"RoleInTerritory2": "",

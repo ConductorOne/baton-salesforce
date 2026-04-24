@@ -70,7 +70,8 @@
           {
             "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlements"
           }
-        ]
+        ],
+        "description": "Requires Enterprise Territory Management 2.0 to be enabled in Salesforce."
       },
       "capabilities": [
         "CAPABILITY_SYNC",

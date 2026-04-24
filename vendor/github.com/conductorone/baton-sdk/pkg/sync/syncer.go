@@ -1185,8 +1185,6 @@ func (s *syncer) syncStaticEntitlementsForResourceType(ctx context.Context, acti
 				entitlements = append(entitlements, &v2.Entitlement{
 					Resource:    resource,
 					Id:          entitlement.NewEntitlementID(resource, ent.GetSlug()),
-					Slug:        ent.GetSlug(),
-					Purpose:     ent.GetPurpose(),
 					DisplayName: displayName,
 					Description: description,
 					GrantableTo: ent.GetGrantableTo(),

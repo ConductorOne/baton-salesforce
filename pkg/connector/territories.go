@@ -55,9 +55,10 @@ func (t *territoryBuilder) Entitlements(_ context.Context, _ *v2.Resource, _ rs.
 }
 
 func (t *territoryBuilder) StaticEntitlements(ctx context.Context, _ rs.SyncOpAttrs) ([]*v2.Entitlement, *rs.SyncOpResults, error) {
-	roles, _, err := t.client.GetTerritoryRoles(ctx)
+	roles, ratelimitData, err := t.client.GetTerritoryRoles(ctx)
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, &rs.SyncOpResults{}, fmt.Errorf("baton-salesforce: territories: failed to get static entitlements: %w", err)
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: territories: failed to get static entitlements: %w", err)
 	}
 
 	ents := make([]*v2.Entitlement, 0, 1+len(roles))
@@ -80,7 +81,7 @@ func (t *territoryBuilder) StaticEntitlements(ctx context.Context, _ rs.SyncOpAt
 		))
 	}
 
-	return ents, &rs.SyncOpResults{}, nil
+	return ents, &rs.SyncOpResults{Annotations: outputAnnotations}, nil
 }
 
 func (t *territoryBuilder) Grants(ctx context.Context, resource *v2.Resource, attrs rs.SyncOpAttrs) ([]*v2.Grant, *rs.SyncOpResults, error) {
@@ -90,7 +91,7 @@ func (t *territoryBuilder) Grants(ctx context.Context, resource *v2.Resource, at
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
 	}
 
-	grants := make([]*v2.Grant, 0, len(members))
+	grants := make([]*v2.Grant, 0, 2*len(members))
 	for _, member := range members {
 		principalID := &v2.ResourceId{
 			ResourceType: resourceTypeUser.Id,

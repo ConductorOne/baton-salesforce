@@ -55,6 +55,6 @@ var (
 		Id:          "territory",
 		DisplayName: "Territory",
 		Description: "Requires Enterprise Territory Management 2.0 to be enabled in Salesforce.",
-		Annotations: annotations.New(&v2.SkipEntitlements{}),
+		Annotations: annotations.New(&v2.SkipEntitlements{}, &v2.OptInRequired{}),
 	}
 )

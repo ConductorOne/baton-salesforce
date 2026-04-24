@@ -12,6 +12,12 @@ import (
 )
 
 var ErrObjectNotFound = errors.New("salesforce object does not exist")
+var ErrObjectAlreadyExists = errors.New("salesforce object already exists")
+
+func isSalesforceDuplicateError(err error) bool {
+	var sfErr simpleforce.SalesforceError
+	return errors.As(err, &sfErr) && sfErr.ErrorCode == "DUPLICATE_VALUE"
+}
 
 func getQueryString(
 	q *SalesforceQuery,
@@ -21,9 +27,10 @@ func getQueryString(
 	if paginationPath != "" {
 		return paginationPath
 	}
-	return q.
-		OrderBy(SalesforcePK).
-		String()
+	if q.skipOrderBy {
+		return q.String()
+	}
+	return q.OrderBy(SalesforcePK).String()
 }
 
 // query performs a query to the Salesforce API via the simpleforce client. When
@@ -124,8 +131,9 @@ func (c *SalesforceClient) CreateObject(
 		created = created.Set(key, value)
 	}
 	created, err = created.Create(ctx)
+	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
-		return nil, err
+		return ratelimitData, err
 	}
 
 	debugFields := []zap.Field{}
@@ -136,10 +144,31 @@ func (c *SalesforceClient) CreateObject(
 		"Called Create()",
 		debugFields...,
 	)
-
-	ratelimitData := c.salesforceTransport.rateLimit
 	if created == nil {
 		return ratelimitData, fmt.Errorf("failed to create object")
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) UpdateObject(
+	ctx context.Context,
+	tableName string,
+	id string,
+	values map[string]interface{},
+) (*v2.RateLimitDescription, error) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	obj := c.client.SObject(tableName).Set("Id", id)
+	for key, value := range values {
+		obj = obj.Set(key, value)
+	}
+	_, err = obj.Update(ctx)
+	ratelimitData := c.salesforceTransport.rateLimit
+	if err != nil {
+		return ratelimitData, fmt.Errorf("baton-salesforce: failed to update %s: %w", tableName, err)
 	}
 	return ratelimitData, nil
 }

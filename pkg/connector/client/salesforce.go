@@ -1168,3 +1168,184 @@ func (c *SalesforceClient) GetUserLogin(
 	}
 	return userLogin, ratelimitData, nil
 }
+
+func (c *SalesforceClient) GetTerritories(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]simpleforce.SObject,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	q := NewQuery(TableNameTerritory2).WhereInSubQuery(
+		"Territory2ModelId",
+		NewIDQuery(TableNameTerritory2Model).WhereEq("State", "Active"),
+	)
+	records, paginationURL, ratelimitData, err := c.query(ctx, q, pageToken, pageSize)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+	return records, paginationURL, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetTerritoryMembers(
+	ctx context.Context,
+	territoryID string,
+	pageToken string,
+	pageSize int,
+) (
+	[]*UserTerritory2Association,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameUserTerritory2Assoc).WhereEq("Territory2Id", territoryID)
+	records, paginationURL, ratelimitData, err := c.query(ctx, query, pageToken, pageSize)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+
+	members := make([]*UserTerritory2Association, 0, len(records))
+	for _, record := range records {
+		members = append(members, &UserTerritory2Association{
+			ID:               record.ID(),
+			UserId:           record.StringField("UserId"),
+			Territory2Id:     record.StringField("Territory2Id"),
+			RoleInTerritory2: record.StringField("RoleInTerritory2"),
+		})
+	}
+	return members, paginationURL, ratelimitData, nil
+}
+
+// GetTerritoryRoles fetches all active picklist values for RoleInTerritory2 via
+// PicklistValueInfo.
+func (c *SalesforceClient) GetTerritoryRoles(ctx context.Context) ([]string, *v2.RateLimitDescription, error) {
+	records, _, ratelimitData, err := c.query(
+		ctx,
+		NewQuery(TableNamePicklistValueInfo, "Value").
+			WhereEq("EntityParticle.EntityDefinition.QualifiedApiName", TableNameUserTerritory2Assoc).
+			WhereEq("EntityParticle.DeveloperName", "RoleInTerritory2").
+			WhereRaw("IsActive = true").
+			WithoutOrderBy(),
+		"",
+		-1,
+	)
+	if err != nil {
+		return nil, ratelimitData, fmt.Errorf("baton-salesforce: failed to get territory roles: %w", err)
+	}
+
+	roles := make([]string, 0, len(records))
+	for _, record := range records {
+		if value := record.StringField("Value"); value != "" {
+			roles = append(roles, value)
+		}
+	}
+	return roles, ratelimitData, nil
+}
+
+func (c *SalesforceClient) GetUserTerritoryAssociation(
+	ctx context.Context,
+	userID string,
+	territoryID string,
+) (*simpleforce.SObject, *v2.RateLimitDescription, error) {
+	return c.getSObject(
+		ctx,
+		NewQuery(TableNameUserTerritory2Assoc).
+			WhereEq("Territory2Id", territoryID).
+			WhereEq("UserId", userID),
+	)
+}
+
+func (c *SalesforceClient) AddUserToTerritory(
+	ctx context.Context,
+	userID string,
+	territoryID string,
+) (*v2.RateLimitDescription, error) {
+	ratelimitData, err := c.CreateObject(
+		ctx,
+		TableNameUserTerritory2Assoc,
+		map[string]interface{}{
+			"UserId":       userID,
+			"Territory2Id": territoryID,
+		},
+	)
+	if err != nil {
+		if isSalesforceDuplicateError(err) {
+			return ratelimitData, ErrObjectAlreadyExists
+		}
+		return ratelimitData, err
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) RemoveUserFromTerritory(
+	ctx context.Context,
+	userID string,
+	territoryID string,
+) (*v2.RateLimitDescription, error) {
+	record, ratelimitData, err := c.getSObject(
+		ctx,
+		NewQuery(TableNameUserTerritory2Assoc).
+			WhereEq("Territory2Id", territoryID).
+			WhereEq("UserId", userID),
+	)
+	if err != nil {
+		return ratelimitData, err
+	}
+	return c.DeleteObject(ctx, TableNameUserTerritory2Assoc, record.ID())
+}
+
+func (c *SalesforceClient) AddUserToTerritoryWithRole(
+	ctx context.Context,
+	userID string,
+	territoryID string,
+	role string,
+) (*v2.RateLimitDescription, error) {
+	ratelimitData, err := c.CreateObject(ctx, TableNameUserTerritory2Assoc, map[string]interface{}{
+		"UserId":           userID,
+		"Territory2Id":     territoryID,
+		"RoleInTerritory2": role,
+	})
+	if err != nil {
+		if isSalesforceDuplicateError(err) {
+			return ratelimitData, ErrObjectAlreadyExists
+		}
+		return ratelimitData, err
+	}
+	return ratelimitData, nil
+}
+
+func (c *SalesforceClient) SetUserTerritoryRole(
+	ctx context.Context,
+	assocID string,
+	role string,
+) (*v2.RateLimitDescription, error) {
+	return c.UpdateObject(ctx, TableNameUserTerritory2Assoc, assocID, map[string]interface{}{
+		"RoleInTerritory2": role,
+	})
+}
+
+func (c *SalesforceClient) ClearUserTerritoryRole(
+	ctx context.Context,
+	userID string,
+	territoryID string,
+) (*v2.RateLimitDescription, error) {
+	record, ratelimitData, err := c.getSObject(
+		ctx,
+		NewQuery(TableNameUserTerritory2Assoc).
+			WhereEq("Territory2Id", territoryID).
+			WhereEq("UserId", userID),
+	)
+	if err != nil {
+		return ratelimitData, err
+	}
+	if record.StringField("RoleInTerritory2") == "" {
+		// The association exists but has no role assigned — treat as already revoked.
+		return ratelimitData, ErrObjectNotFound
+	}
+	return c.UpdateObject(ctx, TableNameUserTerritory2Assoc, record.ID(), map[string]interface{}{
+		"RoleInTerritory2": "",
+	})
+}

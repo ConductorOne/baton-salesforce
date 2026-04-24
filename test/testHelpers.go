@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +28,17 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// salesforceAPIError lets mock handlers return a non-200 HTTP response with a
+// structured Salesforce error body (e.g. DUPLICATE_VALUE).
+type salesforceAPIError struct {
+	statusCode int
+	body       []byte
+}
+
+func (e *salesforceAPIError) Error() string {
+	return fmt.Sprintf("salesforce API error (HTTP %d): %s", e.statusCode, e.body)
+}
 
 type salesforceResponse struct {
 	Id      string `json:"id"`
@@ -115,9 +127,50 @@ func seedDB(ctx context.Context) (*sql.DB, error) {
 	return db, nil
 }
 
+// resolveSubqueries rewrites "IN (SELECT Id FROM Table WHERE ...)" into
+// "IN ('id1', 'id2', ...)" because ramsql does not support subqueries.
+func resolveSubqueries(ctx context.Context, db *sql.DB, queryString string) (string, error) {
+	re := regexp.MustCompile(`IN \(SELECT Id FROM (\w+)(?: WHERE ([^)]+))?\)`)
+	var resolveErr error
+	result := re.ReplaceAllStringFunc(queryString, func(match string) string {
+		submatches := re.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			return match
+		}
+		table := submatches[1]
+		innerQuery := fmt.Sprintf("SELECT Id FROM %s", table)
+		if len(submatches) > 2 && submatches[2] != "" {
+			innerQuery += " WHERE " + submatches[2]
+		}
+		rows, err := query(ctx, db, innerQuery)
+		if err != nil {
+			resolveErr = err
+			return match
+		}
+		if len(rows) == 0 {
+			return "IN (NULL)"
+		}
+		ids := make([]string, 0, len(rows))
+		for _, row := range rows {
+			ids = append(ids, fmt.Sprintf("'%s'", row.ID()))
+		}
+		return fmt.Sprintf("IN (%s)", strings.Join(ids, ", "))
+	})
+	if resolveErr != nil {
+		return "", resolveErr
+	}
+	return result, nil
+}
+
 func query(ctx context.Context, db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
 	hackString := strings.ReplaceAll(queryString, ".Name", "")
 	hackString = strings.ReplaceAll(hackString, "Fields(standard)", "Id,*")
+
+	var err error
+	hackString, err = resolveSubqueries(ctx, db, hackString)
+	if err != nil {
+		return nil, err
+	}
 
 	rows, err := db.QueryContext(ctx, hackString) //nolint:gosec // test-only mock server; query is built from internal fixture data, not user input
 	if err != nil {
@@ -200,6 +253,12 @@ func FixturesServer(ctx context.Context) (*httptest.Server, *sql.DB, error) {
 				}
 
 				if err != nil {
+					var apiErr *salesforceAPIError
+					if errors.As(err, &apiErr) {
+						writer.WriteHeader(apiErr.statusCode)
+						_, _ = writer.Write(apiErr.body)
+						return
+					}
 					writer.WriteHeader(http.StatusInternalServerError)
 					return
 				}
@@ -318,31 +377,42 @@ func handleInsert(ctx context.Context, db *sql.DB, request *http.Request) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	// If object is immutable, then we can short-circuit if the row exists.
-	if slices.Contains([]string{client.TableNameGroupMemberships}, tableName) {
-		conditions := make([]string, 0)
-		for key, value := range body {
-			conditions = append(conditions, fmt.Sprintf(`"%s" = '%s'`, strings.ToLower(key), value))
-		}
-		conditionsString := strings.Join(conditions, " AND ")
-		queryString := fmt.Sprintf(
-			"SELECT Id, * FROM %s WHERE %s",
-			tableName,
-			conditionsString,
-		)
-		rows, err := query(ctx, db, queryString)
+	// For UserTerritory2Association the unique constraint is (UserId, Territory2Id).
+	// Return DUPLICATE_VALUE matching real Salesforce behavior.
+	if tableName == client.TableNameUserTerritory2Assoc {
+		userID, _ := body["UserId"].(string)
+		territory2ID, _ := body["Territory2Id"].(string)
+		rows, err := query(ctx, db, fmt.Sprintf(
+			"SELECT Id FROM %s WHERE UserId = '%s' AND Territory2Id = '%s'",
+			tableName, userID, territory2ID,
+		))
 		if err != nil {
 			return nil, err
 		}
-
-		// We already have this value.
 		if len(rows) > 0 {
-			return json.Marshal(
-				salesforceResponse{
-					Id:      rows[0].ID(),
-					Success: true,
+			errBody, _ := json.Marshal([]map[string]interface{}{
+				{
+					"errorCode": "DUPLICATE_VALUE",
+					"message":   fmt.Sprintf("duplicate value found: %s duplicates value on record with id: %s", tableName, rows[0].ID()),
 				},
-			)
+			})
+			return nil, &salesforceAPIError{statusCode: http.StatusBadRequest, body: errBody}
+		}
+	}
+
+	// For GroupMemberships, short-circuit with success if the row already exists.
+	if tableName == client.TableNameGroupMemberships {
+		conditions := make([]string, 0)
+		for key, value := range body {
+			conditions = append(conditions, fmt.Sprintf(`%s = '%s'`, key, value))
+		}
+		conditionsString := strings.Join(conditions, " AND ")
+		rows, err := query(ctx, db, fmt.Sprintf("SELECT Id FROM %s WHERE %s", tableName, conditionsString))
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) > 0 {
+			return json.Marshal(salesforceResponse{Id: rows[0].ID(), Success: true})
 		}
 	}
 
@@ -435,6 +505,15 @@ func handleShow(ctx context.Context, db *sql.DB, request *http.Request) ([]byte,
 
 func handleQuery(ctx context.Context, db *sql.DB, request *http.Request) ([]byte, error) {
 	queryString := request.URL.Query().Get("q")
+
+	// PicklistValueInfo uses Salesforce-specific nested field references in its WHERE
+	// clause (EntityParticle.EntityDefinition.QualifiedApiName, EntityParticle.DeveloperName)
+	// that SQLite cannot evaluate. Also omit IsActive filter: ramsql stores integer
+	// literals from INSERT as empty strings, so numeric comparisons don't work.
+	// Fixture data only contains active values, so filtering is not needed here.
+	if strings.Contains(queryString, client.TableNamePicklistValueInfo) {
+		queryString = fmt.Sprintf("SELECT Id, Value FROM %s", client.TableNamePicklistValueInfo)
+	}
 	var offset int
 	var totalSize int
 	var err error

@@ -92,3 +92,10 @@ type UserLogin struct {
 	IsFrozen         bool
 	IsPasswordLocked bool
 }
+
+type UserTerritory2Association struct {
+	ID               string
+	UserId           string
+	Territory2Id     string
+	RoleInTerritory2 string
+}

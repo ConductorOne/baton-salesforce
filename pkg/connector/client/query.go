@@ -1,6 +1,8 @@
 package client
 
 import (
+	"fmt"
+
 	"github.com/huandu/go-sqlbuilder"
 )
 
@@ -19,6 +21,10 @@ const (
 	TablePermissionSetGroupComponent = "PermissionSetGroupComponent"
 	TableNameConnectedApps           = "ConnectedApplication"
 	TableNameUserLogin               = "UserLogin"
+	TableNameTerritory2              = "Territory2"
+	TableNameTerritory2Model         = "Territory2Model"
+	TableNameUserTerritory2Assoc     = "UserTerritory2Association"
+	TableNamePicklistValueInfo       = "PicklistValueInfo"
 )
 
 var TableNamesToFieldsMapping = map[string][]string{
@@ -88,10 +94,43 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"IsFrozen",
 		"IsPasswordLocked",
 	},
+	TableNameTerritory2: {
+		"Name",
+		"Territory2ModelId",
+		"Territory2TypeId",
+		"ParentTerritory2Id",
+		"Description",
+	},
+	TableNameTerritory2Model: {
+		"Name",
+		"State",
+	},
+	TableNameUserTerritory2Assoc: {
+		"UserId",
+		"Territory2Id",
+		"RoleInTerritory2",
+	},
+	TableNamePicklistValueInfo: {
+		"Value",
+	},
 }
 
 type SalesforceQuery struct {
-	sb *sqlbuilder.SelectBuilder
+	sb          *sqlbuilder.SelectBuilder
+	skipOrderBy bool
+}
+
+// WithoutOrderBy disables the automatic ORDER BY Id that getQueryString adds.
+func (q *SalesforceQuery) WithoutOrderBy() *SalesforceQuery {
+	q.skipOrderBy = true
+	return q
+}
+
+// NewIDQuery creates a query that selects only the Id field.
+func NewIDQuery(tableName string) *SalesforceQuery {
+	return &SalesforceQuery{
+		sb: sqlbuilder.Select(SalesforcePK).From(tableName),
+	}
 }
 
 func NewQuery(tableName string, selectors ...string) *SalesforceQuery {
@@ -115,6 +154,13 @@ func (q *SalesforceQuery) WhereEq(field string, value string) *SalesforceQuery {
 	return q
 }
 
+// WhereRaw adds a raw SOQL condition without any escaping. Only use with
+// hardcoded strings — never with user-supplied input.
+func (q *SalesforceQuery) WhereRaw(condition string) *SalesforceQuery {
+	q.sb.Where(condition)
+	return q
+}
+
 func (q *SalesforceQuery) WhereNotEq(field string, value string) *SalesforceQuery {
 	q.sb.Where(q.sb.NE(field, value))
 	return q
@@ -126,7 +172,7 @@ func (q *SalesforceQuery) WhereGT(field string, value string) *SalesforceQuery {
 }
 
 func (q *SalesforceQuery) WhereInSubQuery(field string, sq *SalesforceQuery) *SalesforceQuery {
-	q.sb.Where(q.sb.In(field, sq.String()))
+	q.sb.Where(fmt.Sprintf("%s IN (%s)", field, sq.String()))
 	return q
 }
 

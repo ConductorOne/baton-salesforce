@@ -154,6 +154,11 @@ func (q *SalesforceQuery) WhereEq(field string, value string) *SalesforceQuery {
 	return q
 }
 
+func (q *SalesforceQuery) WhereBoolEq(field string, value bool) *SalesforceQuery {
+	q.sb.Where(fmt.Sprintf("%s = %t", field, value))
+	return q
+}
+
 // WhereRaw adds a raw SOQL condition without any escaping. Only use with
 // hardcoded strings — never with user-supplied input.
 func (q *SalesforceQuery) WhereRaw(condition string) *SalesforceQuery {

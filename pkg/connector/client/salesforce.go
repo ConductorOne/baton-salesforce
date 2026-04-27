@@ -1227,7 +1227,7 @@ func (c *SalesforceClient) GetTerritoryRoles(ctx context.Context) ([]string, *v2
 		NewQuery(TableNamePicklistValueInfo, "Value").
 			WhereEq("EntityParticle.EntityDefinition.QualifiedApiName", TableNameUserTerritory2Assoc).
 			WhereEq("EntityParticle.DeveloperName", "RoleInTerritory2").
-			WhereRaw("IsActive = true").
+			WhereBoolEq("IsActive", true).
 			WithoutOrderBy(),
 		"",
 		-1,
@@ -1331,6 +1331,7 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 	ctx context.Context,
 	userID string,
 	territoryID string,
+	expectedRole string,
 ) (*v2.RateLimitDescription, error) {
 	record, ratelimitData, err := c.getSObject(
 		ctx,
@@ -1341,8 +1342,12 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 	if err != nil {
 		return ratelimitData, err
 	}
-	if record.StringField("RoleInTerritory2") == "" {
+	currentRole := record.StringField("RoleInTerritory2")
+	if currentRole == "" {
 		return ratelimitData, ErrRoleAlreadyCleared
+	}
+	if currentRole != expectedRole {
+		return ratelimitData, fmt.Errorf("baton-salesforce: territory role mismatch: expected %q but user has %q", expectedRole, currentRole)
 	}
 	return c.UpdateObject(ctx, TableNameUserTerritory2Assoc, record.ID(), map[string]interface{}{
 		"RoleInTerritory2": "",

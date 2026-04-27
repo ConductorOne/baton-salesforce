@@ -1347,7 +1347,13 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 		return ratelimitData, ErrRoleAlreadyCleared
 	}
 	if currentRole != expectedRole {
-		return ratelimitData, fmt.Errorf("baton-salesforce: territory role mismatch: expected %q but user has %q", expectedRole, currentRole)
+		ctxzap.Extract(ctx).Warn("baton-salesforce: territory role mismatch; treating as already revoked",
+			zap.String("expected_role", expectedRole),
+			zap.String("current_role", currentRole),
+			zap.String("user_id", userID),
+			zap.String("territory_id", territoryID),
+		)
+		return ratelimitData, ErrRoleMismatch
 	}
 	return c.UpdateObject(ctx, TableNameUserTerritory2Assoc, record.ID(), map[string]interface{}{
 		"RoleInTerritory2": "",

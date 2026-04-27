@@ -10,10 +10,11 @@ While developing the connector, please fill out this form. This information is n
     - Roles
     - Profiles
     - Connected apps
+    - Territories (requires Enterprise Territory Management 2.0 to be enabled in the Salesforce org)
 
 2. Can the connector provision any resources? If so, which ones? 
 
-    Yes, Accounts, Groups, Roles, Permission sets and profiles.
+    Yes, Accounts, Groups, Roles, Permission sets, Profiles, and Territories.
 
 ## Connector credentials 
 
@@ -42,7 +43,8 @@ While developing the connector, please fill out this form. This information is n
 
     * If applicable: Is the list of scopes or permissions different to sync (read) versus provision (read-write)? If so, list the difference here. 
 
-        *   **Sync (Read-only)**: Requires read permissions for Users, Groups, Roles, Profiles, Permission Sets, and Connected Apps.
+        *   **Sync (Read-only)**: Requires read permissions for Users, Groups, Roles, Profiles, Permission Sets, Connected Apps, and Territories (if Enterprise Territory Management 2.0 is enabled).
         *   **Provisioning (Read-write)**: In addition to the read permissions, it requires permissions to:
         *   Create and activate user accounts.
         *   Add and remove users from groups.
+        *   Add and remove users from territories (requires Enterprise Territory Management 2.0 to be enabled).

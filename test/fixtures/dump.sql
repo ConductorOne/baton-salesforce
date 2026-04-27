@@ -182,3 +182,50 @@ CREATE TABLE UserLogin
     IsFrozen         TEXT,
     IsPasswordLocked TEXT
 )
+
+CREATE TABLE Territory2Model
+(
+    Id    TEXT PRIMARY KEY,
+    Name  TEXT,
+    State TEXT
+)
+
+CREATE TABLE Territory2
+(
+    Id                  TEXT PRIMARY KEY,
+    Name                TEXT,
+    Territory2ModelId   TEXT,
+    Territory2TypeId    TEXT,
+    ParentTerritory2Id  TEXT,
+    Description         TEXT
+)
+
+CREATE TABLE UserTerritory2Association
+(
+    Id                TEXT PRIMARY KEY,
+    UserId            TEXT,
+    Territory2Id      TEXT,
+    RoleInTerritory2  TEXT DEFAULT ''
+)
+
+CREATE TABLE PicklistValueInfo
+(
+    Id       TEXT PRIMARY KEY,
+    Value    TEXT,
+    IsActive INTEGER
+)
+
+INSERT INTO Territory2Model (Id, Name, State) VALUES ('M1', 'Test Model', 'Active');
+
+INSERT INTO Territory2 (Id, Name, Territory2ModelId, Territory2TypeId, ParentTerritory2Id, Description)
+VALUES ('T1', 'Argentina', 'M1', '', '', ''),
+       ('T2', 'Brasil',    'M1', '', '', '');
+
+INSERT INTO UserTerritory2Association (Id, UserId, Territory2Id, RoleInTerritory2)
+VALUES ('A1', '0051X', 'T1', 'Owner'),
+       ('A2', '0052X', 'T1', 'Sales Rep'),
+       ('A3', '0051X', 'T2', '');
+
+INSERT INTO PicklistValueInfo (Id, Value, IsActive)
+VALUES ('PV1', 'Owner', 1),
+       ('PV2', 'Sales Rep', 1);

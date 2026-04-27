@@ -2,6 +2,7 @@ package connector
 
 import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
 var (
@@ -49,5 +50,11 @@ var (
 		Traits: []v2.ResourceType_Trait{
 			v2.ResourceType_TRAIT_APP,
 		},
+	}
+	resourceTypeTerritory = &v2.ResourceType{
+		Id:          "territory",
+		DisplayName: "Territory",
+		Description: "Requires Enterprise Territory Management 2.0 to be enabled in Salesforce.",
+		Annotations: annotations.New(&v2.SkipEntitlements{}, &v2.OptInRequired{}),
 	}
 )

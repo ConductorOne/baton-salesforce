@@ -65,6 +65,7 @@ func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.Res
 		newProfileBuilder(d.client, d.licenseToLeastProfileMapping),
 		newRoleBuilder(d.client),
 		newPermissionSetGroupBuilder(d.client),
+		newTerritoryBuilder(d.client),
 	}
 	if d.syncConnectedApps {
 		rv = append(rv, newConnectedApplicationBuilder(d.client))

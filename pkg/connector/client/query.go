@@ -160,13 +160,6 @@ func (q *SalesforceQuery) WhereBoolEq(field string, value bool) *SalesforceQuery
 	return q
 }
 
-// WhereRaw adds a raw SOQL condition without any escaping. Only use with
-// hardcoded strings — never with user-supplied input.
-func (q *SalesforceQuery) WhereRaw(condition string) *SalesforceQuery {
-	q.sb.Where(condition)
-	return q
-}
-
 func (q *SalesforceQuery) WhereNotEq(field string, value string) *SalesforceQuery {
 	q.sb.Where(q.sb.NE(field, value))
 	return q

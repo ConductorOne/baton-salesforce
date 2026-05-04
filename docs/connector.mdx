@@ -151,9 +151,39 @@ Click **Next**.
 Find the **Settings** area of the page and click **Edit**.
 </Step>
 <Step>
-Select your method of authenticating to Salesforce and click either **OAuth** or **Username and password**. 
+Select your method of authenticating to Salesforce. Available methods include **OAuth**, **JWT Bearer (ECA compatible)**, **Client Credentials (ECA compatible)**, and **Username and password (legacy)**. 
 </Step>
 <Step>
+   If you chose **JWT Bearer (ECA compatible)**:
+
+      1. In the **Salesforce Client ID** field, enter the Consumer Key from your Connected App or External Client App.
+
+      2. In the **Salesforce Private Key** field, paste the PEM-encoded private key used for JWT signing.
+
+      3. In the **Salesforce JWT Subject** field, enter the Salesforce username to impersonate.
+
+      4. **Optional.** In the **Salesforce Login URL** field, enter your Salesforce login URL (defaults to `https://login.salesforce.com`). Use `https://test.salesforce.com` for sandbox orgs.
+
+      5. In the **Instance URL** field, enter your Salesforce domain.
+
+      6. **Optional.** Configure sync options (connected apps, deactivated users, non-standard users, license-to-profile mapping).
+
+      7. Click **Save**.
+
+   If you chose **Client Credentials (ECA compatible)**:
+
+      1. In the **Salesforce Client ID** field, enter the Consumer Key from your Connected App or External Client App.
+
+      2. In the **Salesforce Client Secret** field, enter the Consumer Secret.
+
+      3. **Optional.** In the **Salesforce Login URL** field, enter your Salesforce login URL (defaults to `https://login.salesforce.com`). Use `https://test.salesforce.com` for sandbox orgs.
+
+      4. In the **Instance URL** field, enter your Salesforce domain.
+
+      5. **Optional.** Configure sync options (connected apps, deactivated users, non-standard users, license-to-profile mapping).
+
+      6. Click **Save**.
+
    If you chose **OAuth**: 
       
       1. In the **Domain** field, enter your Salesforce domain.
@@ -267,11 +297,26 @@ stringData:
   BATON_CLIENT_ID: <C1 client ID>
   BATON_CLIENT_SECRET: <C1 client secret>
   
-  # Salesforce credentials
+  # Salesforce credentials - choose ONE authentication method:
+  
+  # Option 1: JWT Bearer (recommended for External Client Apps)
   BATON_INSTANCE_URL: <Salesforce domain>
-  BATON_SALESFORCE_PASSWORD: <Password to the Salesforce account>
-  BATON_SALESFORCE_USERNAME: <Username for the Salesforce account>
-  BATON_SECURITY_TOKEN: <Salesforce security token (optional if trusted IP is configured)>
+  BATON_SALESFORCE_CLIENT_ID: <OAuth Consumer Key>
+  BATON_SALESFORCE_PRIVATE_KEY: <PEM-encoded private key for JWT signing>
+  BATON_SALESFORCE_JWT_SUBJECT: <Salesforce username to act as>
+  # BATON_SALESFORCE_LOGIN_URL: https://login.salesforce.com  # Optional, defaults to production
+  
+  # Option 2: Client Credentials (simpler alternative for External Client Apps)
+  # BATON_INSTANCE_URL: <Salesforce domain>
+  # BATON_SALESFORCE_CLIENT_ID: <OAuth Consumer Key>
+  # BATON_SALESFORCE_CLIENT_SECRET: <OAuth Consumer Secret>
+  # BATON_SALESFORCE_LOGIN_URL: https://login.salesforce.com  # Optional
+  
+  # Option 3: Username and password (legacy, not supported by External Client Apps)
+  # BATON_INSTANCE_URL: <Salesforce domain>
+  # BATON_SALESFORCE_PASSWORD: <Password to the Salesforce account>
+  # BATON_SALESFORCE_USERNAME: <Username for the Salesforce account>
+  # BATON_SECURITY_TOKEN: <Salesforce security token (optional if trusted IP is configured)>
 
   # Optional: include if you want C1 to provision access using this connector
   BATON_PROVISIONING: true

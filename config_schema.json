@@ -172,6 +172,58 @@
       "stringField": {
         "type": "STRING_FIELD_TYPE_OAUTH2"
       }
+    },
+    {
+      "name": "salesforce-client-id",
+      "displayName": "Salesforce Client ID",
+      "description": "OAuth Client ID (Consumer Key) from Connected App or External Client App",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-private-key",
+      "displayName": "Salesforce Private Key",
+      "description": "PEM-encoded private key for JWT Bearer signing",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-jwt-subject",
+      "displayName": "Salesforce JWT Subject",
+      "description": "Salesforce username to impersonate (sub claim in JWT)",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-login-url",
+      "displayName": "Salesforce Login URL",
+      "description": "Salesforce login URL for OAuth token endpoint (default: https://login.salesforce.com)",
+      "stringField": {}
+    },
+    {
+      "name": "salesforce-client-secret",
+      "displayName": "Salesforce Client Secret",
+      "description": "OAuth Client Secret (Consumer Secret) from Connected App or External Client App",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
     }
   ],
   "displayName": "Salesforce",
@@ -180,8 +232,8 @@
   "fieldGroups": [
     {
       "name": "username-password-group",
-      "displayName": "Username and password",
-      "helpText": "Use a username and password for authentication.",
+      "displayName": "Username and password (legacy)",
+      "helpText": "Use a username and password for authentication. This method is deprecated and not supported by Salesforce External Client Apps.",
       "fields": [
         "salesforce-username",
         "salesforce-password",
@@ -208,6 +260,39 @@
         "oauth2-token"
       ],
       "default": true
+    },
+    {
+      "name": "jwt-bearer-group",
+      "displayName": "JWT Bearer (ECA compatible)",
+      "helpText": "Use JWT Bearer flow for server-to-server authentication. Compatible with both Connected Apps and External Client Apps (ECA). Requires a private key for JWT signing.",
+      "fields": [
+        "salesforce-client-id",
+        "salesforce-private-key",
+        "salesforce-jwt-subject",
+        "salesforce-login-url",
+        "instance-url",
+        "user-username-for-email",
+        "sync-connected-apps",
+        "sync-deactivated-users",
+        "sync-non-standard-users",
+        "license-to-least-privileged-profile-mapping"
+      ]
+    },
+    {
+      "name": "client-credentials-group",
+      "displayName": "Client Credentials (ECA compatible)",
+      "helpText": "Use Client Credentials flow for server-to-server authentication. Compatible with both Connected Apps and External Client Apps (ECA). Simpler than JWT Bearer but requires a client secret.",
+      "fields": [
+        "salesforce-client-id",
+        "salesforce-client-secret",
+        "salesforce-login-url",
+        "instance-url",
+        "user-username-for-email",
+        "sync-connected-apps",
+        "sync-deactivated-users",
+        "sync-non-standard-users",
+        "license-to-least-privileged-profile-mapping"
+      ]
     }
   ]
 }

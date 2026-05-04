@@ -262,6 +262,24 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 			"",
 			"",
 		)
+	case config.SalesforceJWTBearerGroup:
+		jwtTokenSource, err := client.NewJWTBearerTokenSource(
+			cfg.SalesforceClientId,
+			cfg.SalesforcePrivateKey,
+			cfg.SalesforceJwtSubject,
+			cfg.SalesforceLoginUrl,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("baton-salesforce: failed to create JWT bearer token source: %w", err)
+		}
+		salesforceClient = client.New(instanceURL, jwtTokenSource, "", "", "")
+	case config.SalesforceClientCredentialsGroup:
+		ccTokenSource := client.NewClientCredentialsTokenSource(
+			cfg.SalesforceClientId,
+			cfg.SalesforceClientSecret,
+			cfg.SalesforceLoginUrl,
+		)
+		salesforceClient = client.New(instanceURL, ccTokenSource, "", "", "")
 	case config.SalesforceUsernamePasswordGroup:
 		fallthrough
 	default:

@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	SalesforceUsernamePasswordGroup = "username-password-group"
-	SalesforceOAuthGroup            = "oauth-group"
+	SalesforceUsernamePasswordGroup    = "username-password-group"
+	SalesforceOAuthGroup               = "oauth-group"
+	SalesforceJWTBearerGroup           = "jwt-bearer-group"
+	SalesforceClientCredentialsGroup   = "client-credentials-group"
 )
 
 var (
@@ -47,6 +49,37 @@ var (
 		field.WithDescription("Salesforce security token (optional if trusted IP is configured)"),
 		field.WithIsSecret(true),
 	)
+	SalesforceClientIdField = field.StringField(
+		"salesforce-client-id",
+		field.WithDisplayName("Salesforce Client ID"),
+		field.WithDescription("OAuth Client ID (Consumer Key) from Connected App or External Client App"),
+		field.WithRequired(true),
+	)
+	SalesforcePrivateKeyField = field.StringField(
+		"salesforce-private-key",
+		field.WithDisplayName("Salesforce Private Key"),
+		field.WithDescription("PEM-encoded private key for JWT Bearer signing"),
+		field.WithIsSecret(true),
+		field.WithRequired(true),
+	)
+	SalesforceJwtSubjectField = field.StringField(
+		"salesforce-jwt-subject",
+		field.WithDisplayName("Salesforce JWT Subject"),
+		field.WithDescription("Salesforce username to impersonate (sub claim in JWT)"),
+		field.WithRequired(true),
+	)
+	SalesforceLoginUrlField = field.StringField(
+		"salesforce-login-url",
+		field.WithDisplayName("Salesforce Login URL"),
+		field.WithDescription("Salesforce login URL for OAuth token endpoint (default: https://login.salesforce.com)"),
+	)
+	SalesforceOAuthClientSecretField = field.StringField(
+		"salesforce-client-secret",
+		field.WithDisplayName("Salesforce Client Secret"),
+		field.WithDescription("OAuth Client Secret (Consumer Secret) from Connected App or External Client App"),
+		field.WithIsSecret(true),
+		field.WithRequired(true),
+	)
 	SyncConnectedApps = field.BoolField(
 		"sync-connected-apps",
 		field.WithDisplayName("Sync Connected Apps"),
@@ -81,6 +114,11 @@ var (
 		SyncNonStandardUsers,
 		LicenseToLeastPrivilegedProfileMapping,
 		Oauth2TokenField,
+		SalesforceClientIdField,
+		SalesforcePrivateKeyField,
+		SalesforceJwtSubjectField,
+		SalesforceLoginUrlField,
+		SalesforceOAuthClientSecretField,
 	}
 
 	Configuration = field.NewConfiguration(
@@ -91,9 +129,9 @@ var (
 		field.WithFieldGroups([]field.SchemaFieldGroup{
 			{
 				Name:        SalesforceUsernamePasswordGroup,
-				DisplayName: "Username and password",
-				HelpText:    "Use a username and password for authentication.",
-				Fields:      []field.SchemaField{
+				DisplayName: "Username and password (legacy)",
+				HelpText:    "Use a username and password for authentication. This method is deprecated and not supported by Salesforce External Client Apps.",
+				Fields: []field.SchemaField{
 					UsernameField,
 					PasswordField,
 					SecurityTokenField,
@@ -102,22 +140,59 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
-					LicenseToLeastPrivilegedProfileMapping},
-				Default:     false,
+					LicenseToLeastPrivilegedProfileMapping,
+				},
+				Default: false,
 			},
 			{
 				Name:        SalesforceOAuthGroup,
 				DisplayName: "OAuth",
 				HelpText:    "Use OAuth for authentication.",
-				Fields:      []field.SchemaField{
+				Fields: []field.SchemaField{
 					InstanceUrlField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping,
-					Oauth2TokenField},
-				Default:     true,
+					Oauth2TokenField,
+				},
+				Default: true,
+			},
+			{
+				Name:        SalesforceJWTBearerGroup,
+				DisplayName: "JWT Bearer (ECA compatible)",
+				HelpText:    "Use JWT Bearer flow for server-to-server authentication. Compatible with both Connected Apps and External Client Apps (ECA). Requires a private key for JWT signing.",
+				Fields: []field.SchemaField{
+					SalesforceClientIdField,
+					SalesforcePrivateKeyField,
+					SalesforceJwtSubjectField,
+					SalesforceLoginUrlField,
+					InstanceUrlField,
+					UseUsernameForEmailField,
+					SyncConnectedApps,
+					SyncDeactivatedUsers,
+					SyncNonStandardUsers,
+					LicenseToLeastPrivilegedProfileMapping,
+				},
+				Default: false,
+			},
+			{
+				Name:        SalesforceClientCredentialsGroup,
+				DisplayName: "Client Credentials (ECA compatible)",
+				HelpText:    "Use Client Credentials flow for server-to-server authentication. Compatible with both Connected Apps and External Client Apps (ECA). Simpler than JWT Bearer but requires a client secret.",
+				Fields: []field.SchemaField{
+					SalesforceClientIdField,
+					SalesforceOAuthClientSecretField,
+					SalesforceLoginUrlField,
+					InstanceUrlField,
+					UseUsernameForEmailField,
+					SyncConnectedApps,
+					SyncDeactivatedUsers,
+					SyncNonStandardUsers,
+					LicenseToLeastPrivilegedProfileMapping,
+				},
+				Default: false,
 			},
 		}),
 	)

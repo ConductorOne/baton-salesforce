@@ -14,6 +14,11 @@ type Salesforce struct {
 	SyncNonStandardUsers bool `mapstructure:"sync-non-standard-users"`
 	LicenseToLeastPrivilegedProfileMapping map[string]any `mapstructure:"license-to-least-privileged-profile-mapping"`
 	Oauth2Token string `mapstructure:"oauth2-token"`
+	SalesforceClientId string `mapstructure:"salesforce-client-id"`
+	SalesforcePrivateKey string `mapstructure:"salesforce-private-key"`
+	SalesforceJwtSubject string `mapstructure:"salesforce-jwt-subject"`
+	SalesforceLoginUrl string `mapstructure:"salesforce-login-url"`
+	SalesforceClientSecret string `mapstructure:"salesforce-client-secret"`
 }
 
 func (c *Salesforce) findFieldByTag(tagValue string) (any, bool) {

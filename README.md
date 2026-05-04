@@ -34,6 +34,77 @@ BATON_INSTANCE_URL=acme.my.salesforce.com BATON_USER_USERNAME_FOR_EMAIL=false ba
 baton resources
 ```
 
+# Authentication
+
+`baton-salesforce` supports multiple authentication methods. Choose the method that best fits your Salesforce org configuration.
+
+## JWT Bearer Flow (Recommended for External Client Apps)
+
+The JWT Bearer flow is a server-to-server authentication method that works with both Connected Apps and External Client Apps (ECA). It uses a private key to sign JWT assertions.
+
+```bash
+baton-salesforce \
+  --instance-url acme.my.salesforce.com \
+  --salesforce-client-id <consumer-key> \
+  --salesforce-private-key "$(cat server.key)" \
+  --salesforce-jwt-subject admin@acme.com \
+  --salesforce-login-url https://login.salesforce.com
+```
+
+**Setup steps:**
+1. Create a Connected App or External Client App in Salesforce Setup
+2. Enable the JWT Bearer OAuth flow
+3. Generate a private key and upload the corresponding certificate to the app
+4. Pre-authorize the running user via a permission set (required for ECAs)
+
+| Flag | Env Var | Required | Description |
+|------|---------|----------|-------------|
+| `--salesforce-client-id` | `BATON_SALESFORCE_CLIENT_ID` | Yes | OAuth Consumer Key |
+| `--salesforce-private-key` | `BATON_SALESFORCE_PRIVATE_KEY` | Yes | PEM-encoded private key |
+| `--salesforce-jwt-subject` | `BATON_SALESFORCE_JWT_SUBJECT` | Yes | Salesforce username to act as |
+| `--salesforce-login-url` | `BATON_SALESFORCE_LOGIN_URL` | No | Login URL (default: `https://login.salesforce.com`) |
+| `--instance-url` | `BATON_INSTANCE_URL` | Yes | Your Salesforce domain |
+
+## Client Credentials Flow (Simpler alternative for ECAs)
+
+The Client Credentials flow is a simpler server-to-server method that uses a client ID and secret. It works with both Connected Apps and External Client Apps.
+
+```bash
+baton-salesforce \
+  --instance-url acme.my.salesforce.com \
+  --salesforce-client-id <consumer-key> \
+  --salesforce-client-secret <consumer-secret> \
+  --salesforce-login-url https://login.salesforce.com
+```
+
+**Setup steps:**
+1. Create a Connected App or External Client App in Salesforce Setup
+2. Enable the Client Credentials OAuth flow
+3. Configure a "run as" user on the app in Salesforce Setup
+
+| Flag | Env Var | Required | Description |
+|------|---------|----------|-------------|
+| `--salesforce-client-id` | `BATON_SALESFORCE_CLIENT_ID` | Yes | OAuth Consumer Key |
+| `--salesforce-client-secret` | `BATON_SALESFORCE_CLIENT_SECRET` | Yes | OAuth Consumer Secret |
+| `--salesforce-login-url` | `BATON_SALESFORCE_LOGIN_URL` | No | Login URL (default: `https://login.salesforce.com`) |
+| `--instance-url` | `BATON_INSTANCE_URL` | Yes | Your Salesforce domain |
+
+## Username and Password (Legacy)
+
+> **Deprecated:** This method is not supported by Salesforce External Client Apps and is deprecated by Salesforce. Use JWT Bearer or Client Credentials instead.
+
+```bash
+baton-salesforce \
+  --instance-url acme.my.salesforce.com \
+  --salesforce-username admin@acme.com \
+  --salesforce-password <password> \
+  --security-token <token>
+```
+
+## OAuth (via ConductorOne)
+
+When running within ConductorOne, OAuth authentication is handled automatically.
+
 # Data Model
 
 `baton-salesforce` will pull down information about the following resources:

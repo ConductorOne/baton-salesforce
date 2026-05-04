@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -128,7 +129,13 @@ func (s *ClientCredentialsTokenSource) Token() (*oauth2.Token, error) {
 func requestToken(loginURL string, data url.Values) (*oauth2.Token, error) {
 	tokenURL := strings.TrimRight(loginURL, "/") + "/services/oauth2/token"
 
-	resp, err := http.PostForm(tokenURL, data)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("token request creation failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token request failed: %w", err)
 	}

@@ -6,6 +6,8 @@ import (
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 )
 
 const (
@@ -21,11 +23,12 @@ func (t *salesforceHttpTransport) RoundTrip(request *http.Request) (*http.Respon
 	if t.tokenSource != nil {
 		token, err := t.tokenSource.Token()
 		if err != nil {
-			return nil, fmt.Errorf("baton-salesforce: failed to get access token: %w", err)
+			ctxzap.Extract(request.Context()).Warn("baton-salesforce: failed to refresh token, proceeding with existing headers", zap.Error(err))
+		} else {
+			reqCopy := request.Clone(request.Context())
+			reqCopy.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			request = reqCopy
 		}
-		reqCopy := request.Clone(request.Context())
-		reqCopy.Header.Set("Authorization", "Bearer "+token.AccessToken)
-		request = reqCopy
 	}
 
 	t.rateLimit = nil // clear previous

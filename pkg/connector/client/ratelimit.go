@@ -18,6 +18,16 @@ const (
 // This just calls the original `httpClient.RoundTrip()` and caches the header
 // value that Salesforce uses to communicate remaining API call counts.
 func (t *salesforceHttpTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	if t.tokenSource != nil {
+		token, err := t.tokenSource.Token()
+		if err != nil {
+			return nil, fmt.Errorf("baton-salesforce: failed to get access token: %w", err)
+		}
+		reqCopy := request.Clone(request.Context())
+		reqCopy.Header.Set("Authorization", "Bearer "+token.AccessToken)
+		request = reqCopy
+	}
+
 	t.rateLimit = nil // clear previous
 	response, err := t.base.RoundTrip(request)
 	if err != nil {

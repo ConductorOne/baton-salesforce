@@ -172,6 +172,64 @@
       "stringField": {
         "type": "STRING_FIELD_TYPE_OAUTH2"
       }
+    },
+    {
+      "name": "salesforce-client-id",
+      "displayName": "Client ID",
+      "description": "OAuth Client ID / Consumer Key of the Connected App or External Client App",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-client-secret",
+      "displayName": "Client Secret",
+      "description": "OAuth Client Secret / Consumer Secret",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-private-key",
+      "displayName": "Private Key (.pem)",
+      "description": "PEM private key for JWT Bearer flow",
+      "isRequired": true,
+      "isSecret": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        },
+        "type": "STRING_FIELD_TYPE_FILE_UPLOAD",
+        "allowedExtensions": [
+          ".pem"
+        ]
+      }
+    },
+    {
+      "name": "salesforce-jwt-subject",
+      "displayName": "JWT Subject",
+      "description": "Salesforce username of the integration user the connector will authenticate as",
+      "isRequired": true,
+      "stringField": {
+        "rules": {
+          "isRequired": true
+        }
+      }
+    },
+    {
+      "name": "salesforce-login-url",
+      "displayName": "Login URL",
+      "description": "Salesforce login URL for JWT Bearer token exchange.",
+      "stringField": {
+        "defaultValue": "https://login.salesforce.com"
+      }
     }
   ],
   "displayName": "Salesforce",
@@ -180,8 +238,8 @@
   "fieldGroups": [
     {
       "name": "username-password-group",
-      "displayName": "Username and password",
-      "helpText": "Use a username and password for authentication.",
+      "displayName": "Username and password (deprecated)",
+      "helpText": "Use a username and password for authentication. Deprecated: Salesforce is disabling SOAP API login for new orgs.",
       "fields": [
         "salesforce-username",
         "salesforce-password",
@@ -208,6 +266,38 @@
         "oauth2-token"
       ],
       "default": true
+    },
+    {
+      "name": "jwt-bearer-group",
+      "displayName": "JWT Bearer",
+      "helpText": "Authenticate using a signed JWT assertion and private key.",
+      "fields": [
+        "instance-url",
+        "salesforce-login-url",
+        "salesforce-client-id",
+        "salesforce-private-key",
+        "salesforce-jwt-subject",
+        "user-username-for-email",
+        "sync-connected-apps",
+        "sync-deactivated-users",
+        "sync-non-standard-users",
+        "license-to-least-privileged-profile-mapping"
+      ]
+    },
+    {
+      "name": "client-credentials-group",
+      "displayName": "Client Credentials",
+      "helpText": "Authenticate using a client ID and secret.",
+      "fields": [
+        "instance-url",
+        "salesforce-client-id",
+        "salesforce-client-secret",
+        "user-username-for-email",
+        "sync-connected-apps",
+        "sync-deactivated-users",
+        "sync-non-standard-users",
+        "license-to-least-privileged-profile-mapping"
+      ]
     }
   ]
 }

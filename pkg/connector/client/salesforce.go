@@ -49,8 +49,9 @@ var userTypesToSkip = map[string]bool{
 }
 
 type salesforceHttpTransport struct {
-	base      http.RoundTripper
-	rateLimit *v2.RateLimitDescription
+	base        http.RoundTripper
+	rateLimit   *v2.RateLimitDescription
+	tokenSource oauth2.TokenSource
 }
 
 func New(
@@ -105,8 +106,9 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		return err
 	}
 	interceptedTransport := salesforceHttpTransport{
-		base:      httpClient.Transport,
-		rateLimit: &v2.RateLimitDescription{},
+		base:        httpClient.Transport,
+		rateLimit:   &v2.RateLimitDescription{},
+		tokenSource: c.TokenSource,
 	}
 
 	httpClient.Transport = &interceptedTransport
@@ -117,14 +119,22 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 
 	simpleClient.SetHttpClient(wrapper)
 
-	// Oauth takes precedence over username, password.
+	// OAuth token source takes precedence over username/password.
 	if c.TokenSource != nil {
 		logger.Debug("Salesforce client using token source")
 		token, err := c.TokenSource.Token()
 		if err != nil {
-			return err
+			return fmt.Errorf("baton-salesforce: failed to get token: %w", err)
 		}
-		simpleClient.SetSidLoc(token.AccessToken, c.baseUrl)
+		instanceURL := c.baseUrl
+		if v, ok := token.Extra("instance_url").(string); ok && v != "" {
+			instanceURL = v
+		}
+		// SetSidLoc requires a non-empty session ID to mark the client as
+		// authenticated. The transport injects the real Bearer token on every
+		// request, so the value here is only used to satisfy simpleforce's
+		// internal isLoggedIn() check.
+		simpleClient.SetSidLoc(token.AccessToken, instanceURL)
 	} else {
 		logger.Debug("Salesforce client using username and password")
 		err = simpleClient.LoginPassword(

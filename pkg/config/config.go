@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	SalesforceUsernamePasswordGroup = "username-password-group"
-	SalesforceOAuthGroup            = "oauth-group"
+	SalesforceUsernamePasswordGroup  = "username-password-group"
+	SalesforceOAuthGroup             = "oauth-group"
+	SalesforceJWTBearerGroup         = "jwt-bearer-group" //nolint:gosec // false positive: "bearer" is an auth method name, not a credential
+	SalesforceClientCredentialsGroup = "client-credentials-group"
 )
 
 var (
@@ -69,6 +71,39 @@ var (
 		field.WithDisplayName("License to Least Privileged Profile Mapping"),
 		field.WithDescription("Mapping of Salesforce license types to least privileged profiles"),
 	)
+	ClientIDField = field.StringField(
+		"salesforce-client-id",
+		field.WithDisplayName("Client ID"),
+		field.WithDescription("OAuth Client ID / Consumer Key of the Connected App or External Client App"),
+		field.WithRequired(true),
+	)
+	ClientSecretField = field.StringField(
+		"salesforce-client-secret",
+		field.WithDisplayName("Client Secret"),
+		field.WithDescription("OAuth Client Secret / Consumer Secret"),
+		field.WithIsSecret(true),
+		field.WithRequired(true),
+	)
+	PrivateKeyField = field.FileUploadField(
+		"salesforce-private-key",
+		[]string{".pem"},
+		field.WithDisplayName("Private Key (.pem)"),
+		field.WithDescription("PEM private key for JWT Bearer flow"),
+		field.WithIsSecret(true),
+		field.WithRequired(true),
+	)
+	JWTSubjectField = field.StringField(
+		"salesforce-jwt-subject",
+		field.WithDisplayName("JWT Subject"),
+		field.WithDescription("Salesforce username of the integration user the connector will authenticate as"),
+		field.WithRequired(true),
+	)
+	LoginURLField = field.StringField(
+		"salesforce-login-url",
+		field.WithDisplayName("Login URL"),
+		field.WithDescription("Salesforce login URL for JWT Bearer token exchange."),
+		field.WithDefaultValue("https://login.salesforce.com"),
+	)
 
 	configurationFields = []field.SchemaField{
 		UsernameField,
@@ -81,6 +116,11 @@ var (
 		SyncNonStandardUsers,
 		LicenseToLeastPrivilegedProfileMapping,
 		Oauth2TokenField,
+		ClientIDField,
+		ClientSecretField,
+		PrivateKeyField,
+		JWTSubjectField,
+		LoginURLField,
 	}
 
 	Configuration = field.NewConfiguration(
@@ -91,9 +131,9 @@ var (
 		field.WithFieldGroups([]field.SchemaFieldGroup{
 			{
 				Name:        SalesforceUsernamePasswordGroup,
-				DisplayName: "Username and password",
-				HelpText:    "Use a username and password for authentication.",
-				Fields:      []field.SchemaField{
+				DisplayName: "Username and password (deprecated)",
+				HelpText:    "Use a username and password for authentication. Deprecated: Salesforce is disabling SOAP API login for new orgs.",
+				Fields: []field.SchemaField{
 					UsernameField,
 					PasswordField,
 					SecurityTokenField,
@@ -103,21 +143,56 @@ var (
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping},
-				Default:     false,
+				Default: false,
 			},
 			{
 				Name:        SalesforceOAuthGroup,
 				DisplayName: "OAuth",
 				HelpText:    "Use OAuth for authentication.",
-				Fields:      []field.SchemaField{
+				Fields: []field.SchemaField{
 					InstanceUrlField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping,
-					Oauth2TokenField},
-				Default:     true,
+					Oauth2TokenField,
+				},
+				Default: true,
+			},
+			{
+				Name:        SalesforceJWTBearerGroup,
+				DisplayName: "JWT Bearer",
+				HelpText:    "Authenticate using a signed JWT assertion and private key.",
+				Fields: []field.SchemaField{
+					InstanceUrlField,
+					LoginURLField,
+					ClientIDField,
+					PrivateKeyField,
+					JWTSubjectField,
+					UseUsernameForEmailField,
+					SyncConnectedApps,
+					SyncDeactivatedUsers,
+					SyncNonStandardUsers,
+					LicenseToLeastPrivilegedProfileMapping,
+				},
+				Default: false,
+			},
+			{
+				Name:        SalesforceClientCredentialsGroup,
+				DisplayName: "Client Credentials",
+				HelpText:    "Authenticate using a client ID and secret.",
+				Fields: []field.SchemaField{
+					InstanceUrlField,
+					ClientIDField,
+					ClientSecretField,
+					UseUsernameForEmailField,
+					SyncConnectedApps,
+					SyncDeactivatedUsers,
+					SyncNonStandardUsers,
+					LicenseToLeastPrivilegedProfileMapping,
+				},
+				Default: false,
 			},
 		}),
 	)

@@ -14,8 +14,11 @@ const oauthTokenPath = "/services/oauth2/token" //nolint:gosec // false positive
 
 // NewJWTBearerTokenSource exchanges a signed JWT assertion for a Salesforce access token (RFC 7523).
 func NewJWTBearerTokenSource(ctx context.Context, clientID, subject, loginURL string, privateKey []byte) (oauth2.TokenSource, error) {
+	if loginURL == "" {
+		return nil, fmt.Errorf("baton-salesforce: loginURL must not be empty")
+	}
 	u, err := url.Parse(loginURL)
-	if err != nil || loginURL == "" {
+	if err != nil {
 		return nil, fmt.Errorf("baton-salesforce: invalid loginURL: %w", err)
 	}
 	cfg := &jwt.Config{
@@ -36,8 +39,11 @@ func NewJWTBearerTokenSource(ctx context.Context, clientID, subject, loginURL st
 
 // NewClientCredentialsTokenSource obtains a Salesforce access token via the OAuth 2.0 client credentials flow.
 func NewClientCredentialsTokenSource(ctx context.Context, clientID, clientSecret, instanceURL string) (oauth2.TokenSource, error) {
+	if instanceURL == "" {
+		return nil, fmt.Errorf("baton-salesforce: instanceURL must not be empty")
+	}
 	u, err := url.Parse(instanceURL)
-	if err != nil || instanceURL == "" {
+	if err != nil {
 		return nil, fmt.Errorf("baton-salesforce: invalid instanceURL: %w", err)
 	}
 	cfg := &clientcredentials.Config{

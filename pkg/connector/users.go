@@ -24,6 +24,21 @@ type userBuilder struct {
 
 var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
+// accountTypeForUserType maps a Salesforce User.UserType to the NHI account
+// type spine. Only the Automated Process system user (alias "autoproc",
+// UserType "AutomatedProcess", queryable from API v41+) is non-human; every
+// other synced UserType (Standard, PowerPartner, ...) is a human. The SDK
+// coerces an unset account type to HUMAN on the wire, so this positively
+// emits the value rather than relying on that default.
+func accountTypeForUserType(userType string) v2.UserTrait_AccountType {
+	switch userType {
+	case "AutomatedProcess":
+		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
+	default:
+		return v2.UserTrait_ACCOUNT_TYPE_HUMAN
+	}
+}
+
 // userResource convert a SalesforceUser into a Resource.
 func userResource(
 	ctx context.Context,
@@ -68,6 +83,7 @@ func userResource(
 		rs.WithEmail(email, true),
 		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
+		rs.WithAccountType(accountTypeForUserType(user.UserType)),
 	}
 
 	if user.LastLoginDate != nil {

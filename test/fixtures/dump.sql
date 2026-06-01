@@ -215,6 +215,13 @@ CREATE TABLE PicklistValueInfo
     IsActive INTEGER
 )
 
+CREATE TABLE BotDefinition
+(
+    Id            TEXT PRIMARY KEY,
+    DeveloperName TEXT,
+    MasterLabel   TEXT
+)
+
 INSERT INTO Territory2Model (Id, Name, State) VALUES ('M1', 'Test Model', 'Active');
 
 INSERT INTO Territory2 (Id, Name, Territory2ModelId, Territory2TypeId, ParentTerritory2Id, Description)
@@ -229,3 +236,7 @@ VALUES ('A1', '0051X', 'T1', 'Owner'),
 INSERT INTO PicklistValueInfo (Id, Value, IsActive)
 VALUES ('PV1', 'Owner', 1),
        ('PV2', 'Sales Rep', 1);
+
+INSERT INTO BotDefinition (Id, DeveloperName, MasterLabel)
+VALUES ('0Xx000000000001', 'Service_Agent', 'Service Agent'),
+       ('0Xx000000000002', 'Order_Bot', 'Order Bot');

@@ -1029,6 +1029,54 @@ func (c *SalesforceClient) GetConnectedApplications(
 	return apps, paginationUrl, ratelimitData, nil
 }
 
+// AgentforceAPIVersion is the REST API version used for BotDefinition queries.
+// BotDefinition (Einstein Bots and Agentforce Agents) is GA in API v60.0; the
+// shared client is pinned to an older default, so this query opts into v60.0.
+const AgentforceAPIVersion = "60.0"
+
+// GetBotDefinitions lists Agentforce agents and Einstein Bots from the
+// BotDefinition SObject. Most orgs don't have Agentforce or Einstein Bots
+// enabled, in which case the SObject doesn't exist and Salesforce returns
+// INVALID_TYPE; that case is treated as "no agents" rather than a sync failure.
+func (c *SalesforceClient) GetBotDefinitions(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]*BotDefinition,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameBotDefinition)
+	records, paginationUrl, ratelimitData, err := c.queryWithAPIVersion(
+		ctx,
+		query,
+		pageToken,
+		AgentforceAPIVersion,
+	)
+	if err != nil {
+		if isSObjectNotSupportedError(err) {
+			ctxzap.Extract(ctx).Info(
+				"salesforce-client: BotDefinition SObject not available; skipping agent sync (Agentforce/Einstein Bots not enabled)",
+				zap.Error(err),
+			)
+			return []*BotDefinition{}, "", ratelimitData, nil
+		}
+		return nil, "", ratelimitData, err
+	}
+
+	agents := make([]*BotDefinition, 0, len(records))
+	for _, record := range records {
+		agents = append(agents, &BotDefinition{
+			ID:            record.ID(),
+			DeveloperName: record.StringField("DeveloperName"),
+			MasterLabel:   record.StringField("MasterLabel"),
+		})
+	}
+	return agents, paginationUrl, ratelimitData, nil
+}
+
 // userLoginInClauseChunkSize bounds the number of UserIds packed into a single
 // WHERE UserId IN (...) clause. Salesforce's GET /query endpoint enforces a
 // URL length limit (~16 KB); at ~28 URL-encoded chars per ID, 250 keeps the

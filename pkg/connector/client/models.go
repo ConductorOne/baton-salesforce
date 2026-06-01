@@ -86,6 +86,12 @@ type ConnectedApplication struct {
 	LastModifiedDate string
 }
 
+type BotDefinition struct {
+	ID            string
+	DeveloperName string
+	MasterLabel   string
+}
+
 type UserLogin struct {
 	ID               string
 	UserId           string

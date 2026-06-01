@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/simpleforce"
@@ -19,6 +20,16 @@ var ErrRoleMismatch = errors.New("salesforce territory role does not match expec
 func isSalesforceDuplicateError(err error) bool {
 	var sfErr simpleforce.SalesforceError
 	return errors.As(err, &sfErr) && sfErr.ErrorCode == "DUPLICATE_VALUE"
+}
+
+// isSObjectNotSupportedError reports whether the error is Salesforce's
+// INVALID_TYPE, returned when an SObject does not exist in the org (e.g. a
+// SELECT ... FROM BotDefinition against an org without Agentforce or Einstein
+// Bots enabled). Callers use this to skip an optional SObject gracefully
+// instead of failing the sync.
+func isSObjectNotSupportedError(err error) bool {
+	var sfErr simpleforce.SalesforceError
+	return errors.As(err, &sfErr) && sfErr.ErrorCode == "INVALID_TYPE"
 }
 
 func getQueryString(
@@ -58,6 +69,55 @@ func (c *SalesforceClient) query(
 
 	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
+	records, err := c.client.Query(ctx, queryString)
+	ratelimitData := c.salesforceTransport.rateLimit
+	if err != nil {
+		logger.Error(
+			"salesforce-connector: error querying salesforce",
+			zap.String("query", queryString),
+			zap.Error(err),
+		)
+		return nil, "", ratelimitData, err
+	}
+
+	nextToken := ""
+	if !records.Done {
+		nextToken = records.NextRecordsURL
+	}
+	return records.Records, nextToken, ratelimitData, nil
+}
+
+// queryWithAPIVersion behaves like query but pins the SOQL request to a specific
+// Salesforce REST API version. The shared client is constructed at
+// simpleforce.DefaultAPIVersion; some SObjects (e.g. BotDefinition, GA in v60.0)
+// don't exist at that version and would otherwise return INVALID_TYPE. We pin the
+// version by handing simpleforce a fully-qualified query path — it forwards any
+// string starting with "/services/data" verbatim — which keeps the version change
+// scoped to this caller and out of every other syncer. Pagination URLs returned by
+// Salesforce already embed the same version, so they're passed through unchanged.
+func (c *SalesforceClient) queryWithAPIVersion(
+	ctx context.Context,
+	query *SalesforceQuery,
+	paginationPath string,
+	apiVersion string,
+) (
+	[]simpleforce.SObject,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	logger := ctxzap.Extract(ctx)
+	queryString := paginationPath
+	if queryString == "" {
+		soql := query.OrderBy(SalesforcePK).String()
+		queryString = fmt.Sprintf("/services/data/v%s/query?q=%s", apiVersion, url.QueryEscape(soql))
+	}
+
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {

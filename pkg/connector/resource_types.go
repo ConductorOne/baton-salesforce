@@ -57,4 +57,13 @@ var (
 		Description: "Requires Enterprise Territory Management 2.0 to be enabled in Salesforce.",
 		Annotations: annotations.New(&v2.SkipEntitlements{}, &v2.OptInRequired{}),
 	}
+	resourceTypeAgent = &v2.ResourceType{
+		Id:          "agent",
+		DisplayName: "Agent",
+		Description: "Agentforce agents and Einstein Bots (BotDefinition). Requires Agentforce or Einstein Bots to be enabled in Salesforce.",
+		Traits: []v2.ResourceType_Trait{
+			v2.ResourceType_TRAIT_AGENT,
+		},
+		Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
+	}
 )

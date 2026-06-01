@@ -8,7 +8,7 @@ jobs:
       BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
       BATON_SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
       BATON_SALESFORCE_CLIENT_SECRET: ${{ secrets.SALESFORCE_CLIENT_SECRET }}
-      BATON_SELECTED_AUTH_METHOD: client-credentials-group
+      BATON_AUTH_METHOD: client-credentials-group
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
       BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
       BATON_SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
       BATON_SALESFORCE_CLIENT_SECRET: ${{ secrets.SALESFORCE_CLIENT_SECRET }}
-      BATON_SELECTED_AUTH_METHOD: client-credentials-group
+      BATON_AUTH_METHOD: client-credentials-group
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,7 +56,7 @@ jobs:
       BATON_INSTANCE_URL: ${{ secrets.INSTANCE_URL }}
       BATON_SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
       BATON_SALESFORCE_CLIENT_SECRET: ${{ secrets.SALESFORCE_CLIENT_SECRET }}
-      BATON_SELECTED_AUTH_METHOD: client-credentials-group
+      BATON_AUTH_METHOD: client-credentials-group
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

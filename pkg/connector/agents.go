@@ -28,18 +28,33 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		"developer_name": agent.DeveloperName,
 		"master_label":   agent.MasterLabel,
 	}
+	if agent.BotUserId != "" {
+		profile["bot_user_id"] = agent.BotUserId
+	}
 
-	// AgentTrait status and identity_resource_id are left unset: BotDefinition
-	// has no confirmed queryable status field (activation status lives on
-	// BotVersion) and no confirmed runtime-user reference. This v1 syncer is
-	// discovery-only.
+	agentTraitOptions := []rs.AgentTraitOption{
+		rs.WithAgentProfile(profile),
+	}
+
+	// BotDefinition.BotUserId is a queryable reference to the User the agent runs
+	// as (object reference, API v60.0+). When present, link the agent to that
+	// runtime user resource so NHI processing can correlate the two.
+	if agent.BotUserId != "" {
+		agentTraitOptions = append(agentTraitOptions, rs.WithAgentIdentityResourceID(&v2.ResourceId{
+			ResourceType: resourceTypeUser.Id,
+			Resource:     agent.BotUserId,
+		}))
+	}
+
+	// AgentTrait status is left unset: BotDefinition has no queryable status
+	// field. Activation status lives on BotVersion (API v63.0+), which would
+	// raise this syncer's API-version floor and require a per-agent subquery, so
+	// it is intentionally out of scope for this v1 discovery syncer.
 	return rs.NewResource(
 		name,
 		resourceTypeAgent,
 		agent.ID,
-		rs.WithAgentTrait(
-			rs.WithAgentProfile(profile),
-		),
+		rs.WithAgentTrait(agentTraitOptions...),
 	)
 }
 

@@ -219,7 +219,8 @@ CREATE TABLE BotDefinition
 (
     Id            TEXT PRIMARY KEY,
     DeveloperName TEXT,
-    MasterLabel   TEXT
+    MasterLabel   TEXT,
+    BotUserId     TEXT
 )
 
 INSERT INTO Territory2Model (Id, Name, State) VALUES ('M1', 'Test Model', 'Active');
@@ -237,6 +238,6 @@ INSERT INTO PicklistValueInfo (Id, Value, IsActive)
 VALUES ('PV1', 'Owner', 1),
        ('PV2', 'Sales Rep', 1);
 
-INSERT INTO BotDefinition (Id, DeveloperName, MasterLabel)
-VALUES ('0Xx000000000001', 'Service_Agent', 'Service Agent'),
-       ('0Xx000000000002', 'Order_Bot', 'Order Bot');
+INSERT INTO BotDefinition (Id, DeveloperName, MasterLabel, BotUserId)
+VALUES ('0Xx000000000001', 'Service_Agent', 'Service Agent', '0051X'),
+       ('0Xx000000000002', 'Order_Bot', 'Order Bot', '');

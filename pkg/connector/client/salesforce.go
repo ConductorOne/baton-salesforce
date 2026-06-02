@@ -1072,6 +1072,7 @@ func (c *SalesforceClient) GetBotDefinitions(
 			ID:            record.ID(),
 			DeveloperName: record.StringField("DeveloperName"),
 			MasterLabel:   record.StringField("MasterLabel"),
+			BotUserId:     record.StringField("BotUserId"),
 		})
 	}
 	return agents, paginationUrl, ratelimitData, nil

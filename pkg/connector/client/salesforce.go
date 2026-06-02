@@ -1418,3 +1418,67 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 		"RoleInTerritory2": "",
 	})
 }
+
+// AgentforceAPIVersion is the REST API version used for BotDefinition queries.
+// BotDefinition (Einstein Bots and Agentforce Agents) is GA in API v60.0; the
+// shared client is pinned to an older default, so this query opts into v60.0.
+const AgentforceAPIVersion = "60.0"
+
+// GetAgentRuntimeUserIDs returns the set of User IDs that back an Einstein Bot
+// or Agentforce Agent, read from BotDefinition.BotUserId — a queryable reference
+// to the User the agent runs as (Object Reference, API v60.0+). These are
+// non-human service identities, so user sync classifies them as SERVICE.
+//
+// The lookup is best-effort and never fails the user sync: orgs without
+// Agentforce/Einstein Bots return INVALID_TYPE (treated as "no agents"), and any
+// other error is logged and yields an empty set, so affected users simply fall
+// back to their UserType-based classification rather than breaking the sync.
+func (c *SalesforceClient) GetAgentRuntimeUserIDs(
+	ctx context.Context,
+) (
+	map[string]struct{},
+	*v2.RateLimitDescription,
+	error,
+) {
+	logger := ctxzap.Extract(ctx)
+	agentUserIDs := make(map[string]struct{})
+
+	var ratelimitData *v2.RateLimitDescription
+	pageToken := ""
+	for {
+		query := NewQuery(TableNameBotDefinition)
+		records, nextToken, rl, err := c.queryWithAPIVersion(
+			ctx,
+			query,
+			pageToken,
+			AgentforceAPIVersion,
+		)
+		ratelimitData = rl
+		if err != nil {
+			if isSObjectNotSupportedError(err) {
+				logger.Info(
+					"salesforce-client: BotDefinition SObject not available; no agent runtime users to classify (Agentforce/Einstein Bots not enabled)",
+				)
+				return agentUserIDs, ratelimitData, nil
+			}
+			logger.Warn(
+				"salesforce-client: failed to read BotDefinition.BotUserId; agent runtime users will not be specially classified",
+				zap.Error(err),
+			)
+			return agentUserIDs, ratelimitData, nil
+		}
+
+		for _, record := range records {
+			if botUserID := record.StringField("BotUserId"); botUserID != "" {
+				agentUserIDs[botUserID] = struct{}{}
+			}
+		}
+
+		if nextToken == "" {
+			break
+		}
+		pageToken = nextToken
+	}
+
+	return agentUserIDs, ratelimitData, nil
+}

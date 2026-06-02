@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -20,31 +21,41 @@ type userBuilder struct {
 	shouldUseUsernameForEmail bool
 	syncDeactivatedUsers      bool
 	syncNonStandardUsers      bool
+
+	// agentUserIDsOnce loads the set of agent runtime user IDs at most once per
+	// sync; agentUserIDs is the cached result and agentUserIDsRL the rate-limit
+	// description from that one lookup.
+	agentUserIDsOnce sync.Once
+	agentUserIDs     map[string]struct{}
+	agentUserIDsRL   *v2.RateLimitDescription
 }
 
 var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
-// accountTypeForUserType maps a Salesforce User.UserType to the NHI account
-// type spine. Only the Automated Process system user (alias "autoproc",
-// UserType "AutomatedProcess", queryable from API v41+) is non-human; every
-// other synced UserType (Standard, PowerPartner, ...) is a human. The SDK
-// coerces an unset account type to HUMAN on the wire, so this positively
+// accountTypeForUser maps a Salesforce user to the NHI account-type spine.
+//
+// Two non-human signals are recognized: the user is the runtime identity of an
+// Einstein Bot / Agentforce Agent (referenced by BotDefinition.BotUserId — a
+// stable foreign key, the reliable discriminator for an "Einstein Agent User"),
+// or it is the Automated Process system user (alias "autoproc", UserType
+// "AutomatedProcess"). Either is SERVICE; every other synced user is HUMAN. The
+// SDK coerces an unset account type to HUMAN on the wire, so this positively
 // emits the value rather than relying on that default.
-func accountTypeForUserType(userType string) v2.UserTrait_AccountType {
-	switch userType {
-	case "AutomatedProcess":
+func accountTypeForUser(userType string, isAgentUser bool) v2.UserTrait_AccountType {
+	if isAgentUser || userType == "AutomatedProcess" {
 		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
-	default:
-		return v2.UserTrait_ACCOUNT_TYPE_HUMAN
 	}
+	return v2.UserTrait_ACCOUNT_TYPE_HUMAN
 }
 
-// userResource convert a SalesforceUser into a Resource.
+// userResource convert a SalesforceUser into a Resource. isAgentUser is true
+// when the user backs an Einstein Bot / Agentforce Agent (BotDefinition.BotUserId).
 func userResource(
 	ctx context.Context,
 	user *client.SalesforceUser,
 	userLogin *client.UserLogin,
 	shouldUseUsernameForEmail bool,
+	isAgentUser bool,
 ) (*v2.Resource, error) {
 	displayName := fmt.Sprintf(
 		"%s %s",
@@ -83,7 +94,7 @@ func userResource(
 		rs.WithEmail(email, true),
 		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
-		rs.WithAccountType(accountTypeForUserType(user.UserType)),
+		rs.WithAccountType(accountTypeForUser(user.UserType, isAgentUser)),
 	}
 
 	if user.LastLoginDate != nil {
@@ -105,6 +116,30 @@ func userResource(
 
 func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return resourceTypeUser
+}
+
+// loadAgentRuntimeUserIDs returns the cached set of agent runtime user IDs,
+// fetching it from BotDefinition.BotUserId at most once per sync. The rate-limit
+// description is returned only on the call that performs the fetch (nil on cached
+// hits) so the caller folds it into annotations exactly once. The lookup is
+// best-effort and never errors out; on failure the set is empty and users fall
+// back to UserType-based classification.
+func (o *userBuilder) loadAgentRuntimeUserIDs(ctx context.Context) (map[string]struct{}, *v2.RateLimitDescription) {
+	var freshRL *v2.RateLimitDescription
+	o.agentUserIDsOnce.Do(func() {
+		ids, rl, err := o.client.GetAgentRuntimeUserIDs(ctx)
+		if err != nil {
+			ctxzap.Extract(ctx).Warn(
+				"salesforce-connector: agent runtime user lookup failed; skipping agent classification",
+				zap.Error(err),
+			)
+			ids = map[string]struct{}{}
+		}
+		o.agentUserIDs = ids
+		o.agentUserIDsRL = rl
+		freshRL = rl
+	})
+	return o.agentUserIDs, freshRL
 }
 
 // List returns all the users from the database as resource objects.
@@ -135,18 +170,26 @@ func (o *userBuilder) List(
 		userIDs = append(userIDs, user.ID)
 	}
 	userLogins, loginsRL, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
-	outputAnnotations := client.WithRateLimitAnnotations(usersRL, loginsRL)
+	rateLimits := []*v2.RateLimitDescription{usersRL, loginsRL}
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(rateLimits...)}, err
 	}
+
+	agentUserIDs, agentRL := o.loadAgentRuntimeUserIDs(ctx)
+	if agentRL != nil {
+		rateLimits = append(rateLimits, agentRL)
+	}
+	outputAnnotations := client.WithRateLimitAnnotations(rateLimits...)
 
 	rv := make([]*v2.Resource, 0, len(users))
 	for _, user := range users {
+		_, isAgentUser := agentUserIDs[user.ID]
 		newResource, err := userResource(
 			ctx,
 			user,
 			userLogins[user.ID],
 			o.shouldUseUsernameForEmail,
+			isAgentUser,
 		)
 		if err != nil {
 			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
@@ -339,7 +382,7 @@ func (o *userBuilder) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail)
+	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail, false)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
 	}

@@ -5,6 +5,14 @@ import (
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 )
 
+func capabilityPermissions(perms ...string) *v2.CapabilityPermissions {
+	cp := &v2.CapabilityPermissions{}
+	for _, p := range perms {
+		cp.Permissions = append(cp.Permissions, &v2.CapabilityPermission{Permission: p})
+	}
+	return cp
+}
+
 var (
 	resourceTypeGroup = &v2.ResourceType{
 		Id:          "group",
@@ -64,6 +72,12 @@ var (
 		Traits: []v2.ResourceType_Trait{
 			v2.ResourceType_TRAIT_AGENT,
 		},
-		Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
+		Annotations: annotations.New(
+			&v2.SkipEntitlementsAndGrants{},
+			&v2.OptInRequired{},
+			capabilityPermissions(
+				"Agentforce agents or Einstein Bots (BotDefinition)",
+			),
+		),
 	}
 )

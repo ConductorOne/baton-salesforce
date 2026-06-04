@@ -33,7 +33,6 @@ type Salesforce struct {
 	instanceURL                  string
 	shouldUseUsernameForEmail    bool
 	syncConnectedApps            bool
-	syncAgents                   bool
 	syncDeactivatedUsers         bool
 	syncNonStandardUsers         bool
 	licenseToLeastProfileMapping map[string]string
@@ -67,12 +66,12 @@ func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.Res
 		newRoleBuilder(d.client),
 		newPermissionSetGroupBuilder(d.client),
 		newTerritoryBuilder(d.client),
+		// The agent resource type is gated by the OptInRequired annotation, so
+		// it is registered unconditionally and only synced when opted into.
+		newAgentBuilder(d.client),
 	}
 	if d.syncConnectedApps {
 		rv = append(rv, newConnectedApplicationBuilder(d.client))
-	}
-	if d.syncAgents {
-		rv = append(rv, newAgentBuilder(d.client))
 	}
 	return rv
 }
@@ -248,7 +247,6 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 		zap.String("loginURL", cfg.SalesforceLoginUrl),
 		zap.Bool("useUsernameForEmail", cfg.UserUsernameForEmail),
 		zap.Bool("syncConnectedApps", cfg.SyncConnectedApps),
-		zap.Bool("syncAgents", cfg.SyncAgents),
 		zap.Bool("syncDeactivatedUsers", cfg.SyncDeactivatedUsers),
 		zap.Bool("syncNonStandardUsers", cfg.SyncNonStandardUsers),
 		zap.Any("licenseToLeastProfileMapping", cfg.GetLicenseToLeastPrivilegedProfileMapping()),
@@ -299,7 +297,6 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 		shouldUseUsernameForEmail:    cfg.UserUsernameForEmail,
 		instanceURL:                  instanceURL,
 		syncConnectedApps:            cfg.SyncConnectedApps,
-		syncAgents:                   cfg.SyncAgents,
 		syncDeactivatedUsers:         cfg.SyncDeactivatedUsers,
 		syncNonStandardUsers:         cfg.SyncNonStandardUsers,
 		licenseToLeastProfileMapping: cfg.GetLicenseToLeastPrivilegedProfileMapping(),

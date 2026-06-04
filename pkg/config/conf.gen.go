@@ -10,7 +10,6 @@ type Salesforce struct {
 	InstanceUrl string `mapstructure:"instance-url"`
 	UserUsernameForEmail bool `mapstructure:"user-username-for-email"`
 	SyncConnectedApps bool `mapstructure:"sync-connected-apps"`
-	SyncAgents bool `mapstructure:"sync-agents"`
 	SyncDeactivatedUsers bool `mapstructure:"sync-deactivated-users"`
 	SyncNonStandardUsers bool `mapstructure:"sync-non-standard-users"`
 	LicenseToLeastPrivilegedProfileMapping map[string]any `mapstructure:"license-to-least-privileged-profile-mapping"`

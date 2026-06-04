@@ -54,11 +54,6 @@ var (
 		field.WithDisplayName("Sync Connected Apps"),
 		field.WithDescription("Optionally sync access to connected apps"),
 	)
-	SyncAgents = field.BoolField(
-		"sync-agents",
-		field.WithDisplayName("Sync Agentforce Agents"),
-		field.WithDescription("Optionally sync Agentforce agents and Einstein Bots (BotDefinition). Requires Agentforce or Einstein Bots to be enabled in the org."),
-	)
 	SyncDeactivatedUsers = field.BoolField(
 		"sync-deactivated-users",
 		field.WithDisplayName("Sync Deactivated Users"),
@@ -117,7 +112,6 @@ var (
 		InstanceUrlField,
 		UseUsernameForEmailField,
 		SyncConnectedApps,
-		SyncAgents,
 		SyncDeactivatedUsers,
 		SyncNonStandardUsers,
 		LicenseToLeastPrivilegedProfileMapping,
@@ -146,7 +140,6 @@ var (
 					InstanceUrlField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
-					SyncAgents,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping},
@@ -160,7 +153,6 @@ var (
 					InstanceUrlField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
-					SyncAgents,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping,
@@ -180,7 +172,6 @@ var (
 					JWTSubjectField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
-					SyncAgents,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping,
@@ -197,7 +188,6 @@ var (
 					ClientSecretField,
 					UseUsernameForEmailField,
 					SyncConnectedApps,
-					SyncAgents,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
 					LicenseToLeastPrivilegedProfileMapping,

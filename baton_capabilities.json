@@ -3,6 +3,43 @@
   "resourceTypeCapabilities": [
     {
       "resourceType": {
+        "id": "agent",
+        "displayName": "Agent",
+        "traits": [
+          "TRAIT_AGENT"
+        ],
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.OptInRequired"
+          },
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.CapabilityPermissions",
+            "permissions": [
+              {
+                "permission": "Agentforce agents or Einstein Bots (BotDefinition)"
+              }
+            ]
+          }
+        ],
+        "description": "Agentforce agents and Einstein Bots (BotDefinition). Requires Agentforce or Einstein Bots to be enabled in Salesforce."
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC"
+      ],
+      "permissions": {
+        "permissions": [
+          {
+            "permission": "Agentforce agents or Einstein Bots (BotDefinition)"
+          }
+        ]
+      },
+      "optInRequired": true
+    },
+    {
+      "resourceType": {
         "id": "group",
         "displayName": "Group",
         "traits": [

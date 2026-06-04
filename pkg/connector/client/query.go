@@ -25,6 +25,7 @@ const (
 	TableNameTerritory2Model         = "Territory2Model"
 	TableNameUserTerritory2Assoc     = "UserTerritory2Association"
 	TableNamePicklistValueInfo       = "PicklistValueInfo"
+	TableNameBotDefinition           = "BotDefinition"
 )
 
 var TableNamesToFieldsMapping = map[string][]string{
@@ -112,6 +113,17 @@ var TableNamesToFieldsMapping = map[string][]string{
 	},
 	TableNamePicklistValueInfo: {
 		"Value",
+	},
+	// BotDefinition is the top-level object for Einstein Bots and Agentforce
+	// Agents (API v60.0+). DeveloperName, MasterLabel, and BotUserId are all
+	// confirmed queryable in the object reference (BotUserId is a reference to
+	// the User the agent runs as). A status field is not on BotDefinition
+	// (activation lives on BotVersion), and an unknown field would fail the whole
+	// query with INVALID_FIELD, so the set stays conservative.
+	TableNameBotDefinition: {
+		"DeveloperName",
+		"MasterLabel",
+		"BotUserId",
 	},
 }
 

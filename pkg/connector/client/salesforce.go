@@ -1419,11 +1419,6 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 	})
 }
 
-// AgentforceAPIVersion is the REST API version used for BotDefinition queries.
-// BotDefinition (Einstein Bots and Agentforce Agents) is GA in API v60.0; the
-// shared client is pinned to an older default, so this query opts into v60.0.
-const AgentforceAPIVersion = "60.0"
-
 // GetAgentRuntimeUserIDs returns the set of User IDs that back an Einstein Bot
 // or Agentforce Agent, read from BotDefinition.BotUserId — a queryable reference
 // to the User the agent runs as (Object Reference, API v60.0+). These are

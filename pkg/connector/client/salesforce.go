@@ -1424,10 +1424,11 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 // to the User the agent runs as (Object Reference, API v60.0+). These are
 // non-human service identities, so user sync classifies them as SERVICE.
 //
-// The lookup is best-effort and never fails the user sync: orgs without
-// Agentforce/Einstein Bots return INVALID_TYPE (treated as "no agents"), and any
-// other error is logged and yields an empty set, so affected users simply fall
-// back to their UserType-based classification rather than breaking the sync.
+// Orgs without Agentforce/Einstein Bots return INVALID_TYPE, treated as "no
+// agents" (empty set, nil error). Any other (transient) error is logged and
+// returned alongside whatever was collected, so the caller can avoid caching a
+// failed result; either way users fall back to UserType-based classification
+// rather than breaking the sync.
 func (c *SalesforceClient) GetAgentRuntimeUserIDs(
 	ctx context.Context,
 ) (
@@ -1438,10 +1439,10 @@ func (c *SalesforceClient) GetAgentRuntimeUserIDs(
 	logger := ctxzap.Extract(ctx)
 	agentUserIDs := make(map[string]struct{})
 
+	query := NewQuery(TableNameBotDefinition)
 	var ratelimitData *v2.RateLimitDescription
 	pageToken := ""
 	for {
-		query := NewQuery(TableNameBotDefinition)
 		records, nextToken, rl, err := c.queryWithAPIVersion(
 			ctx,
 			query,
@@ -1456,11 +1457,13 @@ func (c *SalesforceClient) GetAgentRuntimeUserIDs(
 				)
 				return agentUserIDs, ratelimitData, nil
 			}
-			logger.Warn(
+			// A real (transient) failure: surface the error so the caller can avoid
+			// caching this incomplete result.
+			logger.Debug(
 				"salesforce-client: failed to read BotDefinition.BotUserId; agent runtime users will not be specially classified",
 				zap.Error(err),
 			)
-			return agentUserIDs, ratelimitData, nil
+			return agentUserIDs, ratelimitData, err
 		}
 
 		for _, record := range records {

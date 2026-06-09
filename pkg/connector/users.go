@@ -3,13 +3,14 @@ package connector
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/session"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -21,13 +22,6 @@ type userBuilder struct {
 	shouldUseUsernameForEmail bool
 	syncDeactivatedUsers      bool
 	syncNonStandardUsers      bool
-
-	// agentUserIDsOnce loads the set of agent runtime user IDs at most once per
-	// sync; agentUserIDs is the cached result and agentUserIDsRL the rate-limit
-	// description from that one lookup.
-	agentUserIDsOnce sync.Once
-	agentUserIDs     map[string]struct{}
-	agentUserIDsRL   *v2.RateLimitDescription
 }
 
 var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
@@ -118,28 +112,66 @@ func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return resourceTypeUser
 }
 
-// loadAgentRuntimeUserIDs returns the cached set of agent runtime user IDs,
-// fetching it from BotDefinition.BotUserId at most once per sync. The rate-limit
-// description is returned only on the call that performs the fetch (nil on cached
-// hits) so the caller folds it into annotations exactly once. The lookup is
-// best-effort and never errors out; on failure the set is empty and users fall
-// back to UserType-based classification.
-func (o *userBuilder) loadAgentRuntimeUserIDs(ctx context.Context) (map[string]struct{}, *v2.RateLimitDescription) {
-	var freshRL *v2.RateLimitDescription
-	o.agentUserIDsOnce.Do(func() {
-		ids, rl, err := o.client.GetAgentRuntimeUserIDs(ctx)
-		if err != nil {
-			ctxzap.Extract(ctx).Warn(
-				"salesforce-connector: agent runtime user lookup failed; skipping agent classification",
+// agentRuntimeUserIDsCacheKey is the session-store key under which the set of
+// agent runtime user IDs is cached for the duration of a sync.
+const agentRuntimeUserIDsCacheKey = "agent_runtime_user_ids"
+
+// loadAgentRuntimeUserIDs returns the set of user IDs that back an Einstein Bot /
+// Agentforce Agent (referenced by BotDefinition.BotUserId).
+func (o *userBuilder) loadAgentRuntimeUserIDs(ctx context.Context, ss sessions.SessionStore) (map[string]struct{}, *v2.RateLimitDescription) {
+	l := ctxzap.Extract(ctx)
+
+	if ss != nil {
+		cached, found, err := session.GetJSON[[]string](ctx, ss, agentRuntimeUserIDsCacheKey)
+		switch {
+		case err != nil:
+			// Cache read failures are non-fatal: fall through and re-fetch.
+			l.Debug(
+				"salesforce-connector: failed to read agent runtime user IDs from session cache; will re-fetch",
 				zap.Error(err),
 			)
-			ids = map[string]struct{}{}
+		case found:
+			l.Debug(
+				"salesforce-connector: loaded agent runtime user IDs from session cache",
+				zap.Int("count", len(cached)),
+			)
+			ids := make(map[string]struct{}, len(cached))
+			for _, id := range cached {
+				ids[id] = struct{}{}
+			}
+			return ids, nil
 		}
-		o.agentUserIDs = ids
-		o.agentUserIDsRL = rl
-		freshRL = rl
-	})
-	return o.agentUserIDs, freshRL
+	}
+
+	ids, rl, err := o.client.GetAgentRuntimeUserIDs(ctx)
+	if err != nil {
+		// Real fetch failure (the client already logs it): use whatever was collected
+		// for this page but do NOT cache it, so a transient failure isn't frozen into
+		// the session store for the rest of the sync. Stay best-effort: never break
+		// the user sync; classification self-corrects on a later page / next sync.
+		return ids, rl
+	}
+
+	if ss != nil {
+		keys := make([]string, 0, len(ids))
+		for id := range ids {
+			keys = append(keys, id)
+		}
+		if err := session.SetJSON(ctx, ss, agentRuntimeUserIDsCacheKey, keys); err != nil {
+			// Cache write failures are non-fatal: the only cost is re-fetching next time.
+			l.Debug(
+				"salesforce-connector: failed to cache agent runtime user IDs",
+				zap.Error(err),
+			)
+		} else {
+			l.Debug(
+				"salesforce-connector: fetched and cached agent runtime user IDs",
+				zap.Int("count", len(keys)),
+			)
+		}
+	}
+
+	return ids, rl
 }
 
 // List returns all the users from the database as resource objects.
@@ -175,7 +207,7 @@ func (o *userBuilder) List(
 		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(rateLimits...)}, err
 	}
 
-	agentUserIDs, agentRL := o.loadAgentRuntimeUserIDs(ctx)
+	agentUserIDs, agentRL := o.loadAgentRuntimeUserIDs(ctx, attrs.Session)
 	if agentRL != nil {
 		rateLimits = append(rateLimits, agentRL)
 	}

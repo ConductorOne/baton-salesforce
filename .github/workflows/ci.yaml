@@ -19,7 +19,7 @@ jobs:
       - name: Build baton-salesforce
         run: go build ./cmd/baton-salesforce
       - name: Test grant/revoking IAM entitlements
-        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        uses: ConductorOne/github-workflows/actions/sync-test@v4
         with:
           connector: ./baton-salesforce
           baton-entitlement: ${{ vars.BATON_ENTITLEMENT_GROUP }}
@@ -43,7 +43,7 @@ jobs:
       - name: Build baton-salesforce
         run: go build ./cmd/baton-salesforce
       - name: Test grant/revoking IAM entitlements
-        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        uses: ConductorOne/github-workflows/actions/sync-test@v4
         with:
           connector: ./baton-salesforce
           baton-entitlement: ${{ vars.BATON_ENTITLEMENT_PSG }}
@@ -67,7 +67,7 @@ jobs:
       - name: Build baton-salesforce
         run: go build ./cmd/baton-salesforce
       - name: Test grant/revoking territory entitlements
-        uses: ConductorOne/github-workflows/actions/sync-test@v2
+        uses: ConductorOne/github-workflows/actions/sync-test@v4
         with:
           connector: ./baton-salesforce
           baton-entitlement: ${{ vars.BATON_ENTITLEMENT_TERRITORY }}

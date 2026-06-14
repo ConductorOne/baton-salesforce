@@ -113,7 +113,7 @@ func TestPermissionSetGroupGrantAndRevoke(t *testing.T) {
 	}
 
 	t.Run("should grant user to permission set group", func(t *testing.T) {
-		user, err := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
+		user, err := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false, false)
 		require.Nil(t, err)
 
 		newGrants, grantAnnotations, err := c.Grant(ctx, user, &psgEntitlement)
@@ -161,7 +161,7 @@ func TestPermissionSetGroupGrantAndRevoke(t *testing.T) {
 	})
 
 	t.Run("should return GrantAlreadyExists for duplicate grant", func(t *testing.T) {
-		user, err := userResource(ctx, &client.SalesforceUser{ID: "0051X"}, nil, false)
+		user, err := userResource(ctx, &client.SalesforceUser{ID: "0051X"}, nil, false, false)
 		require.Nil(t, err)
 
 		_, grantAnnotations, err := c.Grant(ctx, user, &psgEntitlement)
@@ -170,7 +170,7 @@ func TestPermissionSetGroupGrantAndRevoke(t *testing.T) {
 	})
 
 	t.Run("should return GrantAlreadyRevoked when revoking non-existent membership", func(t *testing.T) {
-		user, err := userResource(ctx, &client.SalesforceUser{ID: "0053X"}, nil, false)
+		user, err := userResource(ctx, &client.SalesforceUser{ID: "0053X"}, nil, false, false)
 		require.Nil(t, err)
 
 		revokeGrant := &v2.Grant{

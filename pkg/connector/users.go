@@ -8,7 +8,9 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/session"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -24,12 +26,30 @@ type userBuilder struct {
 
 var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
-// userResource convert a SalesforceUser into a Resource.
+// accountTypeForUser maps a Salesforce user to the NHI account-type spine.
+//
+// Two non-human signals are recognized: the user is the runtime identity of an
+// Einstein Bot / Agentforce Agent (referenced by BotDefinition.BotUserId — a
+// stable foreign key, the reliable discriminator for an "Einstein Agent User"),
+// or it is the Automated Process system user (alias "autoproc", UserType
+// "AutomatedProcess"). Either is SERVICE; every other synced user is HUMAN. The
+// SDK coerces an unset account type to HUMAN on the wire, so this positively
+// emits the value rather than relying on that default.
+func accountTypeForUser(userType string, isAgentUser bool) v2.UserTrait_AccountType {
+	if isAgentUser || userType == "AutomatedProcess" {
+		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
+	}
+	return v2.UserTrait_ACCOUNT_TYPE_HUMAN
+}
+
+// userResource convert a SalesforceUser into a Resource. isAgentUser is true
+// when the user backs an Einstein Bot / Agentforce Agent (BotDefinition.BotUserId).
 func userResource(
 	ctx context.Context,
 	user *client.SalesforceUser,
 	userLogin *client.UserLogin,
 	shouldUseUsernameForEmail bool,
+	isAgentUser bool,
 ) (*v2.Resource, error) {
 	displayName := fmt.Sprintf(
 		"%s %s",
@@ -68,6 +88,7 @@ func userResource(
 		rs.WithEmail(email, true),
 		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
+		rs.WithAccountType(accountTypeForUser(user.UserType, isAgentUser)),
 	}
 
 	if user.LastLoginDate != nil {
@@ -89,6 +110,68 @@ func userResource(
 
 func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return resourceTypeUser
+}
+
+// agentRuntimeUserIDsCacheKey is the session-store key under which the set of
+// agent runtime user IDs is cached for the duration of a sync.
+const agentRuntimeUserIDsCacheKey = "agent_runtime_user_ids"
+
+// loadAgentRuntimeUserIDs returns the set of user IDs that back an Einstein Bot /
+// Agentforce Agent (referenced by BotDefinition.BotUserId).
+func (o *userBuilder) loadAgentRuntimeUserIDs(ctx context.Context, ss sessions.SessionStore) (map[string]struct{}, *v2.RateLimitDescription) {
+	l := ctxzap.Extract(ctx)
+
+	if ss != nil {
+		cached, found, err := session.GetJSON[[]string](ctx, ss, agentRuntimeUserIDsCacheKey)
+		switch {
+		case err != nil:
+			// Cache read failures are non-fatal: fall through and re-fetch.
+			l.Debug(
+				"salesforce-connector: failed to read agent runtime user IDs from session cache; will re-fetch",
+				zap.Error(err),
+			)
+		case found:
+			l.Debug(
+				"salesforce-connector: loaded agent runtime user IDs from session cache",
+				zap.Int("count", len(cached)),
+			)
+			ids := make(map[string]struct{}, len(cached))
+			for _, id := range cached {
+				ids[id] = struct{}{}
+			}
+			return ids, nil
+		}
+	}
+
+	ids, rl, err := o.client.GetAgentRuntimeUserIDs(ctx)
+	if err != nil {
+		// Real fetch failure (the client already logs it): use whatever was collected
+		// for this page but do NOT cache it, so a transient failure isn't frozen into
+		// the session store for the rest of the sync. Stay best-effort: never break
+		// the user sync; classification self-corrects on a later page / next sync.
+		return ids, rl
+	}
+
+	if ss != nil {
+		keys := make([]string, 0, len(ids))
+		for id := range ids {
+			keys = append(keys, id)
+		}
+		if err := session.SetJSON(ctx, ss, agentRuntimeUserIDsCacheKey, keys); err != nil {
+			// Cache write failures are non-fatal: the only cost is re-fetching next time.
+			l.Debug(
+				"salesforce-connector: failed to cache agent runtime user IDs",
+				zap.Error(err),
+			)
+		} else {
+			l.Debug(
+				"salesforce-connector: fetched and cached agent runtime user IDs",
+				zap.Int("count", len(keys)),
+			)
+		}
+	}
+
+	return ids, rl
 }
 
 // List returns all the users from the database as resource objects.
@@ -119,18 +202,26 @@ func (o *userBuilder) List(
 		userIDs = append(userIDs, user.ID)
 	}
 	userLogins, loginsRL, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
-	outputAnnotations := client.WithRateLimitAnnotations(usersRL, loginsRL)
+	rateLimits := []*v2.RateLimitDescription{usersRL, loginsRL}
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(rateLimits...)}, err
 	}
+
+	agentUserIDs, agentRL := o.loadAgentRuntimeUserIDs(ctx, attrs.Session)
+	if agentRL != nil {
+		rateLimits = append(rateLimits, agentRL)
+	}
+	outputAnnotations := client.WithRateLimitAnnotations(rateLimits...)
 
 	rv := make([]*v2.Resource, 0, len(users))
 	for _, user := range users {
+		_, isAgentUser := agentUserIDs[user.ID]
 		newResource, err := userResource(
 			ctx,
 			user,
 			userLogins[user.ID],
 			o.shouldUseUsernameForEmail,
+			isAgentUser,
 		)
 		if err != nil {
 			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
@@ -323,7 +414,7 @@ func (o *userBuilder) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail)
+	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail, false)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
 	}

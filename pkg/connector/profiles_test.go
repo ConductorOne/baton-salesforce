@@ -57,7 +57,7 @@ func TestProfilesList(t *testing.T) {
 
 	t.Run("should grant and revoke entitlements", func(t *testing.T) {
 		profile, _ := profileResource(&client.SalesforceProfile{ID: "198X"})
-		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false)
+		user, _ := userResource(ctx, &client.SalesforceUser{ID: "0052X"}, nil, false, false)
 
 		entitlement := v2.Entitlement{
 			Id:       entitlement.NewEntitlementID(profile, profileAssignmentEntitlementName),

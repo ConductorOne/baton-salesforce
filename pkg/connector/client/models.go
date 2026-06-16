@@ -90,7 +90,7 @@ type BotDefinition struct {
 	ID            string
 	DeveloperName string
 	MasterLabel   string
-	BotUserId     string
+	BotUserID     string
 }
 
 type UserLogin struct {

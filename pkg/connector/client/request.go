@@ -115,18 +115,24 @@ func (c *SalesforceClient) queryWithAPIVersion(
 	queryString := paginationPath
 	if queryString == "" {
 		soql := query.OrderBy(SalesforcePK).String()
-		queryString = fmt.Sprintf("/services/data/v%s/query?q=%s", apiVersion, url.QueryEscape(soql))
+		u := url.URL{
+			Path:     "/services/data/v" + apiVersion + "/query",
+			RawQuery: url.Values{"q": {soql}}.Encode(),
+		}
+		queryString = u.String()
 	}
 
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
-		logger.Error(
-			"salesforce-connector: error querying salesforce",
-			zap.String("query", queryString),
-			zap.Error(err),
-		)
-		return nil, "", ratelimitData, err
+		// INVALID_TYPE (e.g. BotDefinition on an org without Agentforce) is expected
+		// and handled by the caller, so keep it out of ERROR.
+		if isSObjectNotSupportedError(err) {
+			logger.Debug("salesforce-connector: SObject not supported", zap.String("query", queryString), zap.Error(err))
+		} else {
+			logger.Error("salesforce-connector: error querying salesforce", zap.String("query", queryString), zap.Error(err))
+		}
+		return nil, "", ratelimitData, fmt.Errorf("baton-salesforce: query failed (API v%s): %w", apiVersion, err)
 	}
 
 	nextToken := ""

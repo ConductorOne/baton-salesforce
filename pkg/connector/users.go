@@ -8,6 +8,7 @@ import (
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
+	"github.com/conductorone/baton-sdk/pkg/pagination"
 	"github.com/conductorone/baton-sdk/pkg/session"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/conductorone/baton-sdk/pkg/types/sessions"
@@ -112,89 +113,103 @@ func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return resourceTypeUser
 }
 
-// agentRuntimeUserIDsCacheKey is the session-store key under which the set of
-// agent runtime user IDs is cached for the duration of a sync.
-const agentRuntimeUserIDsCacheKey = "agent_runtime_user_ids"
+const agentRuntimeUsersSessionPrefix = "agent_runtime_users"
 
-// loadAgentRuntimeUserIDs returns the set of user IDs that back an Einstein Bot /
-// Agentforce Agent (referenced by BotDefinition.BotUserId).
-func (o *userBuilder) loadAgentRuntimeUserIDs(ctx context.Context, ss sessions.SessionStore) (map[string]struct{}, *v2.RateLimitDescription) {
-	l := ctxzap.Extract(ctx)
+// pagination.Bag phase labels (ResourceTypeID) for List's two phases.
+const (
+	agentsPaginationPhase = "agents"
+	usersPaginationPhase  = "users"
+)
 
-	if ss != nil {
-		cached, found, err := session.GetJSON[[]string](ctx, ss, agentRuntimeUserIDsCacheKey)
-		switch {
-		case err != nil:
-			// Cache read failures are non-fatal: fall through and re-fetch.
-			l.Debug(
-				"salesforce-connector: failed to read agent runtime user IDs from session cache; will re-fetch",
-				zap.Error(err),
-			)
-		case found:
-			l.Debug(
-				"salesforce-connector: loaded agent runtime user IDs from session cache",
-				zap.Int("count", len(cached)),
-			)
-			ids := make(map[string]struct{}, len(cached))
-			for _, id := range cached {
-				ids[id] = struct{}{}
-			}
-			return ids, nil
-		}
-	}
-
-	ids, rl, err := o.client.GetAgentRuntimeUserIDs(ctx)
-	if err != nil {
-		// Real fetch failure (the client already logs it): use whatever was collected
-		// for this page but do NOT cache it, so a transient failure isn't frozen into
-		// the session store for the rest of the sync. Stay best-effort: never break
-		// the user sync; classification self-corrects on a later page / next sync.
-		return ids, rl
-	}
-
-	if ss != nil {
-		keys := make([]string, 0, len(ids))
-		for id := range ids {
-			keys = append(keys, id)
-		}
-		if err := session.SetJSON(ctx, ss, agentRuntimeUserIDsCacheKey, keys); err != nil {
-			// Cache write failures are non-fatal: the only cost is re-fetching next time.
-			l.Debug(
-				"salesforce-connector: failed to cache agent runtime user IDs",
-				zap.Error(err),
-			)
-		} else {
-			l.Debug(
-				"salesforce-connector: fetched and cached agent runtime user IDs",
-				zap.Int("count", len(keys)),
-			)
-		}
-	}
-
-	return ids, rl
-}
-
-// List returns all the users from the database as resource objects.
-// Users include a UserTrait because they are the 'shape' of a standard user.
+// List emits users in two pagination.Bag phases: the agents phase records which
+// users back an Einstein Bot / Agentforce Agent in the session store, then the
+// users phase emits users and marks any recorded one SERVICE. The agents phase
+// runs only when a session store is present.
 func (o *userBuilder) List(
 	ctx context.Context,
-	parentResourceID *v2.ResourceId,
+	_ *v2.ResourceId,
 	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Resource,
 	*rs.SyncOpResults,
 	error,
 ) {
-	token := &attrs.PageToken
+	ss := attrs.Session
+	pageSize := attrs.PageToken.Size
+
+	// Without a session store the agents phase can't run; log once (first page) so
+	// the skipped agent classification isn't silent. Debug, not Warn: the local CLI
+	// never has a session store, so this fires on every local sync.
+	if ss == nil && attrs.PageToken.Token == "" {
+		ctxzap.Extract(ctx).Debug("salesforce-connector: no session store; agent runtime users will not be classified")
+	}
+
+	bag := &pagination.Bag{}
+	if err := bag.Unmarshal(attrs.PageToken.Token); err != nil {
+		return nil, nil, err
+	}
+	if bag.Current() == nil {
+		bag.Push(pagination.PageState{ResourceTypeID: usersPaginationPhase})
+		if ss != nil {
+			bag.Push(pagination.PageState{ResourceTypeID: agentsPaginationPhase})
+		}
+	}
+
+	switch bag.ResourceTypeID() {
+	case agentsPaginationPhase:
+		return o.listAgentRuntimeUsersPage(ctx, bag, ss)
+	case usersPaginationPhase:
+		return o.listUserPage(ctx, bag, ss, pageSize)
+	default:
+		return nil, nil, fmt.Errorf("baton-salesforce: unexpected user pagination phase %q", bag.ResourceTypeID())
+	}
+}
+
+// listAgentRuntimeUsersPage reads one BotDefinition page and records its BotUserIDs
+// in the session store, then advances the bag to the next page or the users phase.
+func (o *userBuilder) listAgentRuntimeUsersPage(
+	ctx context.Context,
+	bag *pagination.Bag,
+	ss sessions.SessionStore,
+) ([]*v2.Resource, *rs.SyncOpResults, error) {
+	bots, nextToken, ratelimitData, err := o.client.GetBotDefinitions(ctx, bag.PageToken())
+	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
+	if err != nil {
+		// INVALID_TYPE (no Agentforce) already comes back empty + nil, so this is a real failure.
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to read agent runtime users: %w", err)
+	}
+
+	agentUsers := make(map[string]bool, len(bots))
+	for _, bot := range bots {
+		if bot.BotUserID != "" {
+			agentUsers[bot.BotUserID] = true
+		}
+	}
+	if err := session.SetManyJSON(ctx, ss, agentUsers, sessions.WithPrefix(agentRuntimeUsersSessionPrefix)); err != nil {
+		// Don't continue with a partial set.
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to record agent runtime users: %w", err)
+	}
+
+	return o.advanceBag(bag, nextToken, nil, outputAnnotations)
+}
+
+// listUserPage emits one page of users, marking any user recorded by the agents
+// phase as SERVICE (without a session store, no agent classification).
+func (o *userBuilder) listUserPage(
+	ctx context.Context,
+	bag *pagination.Bag,
+	ss sessions.SessionStore,
+	pageSize int,
+) ([]*v2.Resource, *rs.SyncOpResults, error) {
 	users, nextToken, usersRL, err := o.client.GetUsers(
 		ctx,
-		token.Token,
-		token.Size,
+		bag.PageToken(),
+		pageSize,
 		o.syncDeactivatedUsers,
 		o.syncNonStandardUsers,
 	)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(usersRL)}, err
+		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(usersRL)}, fmt.Errorf("baton-salesforce: failed to list users: %w", err)
 	}
 
 	userIDs := make([]string, 0, len(users))
@@ -202,26 +217,28 @@ func (o *userBuilder) List(
 		userIDs = append(userIDs, user.ID)
 	}
 	userLogins, loginsRL, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
-	rateLimits := []*v2.RateLimitDescription{usersRL, loginsRL}
+	outputAnnotations := client.WithRateLimitAnnotations(usersRL, loginsRL)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(rateLimits...)}, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to list user logins: %w", err)
 	}
 
-	agentUserIDs, agentRL := o.loadAgentRuntimeUserIDs(ctx, attrs.Session)
-	if agentRL != nil {
-		rateLimits = append(rateLimits, agentRL)
+	// Recorded by the agents phase; empty when there's no session store.
+	agentUsers := map[string]bool{}
+	if ss != nil {
+		agentUsers, err = session.GetManyJSON[bool](ctx, ss, userIDs, sessions.WithPrefix(agentRuntimeUsersSessionPrefix))
+		if err != nil {
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to read agent runtime users: %w", err)
+		}
 	}
-	outputAnnotations := client.WithRateLimitAnnotations(rateLimits...)
 
 	rv := make([]*v2.Resource, 0, len(users))
 	for _, user := range users {
-		_, isAgentUser := agentUserIDs[user.ID]
 		newResource, err := userResource(
 			ctx,
 			user,
 			userLogins[user.ID],
 			o.shouldUseUsernameForEmail,
-			isAgentUser,
+			agentUsers[user.ID],
 		)
 		if err != nil {
 			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
@@ -229,10 +246,26 @@ func (o *userBuilder) List(
 
 		rv = append(rv, newResource)
 	}
-	return rv, &rs.SyncOpResults{
-		NextPageToken: nextToken,
-		Annotations:   outputAnnotations,
-	}, nil
+
+	return o.advanceBag(bag, nextToken, rv, outputAnnotations)
+}
+
+// advanceBag advances the bag to nextToken (popping the phase when empty),
+// marshals it, and returns the page's resources and results.
+func (o *userBuilder) advanceBag(
+	bag *pagination.Bag,
+	nextToken string,
+	resources []*v2.Resource,
+	outputAnnotations annotations.Annotations,
+) ([]*v2.Resource, *rs.SyncOpResults, error) {
+	if err := bag.Next(nextToken); err != nil {
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+	}
+	nextPageToken, err := bag.Marshal()
+	if err != nil {
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+	}
+	return resources, &rs.SyncOpResults{NextPageToken: nextPageToken, Annotations: outputAnnotations}, nil
 }
 
 // Entitlements always returns an empty slice for users.

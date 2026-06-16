@@ -1041,7 +1041,6 @@ const AgentforceAPIVersion = "60.0"
 func (c *SalesforceClient) GetBotDefinitions(
 	ctx context.Context,
 	pageToken string,
-	pageSize int,
 ) (
 	[]*BotDefinition,
 	string,
@@ -1072,7 +1071,7 @@ func (c *SalesforceClient) GetBotDefinitions(
 			ID:            record.ID(),
 			DeveloperName: record.StringField("DeveloperName"),
 			MasterLabel:   record.StringField("MasterLabel"),
-			BotUserId:     record.StringField("BotUserId"),
+			BotUserID:     record.StringField("BotUserId"),
 		})
 	}
 	return agents, paginationUrl, ratelimitData, nil
@@ -1417,66 +1416,4 @@ func (c *SalesforceClient) ClearUserTerritoryRole(
 	return c.UpdateObject(ctx, TableNameUserTerritory2Assoc, record.ID(), map[string]interface{}{
 		"RoleInTerritory2": "",
 	})
-}
-
-// GetAgentRuntimeUserIDs returns the set of User IDs that back an Einstein Bot
-// or Agentforce Agent, read from BotDefinition.BotUserId — a queryable reference
-// to the User the agent runs as (Object Reference, API v60.0+). These are
-// non-human service identities, so user sync classifies them as SERVICE.
-//
-// Orgs without Agentforce/Einstein Bots return INVALID_TYPE, treated as "no
-// agents" (empty set, nil error). Any other (transient) error is logged and
-// returned alongside whatever was collected, so the caller can avoid caching a
-// failed result; either way users fall back to UserType-based classification
-// rather than breaking the sync.
-func (c *SalesforceClient) GetAgentRuntimeUserIDs(
-	ctx context.Context,
-) (
-	map[string]struct{},
-	*v2.RateLimitDescription,
-	error,
-) {
-	logger := ctxzap.Extract(ctx)
-	agentUserIDs := make(map[string]struct{})
-
-	query := NewQuery(TableNameBotDefinition)
-	var ratelimitData *v2.RateLimitDescription
-	pageToken := ""
-	for {
-		records, nextToken, rl, err := c.queryWithAPIVersion(
-			ctx,
-			query,
-			pageToken,
-			AgentforceAPIVersion,
-		)
-		ratelimitData = rl
-		if err != nil {
-			if isSObjectNotSupportedError(err) {
-				logger.Info(
-					"salesforce-client: BotDefinition SObject not available; no agent runtime users to classify (Agentforce/Einstein Bots not enabled)",
-				)
-				return agentUserIDs, ratelimitData, nil
-			}
-			// A real (transient) failure: surface the error so the caller can avoid
-			// caching this incomplete result.
-			logger.Debug(
-				"salesforce-client: failed to read BotDefinition.BotUserId; agent runtime users will not be specially classified",
-				zap.Error(err),
-			)
-			return agentUserIDs, ratelimitData, err
-		}
-
-		for _, record := range records {
-			if botUserID := record.StringField("BotUserId"); botUserID != "" {
-				agentUserIDs[botUserID] = struct{}{}
-			}
-		}
-
-		if nextToken == "" {
-			break
-		}
-		pageToken = nextToken
-	}
-
-	return agentUserIDs, ratelimitData, nil
 }

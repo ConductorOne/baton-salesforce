@@ -3,15 +3,13 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/connectorbuilder"
-	"github.com/conductorone/baton-sdk/pkg/pagination"
-	"github.com/conductorone/baton-sdk/pkg/session"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
-	"github.com/conductorone/baton-sdk/pkg/types/sessions"
 	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -27,30 +25,38 @@ type userBuilder struct {
 
 var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
-// accountTypeForUser maps a Salesforce user to the NHI account-type spine.
-//
-// Two non-human signals are recognized: the user is the runtime identity of an
-// Einstein Bot / Agentforce Agent (referenced by BotDefinition.BotUserId — a
-// stable foreign key, the reliable discriminator for an "Einstein Agent User"),
-// or it is the Automated Process system user (alias "autoproc", UserType
-// "AutomatedProcess"). Either is SERVICE; every other synced user is HUMAN. The
-// SDK coerces an unset account type to HUMAN on the wire, so this positively
-// emits the value rather than relying on that default.
-func accountTypeForUser(userType string, isAgentUser bool) v2.UserTrait_AccountType {
-	if isAgentUser || userType == "AutomatedProcess" {
+const (
+	userTypeAutomatedProcess = "AutomatedProcess"
+	userTypeCloudIntegration = "CloudIntegrationUser"
+
+	// Non-human-identity license keys.
+	agentLicenseKeyPrefix       = "PID_DigitalAgent"    // Einstein + External Einstein Agent
+	integrationLicenseKeySuffix = "_INTEGRATION_USER"   // Salesforce/Cloud/Analytics integration
+	xOrgProxyLicenseKey         = "PID_XOrg_Proxy_User" // cross-org proxy
+)
+
+// accountTypeForUser classifies a user as SERVICE (non-human) or HUMAN from immutable
+// signals — UserType and the license key — not mutable names.
+func accountTypeForUser(userType, licenseDefinitionKey string) v2.UserTrait_AccountType {
+	switch userType {
+	case userTypeAutomatedProcess, userTypeCloudIntegration:
+		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
+	}
+	switch {
+	case strings.HasPrefix(licenseDefinitionKey, agentLicenseKeyPrefix),
+		strings.HasSuffix(licenseDefinitionKey, integrationLicenseKeySuffix),
+		licenseDefinitionKey == xOrgProxyLicenseKey:
 		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
 	}
 	return v2.UserTrait_ACCOUNT_TYPE_HUMAN
 }
 
-// userResource convert a SalesforceUser into a Resource. isAgentUser is true
-// when the user backs an Einstein Bot / Agentforce Agent (BotDefinition.BotUserId).
+// userResource converts a SalesforceUser into a Resource.
 func userResource(
 	ctx context.Context,
 	user *client.SalesforceUser,
 	userLogin *client.UserLogin,
 	shouldUseUsernameForEmail bool,
-	isAgentUser bool,
 ) (*v2.Resource, error) {
 	displayName := fmt.Sprintf(
 		"%s %s",
@@ -89,7 +95,7 @@ func userResource(
 		rs.WithEmail(email, true),
 		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
-		rs.WithAccountType(accountTypeForUser(user.UserType, isAgentUser)),
+		rs.WithAccountType(accountTypeForUser(user.UserType, user.LicenseDefinitionKey)),
 	}
 
 	if user.LastLoginDate != nil {
@@ -113,18 +119,8 @@ func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return resourceTypeUser
 }
 
-const agentRuntimeUsersSessionPrefix = "agent_runtime_users"
-
-// pagination.Bag phase labels (ResourceTypeID) for List's two phases.
-const (
-	agentsPaginationPhase = "agents"
-	usersPaginationPhase  = "users"
-)
-
-// List emits users in two pagination.Bag phases: the agents phase records which
-// users back an Einstein Bot / Agentforce Agent in the session store, then the
-// users phase emits users and marks any recorded one SERVICE. The agents phase
-// runs only when a session store is present.
+// List emits one page of users. The account type (HUMAN vs SERVICE) is derived
+// from each user's UserType and license in userResource — see accountTypeForUser.
 func (o *userBuilder) List(
 	ctx context.Context,
 	_ *v2.ResourceId,
@@ -134,77 +130,11 @@ func (o *userBuilder) List(
 	*rs.SyncOpResults,
 	error,
 ) {
-	ss := attrs.Session
-	pageSize := attrs.PageToken.Size
-
-	// Without a session store the agents phase can't run; log once (first page) so
-	// the skipped agent classification isn't silent. Debug, not Warn: the local CLI
-	// never has a session store, so this fires on every local sync.
-	if ss == nil && attrs.PageToken.Token == "" {
-		ctxzap.Extract(ctx).Debug("salesforce-connector: no session store; agent runtime users will not be classified")
-	}
-
-	bag := &pagination.Bag{}
-	if err := bag.Unmarshal(attrs.PageToken.Token); err != nil {
-		return nil, nil, err
-	}
-	if bag.Current() == nil {
-		bag.Push(pagination.PageState{ResourceTypeID: usersPaginationPhase})
-		if ss != nil {
-			bag.Push(pagination.PageState{ResourceTypeID: agentsPaginationPhase})
-		}
-	}
-
-	switch bag.ResourceTypeID() {
-	case agentsPaginationPhase:
-		return o.listAgentRuntimeUsersPage(ctx, bag, ss)
-	case usersPaginationPhase:
-		return o.listUserPage(ctx, bag, ss, pageSize)
-	default:
-		return nil, nil, fmt.Errorf("baton-salesforce: unexpected user pagination phase %q", bag.ResourceTypeID())
-	}
-}
-
-// listAgentRuntimeUsersPage reads one BotDefinition page and records its BotUserIDs
-// in the session store, then advances the bag to the next page or the users phase.
-func (o *userBuilder) listAgentRuntimeUsersPage(
-	ctx context.Context,
-	bag *pagination.Bag,
-	ss sessions.SessionStore,
-) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	bots, nextToken, ratelimitData, err := o.client.GetBotDefinitions(ctx, bag.PageToken())
-	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
-	if err != nil {
-		// INVALID_TYPE (no Agentforce) already comes back empty + nil, so this is a real failure.
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to read agent runtime users: %w", err)
-	}
-
-	agentUsers := make(map[string]bool, len(bots))
-	for _, bot := range bots {
-		if bot.BotUserID != "" {
-			agentUsers[bot.BotUserID] = true
-		}
-	}
-	if err := session.SetManyJSON(ctx, ss, agentUsers, sessions.WithPrefix(agentRuntimeUsersSessionPrefix)); err != nil {
-		// Don't continue with a partial set.
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to record agent runtime users: %w", err)
-	}
-
-	return o.advanceBag(bag, nextToken, nil, outputAnnotations)
-}
-
-// listUserPage emits one page of users, marking any user recorded by the agents
-// phase as SERVICE (without a session store, no agent classification).
-func (o *userBuilder) listUserPage(
-	ctx context.Context,
-	bag *pagination.Bag,
-	ss sessions.SessionStore,
-	pageSize int,
-) ([]*v2.Resource, *rs.SyncOpResults, error) {
+	token := &attrs.PageToken
 	users, nextToken, usersRL, err := o.client.GetUsers(
 		ctx,
-		bag.PageToken(),
-		pageSize,
+		token.Token,
+		token.Size,
 		o.syncDeactivatedUsers,
 		o.syncNonStandardUsers,
 	)
@@ -222,15 +152,6 @@ func (o *userBuilder) listUserPage(
 		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to list user logins: %w", err)
 	}
 
-	// Recorded by the agents phase; empty when there's no session store.
-	agentUsers := map[string]bool{}
-	if ss != nil {
-		agentUsers, err = session.GetManyJSON[bool](ctx, ss, userIDs, sessions.WithPrefix(agentRuntimeUsersSessionPrefix))
-		if err != nil {
-			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to read agent runtime users: %w", err)
-		}
-	}
-
 	rv := make([]*v2.Resource, 0, len(users))
 	for _, user := range users {
 		newResource, err := userResource(
@@ -238,34 +159,15 @@ func (o *userBuilder) listUserPage(
 			user,
 			userLogins[user.ID],
 			o.shouldUseUsernameForEmail,
-			agentUsers[user.ID],
 		)
 		if err != nil {
-			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to build user resource: %w", err)
 		}
 
 		rv = append(rv, newResource)
 	}
 
-	return o.advanceBag(bag, nextToken, rv, outputAnnotations)
-}
-
-// advanceBag advances the bag to nextToken (popping the phase when empty),
-// marshals it, and returns the page's resources and results.
-func (o *userBuilder) advanceBag(
-	bag *pagination.Bag,
-	nextToken string,
-	resources []*v2.Resource,
-	outputAnnotations annotations.Annotations,
-) ([]*v2.Resource, *rs.SyncOpResults, error) {
-	if err := bag.Next(nextToken); err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
-	}
-	nextPageToken, err := bag.Marshal()
-	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
-	}
-	return resources, &rs.SyncOpResults{NextPageToken: nextPageToken, Annotations: outputAnnotations}, nil
+	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: outputAnnotations}, nil
 }
 
 // Entitlements always returns an empty slice for users.
@@ -407,7 +309,6 @@ func (o *userBuilder) CreateAccount(
 	}
 
 	if userExist {
-		// l.Info("User already exists, skipping user creation")
 		user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
 		if err != nil {
 			return nil, nil, nil, err
@@ -447,7 +348,7 @@ func (o *userBuilder) CreateAccount(
 		return nil, nil, nil, err
 	}
 
-	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail, false)
+	r, err := userResource(ctx, user, userLogin, o.shouldUseUsernameForEmail)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("baton-salesforce: cannot create user resource: %w", err)
 	}

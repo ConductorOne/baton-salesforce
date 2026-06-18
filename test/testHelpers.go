@@ -163,7 +163,13 @@ func resolveSubqueries(ctx context.Context, db *sql.DB, queryString string) (str
 }
 
 func query(ctx context.Context, db *sql.DB, queryString string) ([]simpleforce.SObject, error) {
-	hackString := strings.ReplaceAll(queryString, ".Name", "")
+	// The ramsql backing store has no relationship columns, so drop the nested
+	// license field from the User query. NewQuery joins fields with ", " while the
+	// SObject GET path (find) joins with ",", so strip both forms. Account-type
+	// classification is covered by unit tests (TestAccountTypeForUser), not the fixture.
+	hackString := strings.ReplaceAll(queryString, ", Profile.UserLicense.LicenseDefinitionKey", "")
+	hackString = strings.ReplaceAll(hackString, ",Profile.UserLicense.LicenseDefinitionKey", "")
+	hackString = strings.ReplaceAll(hackString, ".Name", "")
 	hackString = strings.ReplaceAll(hackString, "Fields(standard)", "Id,*")
 
 	var err error

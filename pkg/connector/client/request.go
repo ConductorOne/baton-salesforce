@@ -125,8 +125,9 @@ func (c *SalesforceClient) queryWithAPIVersion(
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
-		// INVALID_TYPE (e.g. BotDefinition on an org without Agentforce) is expected
-		// and handled by the caller, so keep it out of ERROR.
+		// INVALID_TYPE (e.g. BotDefinition on an org without Agentforce) is expected,
+		// so log it at Debug instead of Error. The error is still returned either way;
+		// the caller detects it and decides whether to treat it as a real failure.
 		if isSObjectNotSupportedError(err) {
 			logger.Debug("salesforce-connector: SObject not supported", zap.String("query", queryString), zap.Error(err))
 		} else {

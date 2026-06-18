@@ -39,6 +39,8 @@ var TableNamesToFieldsMapping = map[string][]string{
 		"ProfileId",
 		"UserRoleId",
 		"LastLoginDate",
+		// used to classify the account type.
+		"Profile.UserLicense.LicenseDefinitionKey",
 	},
 	TableNameRoles: {
 		"Name",

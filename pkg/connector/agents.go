@@ -72,7 +72,7 @@ func (o *agentBuilder) List(
 	agents, nextToken, ratelimitData, err := o.client.GetBotDefinitions(ctx, token.Token)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to list agents: %w", err)
 	}
 
 	rv := make([]*v2.Resource, 0, len(agents))

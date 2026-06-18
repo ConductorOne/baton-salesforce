@@ -19,6 +19,5 @@ func main() {
 		cfg.Configuration,
 		connector.New,
 		connectorrunner.WithDefaultCapabilitiesConnectorBuilderV2(&connector.Salesforce{}),
-		connectorrunner.WithSessionStoreEnabled(),
 	)
 }

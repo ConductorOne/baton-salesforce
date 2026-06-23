@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -24,7 +25,33 @@ type userBuilder struct {
 
 var _ connectorbuilder.AccountManagerV2 = &userBuilder{}
 
-// userResource convert a SalesforceUser into a Resource.
+const (
+	userTypeAutomatedProcess = "AutomatedProcess"
+	userTypeCloudIntegration = "CloudIntegrationUser"
+
+	// Non-human-identity license keys.
+	agentLicenseKeyPrefix       = "PID_DigitalAgent"    // Einstein + External Einstein Agent
+	integrationLicenseKeySuffix = "_INTEGRATION_USER"   // Salesforce/Cloud/Analytics integration
+	xOrgProxyLicenseKey         = "PID_XOrg_Proxy_User" // cross-org proxy
+)
+
+// accountTypeForUser classifies a user as SERVICE (non-human) or HUMAN from immutable
+// signals — UserType and the license key — not mutable names.
+func accountTypeForUser(userType, licenseDefinitionKey string) v2.UserTrait_AccountType {
+	switch userType {
+	case userTypeAutomatedProcess, userTypeCloudIntegration:
+		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
+	}
+	switch {
+	case strings.HasPrefix(licenseDefinitionKey, agentLicenseKeyPrefix),
+		strings.HasSuffix(licenseDefinitionKey, integrationLicenseKeySuffix),
+		licenseDefinitionKey == xOrgProxyLicenseKey:
+		return v2.UserTrait_ACCOUNT_TYPE_SERVICE
+	}
+	return v2.UserTrait_ACCOUNT_TYPE_HUMAN
+}
+
+// userResource converts a SalesforceUser into a Resource.
 func userResource(
 	ctx context.Context,
 	user *client.SalesforceUser,
@@ -68,6 +95,7 @@ func userResource(
 		rs.WithEmail(email, true),
 		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
+		rs.WithAccountType(accountTypeForUser(user.UserType, user.LicenseDefinitionKey)),
 	}
 
 	if user.LastLoginDate != nil {
@@ -91,11 +119,11 @@ func (o *userBuilder) ResourceType(ctx context.Context) *v2.ResourceType {
 	return resourceTypeUser
 }
 
-// List returns all the users from the database as resource objects.
-// Users include a UserTrait because they are the 'shape' of a standard user.
+// List emits one page of users. The account type (HUMAN vs SERVICE) is derived
+// from each user's UserType and license in userResource — see accountTypeForUser.
 func (o *userBuilder) List(
 	ctx context.Context,
-	parentResourceID *v2.ResourceId,
+	_ *v2.ResourceId,
 	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Resource,
@@ -111,7 +139,7 @@ func (o *userBuilder) List(
 		o.syncNonStandardUsers,
 	)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(usersRL)}, err
+		return nil, &rs.SyncOpResults{Annotations: client.WithRateLimitAnnotations(usersRL)}, fmt.Errorf("baton-salesforce: failed to list users: %w", err)
 	}
 
 	userIDs := make([]string, 0, len(users))
@@ -121,7 +149,7 @@ func (o *userBuilder) List(
 	userLogins, loginsRL, err := o.client.GetUserLoginsByUserIDs(ctx, userIDs)
 	outputAnnotations := client.WithRateLimitAnnotations(usersRL, loginsRL)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to list user logins: %w", err)
 	}
 
 	rv := make([]*v2.Resource, 0, len(users))
@@ -133,15 +161,13 @@ func (o *userBuilder) List(
 			o.shouldUseUsernameForEmail,
 		)
 		if err != nil {
-			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to build user resource: %w", err)
 		}
 
 		rv = append(rv, newResource)
 	}
-	return rv, &rs.SyncOpResults{
-		NextPageToken: nextToken,
-		Annotations:   outputAnnotations,
-	}, nil
+
+	return rv, &rs.SyncOpResults{NextPageToken: nextToken, Annotations: outputAnnotations}, nil
 }
 
 // Entitlements always returns an empty slice for users.
@@ -283,7 +309,6 @@ func (o *userBuilder) CreateAccount(
 	}
 
 	if userExist {
-		// l.Info("User already exists, skipping user creation")
 		user, err := o.client.GetUserByEmail(ctx, userRequest.Email)
 		if err != nil {
 			return nil, nil, nil, err

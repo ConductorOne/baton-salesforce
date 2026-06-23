@@ -243,6 +243,22 @@ func shouldSkipSyncingUserType(
 	return ok && value
 }
 
+// licenseDefinitionKey reads Profile.UserLicense.LicenseDefinitionKey from the user
+// record — an immutable system key used to classify the account type (e.g. "SFDC" for
+// humans, "PID_DigitalAgent" for agents). The relations are expanded inline by the SELECT.
+func licenseDefinitionKey(record simpleforce.SObject) string {
+	profile, ok := record.InterfaceField("Profile").(map[string]any)
+	if !ok {
+		return ""
+	}
+	license, ok := profile["UserLicense"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	key, _ := license["LicenseDefinitionKey"].(string)
+	return key
+}
+
 func (c *SalesforceClient) GetUsers(
 	ctx context.Context,
 	pageToken string,
@@ -295,14 +311,15 @@ func (c *SalesforceClient) GetUsers(
 		}
 
 		users = append(users, &SalesforceUser{
-			ID:            record.ID(),
-			Username:      record.StringField("Username"),
-			Email:         record.StringField("Email"),
-			FirstName:     record.StringField("FirstName"),
-			LastName:      record.StringField("LastName"),
-			UserType:      record.StringField("UserType"),
-			IsActive:      isActive,
-			LastLoginDate: lastLogin,
+			ID:                   record.ID(),
+			Username:             record.StringField("Username"),
+			Email:                record.StringField("Email"),
+			FirstName:            record.StringField("FirstName"),
+			LastName:             record.StringField("LastName"),
+			UserType:             record.StringField("UserType"),
+			LicenseDefinitionKey: licenseDefinitionKey(record),
+			IsActive:             isActive,
+			LastLoginDate:        lastLogin,
 		})
 	}
 	return users, paginationUrl, ratelimitData, nil
@@ -1041,7 +1058,6 @@ const AgentforceAPIVersion = "60.0"
 func (c *SalesforceClient) GetBotDefinitions(
 	ctx context.Context,
 	pageToken string,
-	pageSize int,
 ) (
 	[]*BotDefinition,
 	string,
@@ -1072,7 +1088,7 @@ func (c *SalesforceClient) GetBotDefinitions(
 			ID:            record.ID(),
 			DeveloperName: record.StringField("DeveloperName"),
 			MasterLabel:   record.StringField("MasterLabel"),
-			BotUserId:     record.StringField("BotUserId"),
+			BotUserID:     record.StringField("BotUserId"),
 		})
 	}
 	return agents, paginationUrl, ratelimitData, nil

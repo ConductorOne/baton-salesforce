@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
@@ -28,8 +29,8 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		"developer_name": agent.DeveloperName,
 		"master_label":   agent.MasterLabel,
 	}
-	if agent.BotUserId != "" {
-		profile["bot_user_id"] = agent.BotUserId
+	if agent.BotUserID != "" {
+		profile["bot_user_id"] = agent.BotUserID
 	}
 
 	agentTraitOptions := []rs.AgentTraitOption{
@@ -39,10 +40,10 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 	// BotDefinition.BotUserId is a queryable reference to the User the agent runs
 	// as (object reference, API v60.0+). When present, link the agent to that
 	// runtime user resource so NHI processing can correlate the two.
-	if agent.BotUserId != "" {
+	if agent.BotUserID != "" {
 		agentTraitOptions = append(agentTraitOptions, rs.WithAgentIdentityResourceID(&v2.ResourceId{
 			ResourceType: resourceTypeUser.Id,
-			Resource:     agent.BotUserId,
+			Resource:     agent.BotUserID,
 		}))
 	}
 
@@ -60,7 +61,7 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 
 func (o *agentBuilder) List(
 	ctx context.Context,
-	parentResourceID *v2.ResourceId,
+	_ *v2.ResourceId,
 	attrs rs.SyncOpAttrs,
 ) (
 	[]*v2.Resource,
@@ -68,21 +69,17 @@ func (o *agentBuilder) List(
 	error,
 ) {
 	token := &attrs.PageToken
-	agents, nextToken, ratelimitData, err := o.client.GetBotDefinitions(
-		ctx,
-		token.Token,
-		token.Size,
-	)
+	agents, nextToken, ratelimitData, err := o.client.GetBotDefinitions(ctx, token.Token)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
 	if err != nil {
-		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+		return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to list agents: %w", err)
 	}
 
 	rv := make([]*v2.Resource, 0, len(agents))
 	for _, agent := range agents {
 		newResource, err := agentResource(ctx, agent)
 		if err != nil {
-			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, err
+			return nil, &rs.SyncOpResults{Annotations: outputAnnotations}, fmt.Errorf("baton-salesforce: failed to build agent resource: %w", err)
 		}
 
 		rv = append(rv, newResource)

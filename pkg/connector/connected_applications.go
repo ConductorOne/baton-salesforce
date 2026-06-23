@@ -22,6 +22,7 @@ func connectedApplicationResource(_ context.Context, app *client.ConnectedApplic
 		resourceTypeConnectedApplication,
 		app.ID,
 		rs.WithAppTrait(),
+		rs.WithNHIType(v2.NonHumanIdentityTrait_NHI_TYPE_APP_REGISTRATION, "salesforce.connected_application"),
 	)
 	if err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/conductorone/baton-salesforce/test"
@@ -102,6 +103,59 @@ func TestAgentsList(t *testing.T) {
 		_, hasBotUserID := profile["bot_user_id"]
 		require.False(t, hasBotUserID)
 	})
+}
+
+// TestAgentsListPaginates drives agentBuilder.List against a BotDefinition endpoint
+// that returns two pages and checks that List follows the nextRecordsUrl cursor and
+// emits the agents from both pages. The FixturesServer-based test above returns
+// everything in a single response, so it does not actually exercise multi-page.
+func TestAgentsListPaginates(t *testing.T) {
+	ctx := context.Background()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/query/") {
+			// Page 2: the nextRecordsUrl continuation (done, no further cursor).
+			_, _ = w.Write([]byte(`{"totalSize":2,"done":true,"records":[` +
+				`{"attributes":{"type":"BotDefinition"},"Id":"0Xx2",` +
+				`"DeveloperName":"Bot2","MasterLabel":"Bot Two","BotUserId":"0052X"}]}`))
+			return
+		}
+		// Page 1, with a cursor to page 2.
+		_, _ = w.Write([]byte(`{"totalSize":2,"done":false,` +
+			`"nextRecordsUrl":"/services/data/v60.0/query/01g-1","records":[` +
+			`{"attributes":{"type":"BotDefinition"},"Id":"0Xx1",` +
+			`"DeveloperName":"Bot1","MasterLabel":"Bot One","BotUserId":"0051X"}]}`))
+	}))
+	defer server.Close()
+
+	salesforceClient, err := test.Client(ctx, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newAgentBuilder(salesforceClient)
+
+	resources := make([]*v2.Resource, 0)
+	token := ""
+	calls := 0
+	for {
+		page, results, err := c.List(ctx, nil, rs.SyncOpAttrs{PageToken: pagination.Token{Token: token, Size: 1}})
+		require.NoError(t, err)
+		require.NotNil(t, results)
+		resources = append(resources, page...)
+		calls++
+		if results.NextPageToken == "" {
+			break
+		}
+		token = results.NextPageToken
+	}
+
+	require.Equal(t, 2, calls, "List should follow the cursor across two pages")
+	require.Len(t, resources, 2)
+	require.ElementsMatch(t,
+		[]string{"0Xx1", "0Xx2"},
+		[]string{resources[0].Id.Resource, resources[1].Id.Resource},
+	)
 }
 
 // TestAgentsGracefulSkip verifies that an org without Agentforce or Einstein

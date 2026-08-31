@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -133,19 +135,32 @@ func (c *SalesforceClient) GetUserByEmail(
 	*SalesforceUser,
 	error,
 ) {
-	// Filter for Standard users only - these are full Salesforce users with standard licenses.
-	// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
-	// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
 	// While we're not syncing Chatter users, we need to support creating them so we can possibly then upgrade them.
 	// this is slightly Weird behavior but there's a future where we do a more nuanced thing here.
-	query := NewQuery(TableNameUsers).
-		WhereEq("Email", email)
+	additionalFields := c.additionalUserFieldNames(ctx)
 	records, _, _, err := c.query(
 		ctx,
-		query,
+		NewQuery(TableNameUsers, userSelectFields(additionalFields)...).WhereEq("Email", email),
 		"",
 		1,
 	)
+	// Same guard as GetUsers: a field Salesforce won't select must not make
+	// looking up a user impossible. See GetUsers for the full rationale.
+	if err != nil && len(additionalFields) > 0 && isInvalidFieldError(err) {
+		ctxzap.Extract(ctx).Warn(
+			"salesforce-client: Salesforce rejected an additional User field, querying without additional fields",
+			zap.Strings("additional_fields", additionalFields),
+			zap.Error(err),
+		)
+		c.disableAdditionalUserFields()
+		additionalFields = nil
+		records, _, _, err = c.query(
+			ctx,
+			NewQuery(TableNameUsers, userSelectFields(additionalFields)...).WhereEq("Email", email),
+			"",
+			1,
+		)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -165,14 +180,15 @@ func (c *SalesforceClient) GetUserByEmail(
 		}
 
 		users = append(users, &SalesforceUser{
-			ID:            record.ID(),
-			Username:      record.StringField("Username"),
-			Email:         record.StringField("Email"),
-			FirstName:     record.StringField("FirstName"),
-			LastName:      record.StringField("LastName"),
-			UserType:      record.StringField("UserType"),
-			IsActive:      isActive,
-			LastLoginDate: lastLogin,
+			ID:               record.ID(),
+			Username:         record.StringField("Username"),
+			Email:            record.StringField("Email"),
+			FirstName:        record.StringField("FirstName"),
+			LastName:         record.StringField("LastName"),
+			UserType:         record.StringField("UserType"),
+			IsActive:         isActive,
+			LastLoginDate:    lastLogin,
+			AdditionalFields: additionalFieldValues(ctx, record, additionalFields),
 		})
 	}
 

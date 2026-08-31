@@ -90,6 +90,21 @@ func userResource(
 		"id":           user.ID,
 	}
 
+	// Any extra User fields named in config land in the profile under their
+	// Salesforce API name (e.g. "Role_Based_Access__c"), so they can be mapped
+	// onto a C1 attribute. The five keys above stay authoritative.
+	for name, value := range user.AdditionalFields {
+		if _, exists := profile[name]; exists {
+			ctxzap.Extract(ctx).Warn(
+				"salesforce-connector: additional field collides with a standard profile key, skipping it",
+				zap.String("field", name),
+				zap.String("user_id", user.ID),
+			)
+			continue
+		}
+		profile[name] = value
+	}
+
 	userTraitOptions := []rs.UserTraitOption{
 		rs.WithUserProfile(profile),
 		rs.WithEmail(email, true),

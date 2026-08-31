@@ -66,6 +66,14 @@ var (
 		field.WithDescription("Optionally sync non-standard user types (Customer Community, etc)"),
 		field.WithDefaultValue(false),
 	)
+	AdditionalUserFields = field.StringSliceField(
+		"salesforce-additional-user-fields",
+		field.WithDisplayName("Additional User Fields"),
+		field.WithDescription(
+			"Salesforce User field API names to sync into the ConductorOne user profile, ex: Role_Based_Access__c. "+
+				"Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning.",
+		),
+	)
 	LicenseToLeastPrivilegedProfileMapping = field.StringMapField(
 		"license-to-least-privileged-profile-mapping",
 		field.WithDisplayName("License to Least Privileged Profile Mapping"),
@@ -114,6 +122,7 @@ var (
 		SyncConnectedApps,
 		SyncDeactivatedUsers,
 		SyncNonStandardUsers,
+		AdditionalUserFields,
 		LicenseToLeastPrivilegedProfileMapping,
 		Oauth2TokenField,
 		ClientIDField,
@@ -142,6 +151,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping},
 				Default: false,
 			},
@@ -155,6 +165,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping,
 					Oauth2TokenField,
 				},
@@ -174,6 +185,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping,
 				},
 				Default: false,
@@ -190,6 +202,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping,
 				},
 				Default: false,

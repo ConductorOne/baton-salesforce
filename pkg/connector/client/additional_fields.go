@@ -1,0 +1,275 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"regexp"
+	"strings"
+
+	"github.com/conductorone/simpleforce"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
+)
+
+const (
+	// DescribePathFmt is the SObject describe endpoint, used to check that a
+	// configured field API name actually exists on an object before we put it in
+	// a SELECT. Formatted with the SObject name.
+	DescribePathFmt = "/services/data/v64.0/sobjects/%s/describe"
+
+	// maxAdditionalFields caps how many extra fields config can append to a
+	// SELECT. SOQL has a 100k character query limit; this keeps a misconfigured
+	// list from getting anywhere near it.
+	maxAdditionalFields = 50
+)
+
+// additionalFieldNamePattern matches a bare Salesforce field API name: a letter
+// followed by letters, digits, and underscores (custom fields end in "__c",
+// namespaced ones look like "acme__Role__c").
+//
+// Configured names are interpolated into the SELECT clause verbatim — SOQL has
+// no bind parameters for field names — so this pattern is also the injection
+// guard. Anything it does not match never reaches a query. Relationship
+// traversals ("Manager.Name") are deliberately excluded: they can't be checked
+// against a single object's describe, and they're out of scope for this option.
+var additionalFieldNamePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,254}$`)
+
+// NormalizeAdditionalFields cleans a configured list of extra field API names
+// for tableName: it drops blanks, anything that isn't a bare field API name,
+// duplicates, and names already selected by TableNamesToFieldsMapping. Each
+// rejection is logged rather than returned as an error — a single typo should
+// not stop a connector from starting.
+func NormalizeAdditionalFields(ctx context.Context, tableName string, configured []string) []string {
+	logger := ctxzap.Extract(ctx)
+
+	seen := make(map[string]struct{}, len(configured))
+	seen[strings.ToLower(SalesforcePK)] = struct{}{}
+	for _, existing := range TableNamesToFieldsMapping[tableName] {
+		seen[strings.ToLower(existing)] = struct{}{}
+	}
+
+	normalized := make([]string, 0, len(configured))
+	for _, raw := range configured {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		if !additionalFieldNamePattern.MatchString(name) {
+			logger.Warn(
+				"salesforce-client: ignoring invalid additional field name",
+				zap.String("table", tableName),
+				zap.String("field", name),
+			)
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			logger.Debug(
+				"salesforce-client: ignoring duplicate additional field name",
+				zap.String("table", tableName),
+				zap.String("field", name),
+			)
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, name)
+
+		if len(normalized) == maxAdditionalFields {
+			logger.Warn(
+				"salesforce-client: too many additional fields configured, ignoring the rest",
+				zap.String("table", tableName),
+				zap.Int("max", maxAdditionalFields),
+			)
+			break
+		}
+	}
+
+	return normalized
+}
+
+// SetAdditionalUserFields records the extra User field API names to select
+// alongside the standard ones. The list is normalized here; it is checked
+// against the object's describe lazily, on first use.
+func (c *SalesforceClient) SetAdditionalUserFields(ctx context.Context, fields []string) {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	c.configuredUserFields = NormalizeAdditionalFields(ctx, TableNameUsers, fields)
+	c.additionalUserFields = nil
+	c.additionalUserFieldsResolved = false
+}
+
+// describeFieldNames returns the field API names of an SObject, keyed by their
+// lowercased form so callers can match config case-insensitively (SOQL is).
+// Only fields visible to the authenticated user are returned, which is exactly
+// the set that can be selected.
+func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName string) (map[string]string, error) {
+	err := c.Initialize(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := c.client.ApexREST(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf(DescribePathFmt, tableName),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("baton-salesforce: failed to describe %s: %w", tableName, err)
+	}
+
+	var described struct {
+		Fields []struct {
+			Name string `json:"name"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(body, &described); err != nil {
+		return nil, fmt.Errorf("baton-salesforce: failed to parse %s describe response: %w", tableName, err)
+	}
+
+	names := make(map[string]string, len(described.Fields))
+	for _, field := range described.Fields {
+		if field.Name == "" {
+			continue
+		}
+		names[strings.ToLower(field.Name)] = field.Name
+	}
+	return names, nil
+}
+
+// additionalUserFieldNames returns the configured extra User fields that are
+// safe to select, resolving them against the User describe exactly once.
+//
+// A configured field that doesn't exist on the object (a typo, or a field the
+// integration user can't see) would make the whole user query fail with
+// INVALID_FIELD, so unknown names are dropped with a warning instead. If the
+// describe call itself fails we keep the configured list — losing the feature
+// because of one flaky request would be worse, and GetUsers still falls back to
+// the standard fields if Salesforce rejects the query.
+func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []string {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	if c.additionalUserFieldsResolved {
+		return c.additionalUserFields
+	}
+	c.additionalUserFieldsResolved = true
+
+	if len(c.configuredUserFields) == 0 {
+		return nil
+	}
+
+	logger := ctxzap.Extract(ctx)
+	available, err := c.describeFieldNames(ctx, TableNameUsers)
+	if err != nil {
+		logger.Warn(
+			"salesforce-client: could not describe the User object, using additional fields as configured",
+			zap.Strings("additional_fields", c.configuredUserFields),
+			zap.Error(err),
+		)
+		c.additionalUserFields = c.configuredUserFields
+		return c.additionalUserFields
+	}
+
+	resolved := make([]string, 0, len(c.configuredUserFields))
+	for _, name := range c.configuredUserFields {
+		canonical, ok := available[strings.ToLower(name)]
+		if !ok {
+			logger.Warn(
+				"salesforce-client: additional field does not exist on the User object or is not visible to this user, skipping it",
+				zap.String("field", name),
+			)
+			continue
+		}
+		resolved = append(resolved, canonical)
+	}
+
+	logger.Info(
+		"salesforce-client: syncing additional User fields",
+		zap.Strings("additional_fields", resolved),
+	)
+	c.additionalUserFields = resolved
+	return c.additionalUserFields
+}
+
+// disableAdditionalUserFields drops the extra fields for the rest of this
+// client's life. Called when Salesforce rejects them at query time, so that
+// every later page and every later query uses the standard field set.
+func (c *SalesforceClient) disableAdditionalUserFields() {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	c.configuredUserFields = nil
+	c.additionalUserFields = nil
+	c.additionalUserFieldsResolved = true
+}
+
+// userSelectFields is the SELECT list for a User query: the standard fields
+// plus the given additional ones.
+func userSelectFields(additional []string) []string {
+	standard := TableNamesToFieldsMapping[TableNameUsers]
+
+	fields := make([]string, 0, len(standard)+len(additional))
+	fields = append(fields, standard...)
+	fields = append(fields, additional...)
+	return fields
+}
+
+// isInvalidFieldError reports whether Salesforce rejected a query because one of
+// the selected fields doesn't exist on the object (or isn't visible to the
+// authenticated user).
+func isInvalidFieldError(err error) bool {
+	var sfErr simpleforce.SalesforceError
+	return errors.As(err, &sfErr) && sfErr.ErrorCode == "INVALID_FIELD"
+}
+
+// additionalFieldValues reads the configured extra fields off a User record.
+// Values are passed through with their JSON types so a checkbox stays a
+// boolean and a number stays a number. Empty and null values are omitted — an
+// unset picklist carries no information for a reviewer — and structured values
+// (a nested relationship object) are skipped because the user profile is flat.
+func additionalFieldValues(
+	ctx context.Context,
+	record simpleforce.SObject,
+	fields []string,
+) map[string]any {
+	if len(fields) == 0 {
+		return nil
+	}
+
+	values := make(map[string]any, len(fields))
+	for _, name := range fields {
+		switch value := record.InterfaceField(name).(type) {
+		case nil:
+			// Field is unset for this user.
+		case string:
+			if value == "" {
+				continue
+			}
+			values[name] = value
+		case bool:
+			values[name] = value
+		case float64:
+			values[name] = value
+		case int:
+			values[name] = float64(value)
+		case int64:
+			values[name] = float64(value)
+		default:
+			ctxzap.Extract(ctx).Debug(
+				"salesforce-client: skipping additional field with unsupported value type",
+				zap.String("field", name),
+				zap.String("user_id", record.ID()),
+			)
+		}
+	}
+
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}

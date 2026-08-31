@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -36,6 +37,14 @@ type SalesforceClient struct {
 	password            string
 	securityToken       string
 	initialized         bool
+
+	// Extra User fields to select, from config. configuredUserFields is the
+	// normalized config; additionalUserFields is the subset that survived the
+	// describe check. See additional_fields.go.
+	additionalUserFieldsMutex    sync.Mutex
+	configuredUserFields         []string
+	additionalUserFields         []string
+	additionalUserFieldsResolved bool
 }
 
 // Gathered from the UserType field found here:
@@ -259,6 +268,19 @@ func licenseDefinitionKey(record simpleforce.SObject) string {
 	return key
 }
 
+// newUserQuery builds a User SELECT over the given fields. Unless
+// syncNonStandardUsers is set it filters to Standard users only — full
+// Salesforce users with standard licenses. Other types like Partner, Portal, or
+// Chatter users have limited access and are excluded.
+// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
+func newUserQuery(fields []string, syncNonStandardUsers bool) *SalesforceQuery {
+	query := NewQuery(TableNameUsers, fields...)
+	if syncNonStandardUsers {
+		return query
+	}
+	return query.WhereEq("UserType", "Standard")
+}
+
 func (c *SalesforceClient) GetUsers(
 	ctx context.Context,
 	pageToken string,
@@ -271,24 +293,36 @@ func (c *SalesforceClient) GetUsers(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	// Build the conditional query based on syncNonStandardUsers
 	logger := ctxzap.Extract(ctx)
-	var query *SalesforceQuery
 	if syncNonStandardUsers {
 		logger.Debug("salesforce-client: syncing non-standard users")
-		query = NewQuery(TableNameUsers) // No user type filter
-	} else {
-		// Filter for Standard users only - these are full Salesforce users with standard licenses.
-		// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
-		// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
-		query = NewQuery(TableNameUsers).WhereEq("UserType", "Standard")
 	}
+	additionalFields := c.additionalUserFieldNames(ctx)
 	records, paginationUrl, ratelimitData, err := c.query(
 		ctx,
-		query,
+		newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
 		pageToken,
 		pageSize,
 	)
+	// An additional field that Salesforce won't select fails the whole query, which
+	// would take every user down with it. Drop the extra fields and retry once with
+	// the standard set so the sync still completes. Only the first page can hit this
+	// — later pages replay a Salesforce-issued URL that we can't rebuild.
+	if err != nil && pageToken == "" && len(additionalFields) > 0 && isInvalidFieldError(err) {
+		logger.Warn(
+			"salesforce-client: Salesforce rejected an additional User field, syncing without additional fields",
+			zap.Strings("additional_fields", additionalFields),
+			zap.Error(err),
+		)
+		c.disableAdditionalUserFields()
+		additionalFields = nil
+		records, paginationUrl, ratelimitData, err = c.query(
+			ctx,
+			newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
+			pageToken,
+			pageSize,
+		)
+	}
 	if err != nil {
 		return nil, "", ratelimitData, err
 	}
@@ -320,6 +354,7 @@ func (c *SalesforceClient) GetUsers(
 			LicenseDefinitionKey: licenseDefinitionKey(record),
 			IsActive:             isActive,
 			LastLoginDate:        lastLogin,
+			AdditionalFields:     additionalFieldValues(ctx, record, additionalFields),
 		})
 	}
 	return users, paginationUrl, ratelimitData, nil

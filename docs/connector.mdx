@@ -48,6 +48,18 @@ To add an optional field mapping in C1, use the exact Salesforce field API name 
 
 *You have the option to sync user accounts that use non-standard licenses. 
 
+### Sync additional Salesforce user fields
+
+The connector syncs a fixed set of standard fields from the Salesforce User object. If your org keeps access-relevant information in another field — a custom picklist such as `Role_Based_Access__c`, for example — list that field in the **Additional User Fields** setting and the connector pulls its value into the user's profile in C1, where you can map it onto a user attribute for access reviews.
+
+Use the exact Salesforce field API name, including the `__c` suffix on custom fields (for example, `Role_Based_Access__c`, `Department`, `FederationIdentifier`). This is read-only: the connector never writes these fields back to Salesforce.
+
+<Note>
+Relationship traversals (such as `Manager.Name`) are not supported — name fields that live directly on the User object.
+
+A field name that doesn't exist on the User object, or that the connector's Salesforce user can't see, is skipped with a warning in the logs. The rest of the sync is unaffected, so a typo here can't stop your users from syncing.
+</Note>
+
 ### Connector actions
 
 Connector actions are custom capabilities that extend C1 automations with app-specific operations. You can use connector actions in the [Perform connector action](/product/admin/automations-steps-reference#perform-connector-action) automation step.
@@ -260,13 +272,15 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
       6. **Optional.** Create a map of the Salesforce license types used by your organization and the profile associated with each license type that has the fewest permissions. C1 will use this information when deprovisioning user profiles to automatically reassign the user to the least-privilege profile associated with their license type.  
 
-      7. Click **Save**. 
+      7. **Optional.** In the **Additional User Fields** setting, list the API names of any extra Salesforce User fields to sync into user profiles, such as `Role_Based_Access__c`.
 
-      8. Click **Login with OAuth**.
+      8. Click **Save**. 
 
-      9. Log in and authorize C1 with your Salesforce instance.
+      9. Click **Login with OAuth**.
 
-      10. You will then be redirected back to the Salesforce setup page in C1, where you'll see an authorization message.
+      10. Log in and authorize C1 with your Salesforce instance.
+
+      11. You will then be redirected back to the Salesforce setup page in C1, where you'll see an authorization message.
 
    If you chose **JWT Bearer**:
 
@@ -280,7 +294,7 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
       5. **Optional.** In the **Login URL** field, enter a custom Salesforce login URL. Defaults to `https://login.salesforce.com`. Use `https://test.salesforce.com` for sandbox orgs.
 
-      6. **Optional.** Configure sync options as needed (connected apps, deactivated users, non-standard users, license mapping).
+      6. **Optional.** Configure sync options as needed (connected apps, deactivated users, non-standard users, additional user fields, license mapping).
 
       7. Click **Save**.
 
@@ -292,7 +306,7 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
       3. In the **Client Secret** field, enter the Consumer Secret from your External Client App.
 
-      4. **Optional.** Configure sync options as needed (connected apps, deactivated users, non-standard users, license mapping).
+      4. **Optional.** Configure sync options as needed (connected apps, deactivated users, non-standard users, additional user fields, license mapping).
 
       5. Click **Save**.
 
@@ -316,7 +330,9 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
       8. **Optional.** Create a map of the Salesforce license types used by your organization and the profile associated with each license type that has the fewest permissions. C1 will use this information when deprovisioning user profiles to automatically reassign the user to the least-privilege profile associated with their license type. 
 
-      9. Click **Save**.
+      9. **Optional.** In the **Additional User Fields** setting, list the API names of any extra Salesforce User fields to sync into user profiles, such as `Role_Based_Access__c`.
+
+      10. Click **Save**.
   </Step>
   <Step>
    The connector's label changes to **Syncing**, followed by **Connected**. You can view the logs to ensure that information is syncing.
@@ -409,6 +425,9 @@ stringData:
 
   # Optional: include to use Salesforce usernames as the email addresses for your organization's accounts
   BATON_USER_USERNAME_FOR_EMAIL: true
+
+  # Optional: include to sync extra Salesforce User fields into user profiles (comma-separated field API names)
+  BATON_SALESFORCE_ADDITIONAL_USER_FIELDS: Role_Based_Access__c
 
   # Optional: include to provide info on how to manage least privileged profile changes 
   BATON_LICENSE_TO_LEAST_PRIVILEGED_PROFILE_MAPPING: <[map]>

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	"github.com/conductorone/baton-salesforce/test"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
@@ -123,4 +124,75 @@ func TestAccountTypeForUser(t *testing.T) {
 			require.Equal(t, tc.want, accountTypeForUser(tc.userType, tc.licenseKey))
 		})
 	}
+}
+
+// TestUserResourceAdditionalFields pins how configured extra Salesforce fields
+// reach C1: they land in the user profile under their field API name, which is
+// what an access review maps onto an attribute.
+func TestUserResourceAdditionalFields(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("additional fields land in the profile", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:        "0051X",
+				Username:  "user@example.com",
+				Email:     "user@example.com",
+				FirstName: "Ada",
+				LastName:  "Lovelace",
+				UserType:  "Standard",
+				IsActive:  true,
+				AdditionalFields: map[string]any{
+					"Role_Based_Access__c": "Tier 2 Support",
+					"Is_Contractor__c":     true,
+				},
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		profile := resource.GetProfile().AsMap()
+		require.Equal(t, "Tier 2 Support", profile["Role_Based_Access__c"])
+		require.Equal(t, true, profile["Is_Contractor__c"])
+		// The standard keys are untouched.
+		require.Equal(t, "Ada Lovelace", profile["full_name"])
+		require.Equal(t, "user@example.com", profile["email"])
+	})
+
+	t.Run("additional fields never overwrite a standard profile key", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:               "0051X",
+				Username:         "user@example.com",
+				Email:            "user@example.com",
+				UserType:         "Standard",
+				AdditionalFields: map[string]any{"email": "spoofed@example.com"},
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		require.Equal(t, "user@example.com", resource.GetProfile().AsMap()["email"])
+	})
+
+	t.Run("no additional fields leaves the profile as-is", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:       "0051X",
+				Username: "user@example.com",
+				Email:    "user@example.com",
+				UserType: "Standard",
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		require.Len(t, resource.GetProfile().AsMap(), 5)
+	})
 }

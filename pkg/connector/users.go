@@ -35,6 +35,22 @@ const (
 	xOrgProxyLicenseKey         = "PID_XOrg_Proxy_User" // cross-org proxy
 )
 
+// resourceStatusFromUserStatus mirrors the deprecated UserTrait status enum onto the
+// resource-level status enum. The two enums are shape-compatible; keep the mapping
+// explicit so future divergence is caught at compile time.
+func resourceStatusFromUserStatus(s v2.UserTrait_Status_Status) v2.Status_ResourceStatus {
+	switch s {
+	case v2.UserTrait_Status_STATUS_ENABLED:
+		return v2.Status_RESOURCE_STATUS_ENABLED
+	case v2.UserTrait_Status_STATUS_DISABLED:
+		return v2.Status_RESOURCE_STATUS_DISABLED
+	case v2.UserTrait_Status_STATUS_DELETED:
+		return v2.Status_RESOURCE_STATUS_DELETED
+	default:
+		return v2.Status_RESOURCE_STATUS_UNSPECIFIED
+	}
+}
+
 // accountTypeForUser classifies a user as SERVICE (non-human) or HUMAN from immutable
 // signals — UserType and the license key — not mutable names.
 func accountTypeForUser(userType, licenseDefinitionKey string) v2.UserTrait_AccountType {
@@ -106,9 +122,7 @@ func userResource(
 	}
 
 	userTraitOptions := []rs.UserTraitOption{
-		rs.WithUserProfile(profile),
 		rs.WithEmail(email, true),
-		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
 		rs.WithAccountType(accountTypeForUser(user.UserType, user.LicenseDefinitionKey)),
 	}
@@ -122,6 +136,8 @@ func userResource(
 		resourceTypeUser,
 		user.ID,
 		userTraitOptions,
+		rs.WithResourceProfile(profile),
+		rs.WithResourceStatus(resourceStatusFromUserStatus(status), ""),
 	)
 	if err != nil {
 		return nil, err

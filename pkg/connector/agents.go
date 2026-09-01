@@ -33,9 +33,7 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		profile["bot_user_id"] = agent.BotUserID
 	}
 
-	agentTraitOptions := []rs.AgentTraitOption{
-		rs.WithAgentProfile(profile),
-	}
+	var agentTraitOptions []rs.AgentTraitOption
 
 	// BotDefinition.BotUserId is a queryable reference to the User the agent runs
 	// as (object reference, API v60.0+). When present, link the agent to that
@@ -47,14 +45,15 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		}))
 	}
 
-	// AgentTrait status is left unset: BotDefinition has no queryable status
-	// field. Activation status lives on BotVersion (API v63.0+), which would
-	// raise this syncer's API-version floor and require a per-agent subquery, so
-	// it is intentionally out of scope for this v1 discovery syncer.
+	// Status is left unset: BotDefinition has no queryable status field.
+	// Activation status lives on BotVersion (API v63.0+), which would raise
+	// this syncer's API-version floor and require a per-agent subquery, so it
+	// is intentionally out of scope for this v1 discovery syncer.
 	return rs.NewResource(
 		name,
 		resourceTypeAgent,
 		agent.ID,
+		rs.WithResourceProfile(profile),
 		rs.WithAgentTrait(agentTraitOptions...),
 	)
 }

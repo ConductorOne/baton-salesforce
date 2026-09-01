@@ -68,7 +68,7 @@ func TestAgentsList(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, agentTrait)
 		// Status is intentionally unset (BotVersion-only, out of scope for v1).
-		require.Equal(t, v2.AgentTrait_AGENT_STATUS_UNSPECIFIED, agentTrait.GetStatus())
+		require.Equal(t, v2.Status_RESOURCE_STATUS_UNSPECIFIED, serviceAgent.GetStatus().GetStatus())
 		// BotUserId is populated for the Service Agent, so identity_resource_id
 		// links the agent to its runtime user resource.
 		identity := agentTrait.GetIdentityResourceId()
@@ -76,7 +76,7 @@ func TestAgentsList(t *testing.T) {
 		require.Equal(t, resourceTypeUser.Id, identity.ResourceType)
 		require.Equal(t, "0051X", identity.Resource)
 
-		profile := agentTrait.GetProfile().AsMap()
+		profile := serviceAgent.GetProfile().AsMap()
 		require.Equal(t, "0Xx000000000001", profile["id"])
 		require.Equal(t, "Service_Agent", profile["developer_name"])
 		require.Equal(t, "Service Agent", profile["master_label"])
@@ -99,7 +99,7 @@ func TestAgentsList(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, agentTrait.GetIdentityResourceId())
 
-		profile := agentTrait.GetProfile().AsMap()
+		profile := orderBot.GetProfile().AsMap()
 		_, hasBotUserID := profile["bot_user_id"]
 		require.False(t, hasBotUserID)
 	})

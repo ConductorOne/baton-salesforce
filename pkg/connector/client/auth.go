@@ -8,6 +8,8 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/jwt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const oauthTokenPath = "/services/oauth2/token" //nolint:gosec // false positive: this is an API path, not a credential
@@ -32,7 +34,11 @@ func NewJWTBearerTokenSource(ctx context.Context, clientID, subject, loginURL st
 	// Validate credentials eagerly so errors surface at startup.
 	tok, err := ts.Token()
 	if err != nil {
-		return nil, fmt.Errorf("baton-salesforce: JWT bearer token exchange failed: %w", err)
+		// Tag the failure with gRPC Unauthenticated so exit.LogExit surfaces
+		// exit code 16 (see baton-sdk/pkg/exit). Anything else, including the
+		// SDK's default, downgrades to Unknown (2), which the sync-test action
+		// treats as a config-validation error rather than an auth error.
+		return nil, status.Errorf(codes.Unauthenticated, "baton-salesforce: JWT bearer token exchange failed: %v", err)
 	}
 	return oauth2.ReuseTokenSource(tok, ts), nil
 }
@@ -56,7 +62,7 @@ func NewClientCredentialsTokenSource(ctx context.Context, clientID, clientSecret
 	// Validate credentials eagerly so errors surface at startup.
 	tok, err := ts.Token()
 	if err != nil {
-		return nil, fmt.Errorf("baton-salesforce: client credentials token exchange failed: %w", err)
+		return nil, status.Errorf(codes.Unauthenticated, "baton-salesforce: client credentials token exchange failed: %v", err)
 	}
 	return oauth2.ReuseTokenSource(tok, ts), nil
 }

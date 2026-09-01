@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,7 +12,10 @@ import (
 	"testing"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/oauth2"
 )
 
@@ -200,16 +204,80 @@ func TestNormalizeAdditionalFields(t *testing.T) {
 	}
 }
 
-func TestNormalizeAdditionalFieldsCapsCount(t *testing.T) {
-	ctx := context.Background()
+// logRecorder is a minimal zapcore.Core that keeps the messages written through
+// it, so a test can assert on what an operator would actually see. Cheaper than
+// vendoring zaptest/observer for one assertion.
+type logRecorder struct {
+	zapcore.LevelEnabler
+	mutex    sync.Mutex
+	messages []string
+}
 
-	configured := make([]string, 0, maxAdditionalFields+10)
-	for i := range maxAdditionalFields + 10 {
-		configured = append(configured, "Custom_"+strings.Repeat("x", i%5)+string(rune('a'+i%26))+"__c")
+func (r *logRecorder) With([]zapcore.Field) zapcore.Core { return r }
+
+func (r *logRecorder) Check(entry zapcore.Entry, checked *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if r.Enabled(entry.Level) {
+		return checked.AddCore(entry, r)
+	}
+	return checked
+}
+
+func (r *logRecorder) Write(entry zapcore.Entry, _ []zapcore.Field) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.messages = append(r.messages, entry.Message)
+	return nil
+}
+
+func (r *logRecorder) Sync() error { return nil }
+
+func (r *logRecorder) contains(substr string) bool {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	for _, message := range r.messages {
+		if strings.Contains(message, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+// recordingContext returns a context whose logger feeds the returned recorder.
+func recordingContext() (context.Context, *logRecorder) {
+	recorder := &logRecorder{LevelEnabler: zapcore.DebugLevel}
+	return ctxzap.ToContext(context.Background(), zap.New(recorder)), recorder
+}
+
+func TestNormalizeAdditionalFieldsCapsCount(t *testing.T) {
+	const truncationWarning = "too many additional fields configured"
+
+	// Distinct, valid, non-standard field names: Custom_0__c, Custom_1__c, ...
+	uniqueFields := func(n int) []string {
+		fields := make([]string, 0, n)
+		for i := range n {
+			fields = append(fields, fmt.Sprintf("Custom_%d__c", i))
+		}
+		return fields
 	}
 
-	normalized := NormalizeAdditionalFields(ctx, TableNameUsers, configured)
-	require.LessOrEqual(t, len(normalized), maxAdditionalFields)
+	// A list exactly at the cap is legal: it comes through whole AND draws no
+	// warning. Warning here would tell an operator their config was truncated
+	// when nothing was dropped.
+	t.Run("exactly at the cap is not truncated", func(t *testing.T) {
+		ctx, logs := recordingContext()
+		atCap := uniqueFields(maxAdditionalFields)
+
+		require.Equal(t, atCap, NormalizeAdditionalFields(ctx, TableNameUsers, atCap))
+		require.False(t, logs.contains(truncationWarning), "warned about truncation with nothing dropped")
+	})
+
+	t.Run("over the cap is truncated and warns", func(t *testing.T) {
+		ctx, logs := recordingContext()
+		overCap := uniqueFields(maxAdditionalFields + 10)
+
+		require.Equal(t, overCap[:maxAdditionalFields], NormalizeAdditionalFields(ctx, TableNameUsers, overCap))
+		require.True(t, logs.contains(truncationWarning))
+	})
 }
 
 // TestGetUsersWithAdditionalFields is the ticket's core case: a configured

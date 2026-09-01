@@ -81,17 +81,22 @@ func NormalizeAdditionalFields(ctx context.Context, tableName string, configured
 			)
 			continue
 		}
-		seen[key] = struct{}{}
-		normalized = append(normalized, name)
-
+		// Checked before the append, so the warning only fires on a name that is
+		// actually being dropped. Checking after would warn on a legal list of
+		// exactly maxAdditionalFields names, telling an operator their config was
+		// truncated when nothing was.
 		if len(normalized) == maxAdditionalFields {
 			logger.Warn(
 				"salesforce-client: too many additional fields configured, ignoring the rest",
 				zap.String("table", tableName),
 				zap.Int("max", maxAdditionalFields),
+				zap.String("first_ignored_field", name),
 			)
 			break
 		}
+
+		seen[key] = struct{}{}
+		normalized = append(normalized, name)
 	}
 
 	return normalized

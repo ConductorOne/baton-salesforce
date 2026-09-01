@@ -77,6 +77,11 @@ func TestAgentsList(t *testing.T) {
 		require.Equal(t, "0051X", identity.Resource)
 
 		profile := serviceAgent.GetProfile().AsMap()
+		// Profile is emitted at both levels: the AgentTrait field is deprecated
+		// but still part of this connector's output, and the SDK only mirrors
+		// trait -> resource, never the reverse.
+		//nolint:staticcheck // intentionally reads the deprecated trait profile to pin backwards compatibility
+		require.Equal(t, profile, agentTrait.GetProfile().AsMap())
 		require.Equal(t, "0Xx000000000001", profile["id"])
 		require.Equal(t, "Service_Agent", profile["developer_name"])
 		require.Equal(t, "Service Agent", profile["master_label"])

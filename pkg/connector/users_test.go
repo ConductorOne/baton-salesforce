@@ -9,6 +9,7 @@ import (
 	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	"github.com/conductorone/baton-salesforce/test"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/stretchr/testify/require"
@@ -194,5 +195,77 @@ func TestUserResourceAdditionalFields(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, resource.GetProfile().AsMap(), 5)
+	})
+}
+
+// TestUserResourceEmitsProfileAndStatusAtBothLevels pins the backwards-compat
+// contract around the deprecated UserTrait fields. Profile and status moved to
+// the resource in baton-sdk v0.25.0, but the SDK only mirrors trait -> resource,
+// never the reverse — so setting only the resource-level options silently empties
+// UserTrait.Profile and lets NewUserTrait's ENABLED default stand in for a
+// deactivated user's real status. Both levels must agree.
+//
+//nolint:staticcheck // intentionally reads the deprecated trait profile/status to pin backwards compatibility
+func TestUserResourceEmitsProfileAndStatusAtBothLevels(t *testing.T) {
+	ctx := context.Background()
+
+	userTraitOf := func(t *testing.T, resource *v2.Resource) *v2.UserTrait {
+		t.Helper()
+
+		trait := &v2.UserTrait{}
+		annos := annotations.Annotations(resource.GetAnnotations())
+		picked, err := annos.Pick(trait)
+		require.NoError(t, err)
+		require.True(t, picked, "resource carries no user trait")
+		return trait
+	}
+
+	t.Run("active user", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:               "0051X",
+				Username:         "user@example.com",
+				Email:            "user@example.com",
+				FirstName:        "Ada",
+				LastName:         "Lovelace",
+				UserType:         "Standard",
+				IsActive:         true,
+				AdditionalFields: map[string]any{"Role_Based_Access__c": "Tier 2 Support"},
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		trait := userTraitOf(t, resource)
+		require.Equal(t, v2.Status_RESOURCE_STATUS_ENABLED, resource.GetStatus().GetStatus())
+		require.Equal(t, v2.UserTrait_Status_STATUS_ENABLED, trait.GetStatus().GetStatus())
+		require.Equal(t, resource.GetProfile().AsMap(), trait.GetProfile().AsMap())
+		require.Equal(t, "Tier 2 Support", trait.GetProfile().AsMap()["Role_Based_Access__c"])
+	})
+
+	// The regression this guards: with only WithResourceStatus, NewUserTrait
+	// defaults the unset trait status to ENABLED, reporting a deactivated user
+	// as active to anything still reading the trait.
+	t.Run("deactivated user", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:       "0051X",
+				Username: "user@example.com",
+				Email:    "user@example.com",
+				UserType: "Standard",
+				IsActive: false,
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		trait := userTraitOf(t, resource)
+		require.Equal(t, v2.Status_RESOURCE_STATUS_DISABLED, resource.GetStatus().GetStatus())
+		require.Equal(t, v2.UserTrait_Status_STATUS_DISABLED, trait.GetStatus().GetStatus())
+		require.Equal(t, resource.GetProfile().AsMap(), trait.GetProfile().AsMap())
 	})
 }

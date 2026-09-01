@@ -121,7 +121,22 @@ func userResource(
 		profile[name] = value
 	}
 
+	// Profile and status are set at BOTH levels on purpose.
+	//
+	// They live on the resource now (WithResourceProfile / WithResourceStatus
+	// below), but the deprecated UserTrait fields are still part of what this
+	// connector has always emitted, and BUGBOT.md treats emitted user data as a
+	// stable API. Dropping the trait options is not neutral: the SDK only
+	// mirrors trait -> resource, never the reverse, so trait profile would go
+	// empty, and NewUserTrait defaults an unset trait status to ENABLED — which
+	// would report every deactivated user as active to anything still reading
+	// the trait. The SDK itself writes these same deprecated fields under an
+	// equivalent suppression, for the same reason (see resource.NewUserTrait).
 	userTraitOptions := []rs.UserTraitOption{
+		//nolint:staticcheck // intentionally writes the deprecated trait profile/status for backwards compatibility
+		rs.WithUserProfile(profile),
+		//nolint:staticcheck // intentionally writes the deprecated trait profile/status for backwards compatibility
+		rs.WithStatus(status),
 		rs.WithEmail(email, true),
 		rs.WithUserLogin(user.Username),
 		rs.WithAccountType(accountTypeForUser(user.UserType, user.LicenseDefinitionKey)),

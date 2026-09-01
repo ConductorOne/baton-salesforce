@@ -45,6 +45,7 @@ type SalesforceClient struct {
 	configuredUserFields         []string
 	additionalUserFields         []string
 	additionalUserFieldsResolved bool
+	describeAttempts             int
 }
 
 // Gathered from the UserType field found here:

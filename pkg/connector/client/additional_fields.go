@@ -24,6 +24,13 @@ const (
 	// SELECT. SOQL has a 100k character query limit; this keeps a misconfigured
 	// list from getting anywhere near it.
 	maxAdditionalFields = 50
+
+	// maxDescribeAttempts is how many times we'll try to describe an object
+	// before giving up and using the configured field names as-is. A single
+	// flaky request shouldn't cost us canonical-casing resolution for the rest
+	// of the client's life, but retrying forever would mean one describe call
+	// per page of a sync against a describe endpoint that is genuinely broken.
+	maxDescribeAttempts = 3
 )
 
 // additionalFieldNamePattern matches a bare Salesforce field API name: a letter
@@ -100,6 +107,7 @@ func (c *SalesforceClient) SetAdditionalUserFields(ctx context.Context, fields [
 	c.configuredUserFields = NormalizeAdditionalFields(ctx, TableNameUsers, fields)
 	c.additionalUserFields = nil
 	c.additionalUserFieldsResolved = false
+	c.describeAttempts = 0
 }
 
 // describeFieldNames returns the field API names of an SObject, keyed by their
@@ -142,7 +150,7 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 }
 
 // additionalUserFieldNames returns the configured extra User fields that are
-// safe to select, resolving them against the User describe exactly once.
+// safe to select, resolving them against the User describe once.
 //
 // A configured field that doesn't exist on the object (a typo, or a field the
 // integration user can't see) would make the whole user query fail with
@@ -150,6 +158,13 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 // describe call itself fails we keep the configured list — losing the feature
 // because of one flaky request would be worse, and GetUsers still falls back to
 // the standard fields if Salesforce rejects the query.
+//
+// Resolution is only marked final once it has actually succeeded (or there is
+// nothing to resolve), so a transient describe failure is retried on the next
+// call rather than disabling canonical-casing resolution for the client's life.
+// After maxDescribeAttempts failures we stop asking and settle for the
+// configured names; additionalFieldValues matches record keys
+// case-insensitively, so a mis-cased name still yields its value.
 func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []string {
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()
@@ -157,22 +172,29 @@ func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []strin
 	if c.additionalUserFieldsResolved {
 		return c.additionalUserFields
 	}
-	c.additionalUserFieldsResolved = true
 
 	if len(c.configuredUserFields) == 0 {
+		c.additionalUserFieldsResolved = true
 		return nil
 	}
 
 	logger := ctxzap.Extract(ctx)
 	available, err := c.describeFieldNames(ctx, TableNameUsers)
 	if err != nil {
+		c.describeAttempts++
+		exhausted := c.describeAttempts >= maxDescribeAttempts
 		logger.Warn(
 			"salesforce-client: could not describe the User object, using additional fields as configured",
 			zap.Strings("additional_fields", c.configuredUserFields),
+			zap.Int("attempt", c.describeAttempts),
+			zap.Bool("will_retry", !exhausted),
 			zap.Error(err),
 		)
-		c.additionalUserFields = c.configuredUserFields
-		return c.additionalUserFields
+		if exhausted {
+			c.additionalUserFields = c.configuredUserFields
+			c.additionalUserFieldsResolved = true
+		}
+		return c.configuredUserFields
 	}
 
 	resolved := make([]string, 0, len(c.configuredUserFields))
@@ -193,6 +215,7 @@ func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []strin
 		zap.Strings("additional_fields", resolved),
 	)
 	c.additionalUserFields = resolved
+	c.additionalUserFieldsResolved = true
 	return c.additionalUserFields
 }
 
@@ -206,6 +229,7 @@ func (c *SalesforceClient) disableAdditionalUserFields() {
 	c.configuredUserFields = nil
 	c.additionalUserFields = nil
 	c.additionalUserFieldsResolved = true
+	c.describeAttempts = maxDescribeAttempts
 }
 
 // userSelectFields is the SELECT list for a User query: the standard fields
@@ -232,6 +256,10 @@ func isInvalidFieldError(err error) bool {
 // boolean and a number stays a number. Empty and null values are omitted — an
 // unset picklist carries no information for a reviewer — and structured values
 // (a nested relationship object) are skipped because the user profile is flat.
+//
+// Values are keyed by the record's own field name, which Salesforce always
+// reports as the canonical field API name whatever casing the SELECT used. So
+// the profile key is the canonical name whether or not the describe check ran.
 func additionalFieldValues(
 	ctx context.Context,
 	record simpleforce.SObject,
@@ -241,28 +269,56 @@ func additionalFieldValues(
 		return nil
 	}
 
+	logger := ctxzap.Extract(ctx)
+	// Built lazily, and only if some field misses an exact match: lowercased
+	// record key -> the key as Salesforce spelled it.
+	var recordKeys map[string]string
+
 	values := make(map[string]any, len(fields))
 	for _, name := range fields {
-		switch value := record.InterfaceField(name).(type) {
+		key := name
+		if _, present := record[key]; !present {
+			// A name that never went through the describe check keeps whatever
+			// casing config used, so match the record's keys case-insensitively
+			// (SOQL is case-insensitive, the JSON response is not).
+			if recordKeys == nil {
+				recordKeys = make(map[string]string, len(record))
+				for recordKey := range record {
+					recordKeys[strings.ToLower(recordKey)] = recordKey
+				}
+			}
+			canonical, ok := recordKeys[strings.ToLower(name)]
+			if !ok {
+				logger.Debug(
+					"salesforce-client: additional field is absent from the User record",
+					zap.String("field", name),
+					zap.String("user_id", record.ID()),
+				)
+				continue
+			}
+			key = canonical
+		}
+
+		switch value := record.InterfaceField(key).(type) {
 		case nil:
 			// Field is unset for this user.
 		case string:
 			if value == "" {
 				continue
 			}
-			values[name] = value
+			values[key] = value
 		case bool:
-			values[name] = value
+			values[key] = value
 		case float64:
-			values[name] = value
+			values[key] = value
 		case int:
-			values[name] = float64(value)
+			values[key] = float64(value)
 		case int64:
-			values[name] = float64(value)
+			values[key] = float64(value)
 		default:
-			ctxzap.Extract(ctx).Debug(
+			logger.Debug(
 				"salesforce-client: skipping additional field with unsupported value type",
-				zap.String("field", name),
+				zap.String("field", key),
 				zap.String("user_id", record.ID()),
 			)
 		}

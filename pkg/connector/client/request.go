@@ -72,11 +72,26 @@ func (c *SalesforceClient) query(
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
-		logger.Error(
-			"salesforce-connector: error querying salesforce",
-			zap.String("query", queryString),
-			zap.Error(err),
-		)
+		// INVALID_FIELD means one of the selected fields doesn't exist on the
+		// object or isn't visible to the integration user. Callers that select
+		// config-driven fields recover from it by retrying with the standard
+		// field set and log that recovery themselves (see GetUsers), so log it at
+		// Debug here rather than paging on a customer misconfiguration — the same
+		// treatment queryWithAPIVersion gives an expected INVALID_TYPE. The error
+		// is still returned, so a caller that can't recover surfaces it upward.
+		if isInvalidFieldError(err) {
+			logger.Debug(
+				"salesforce-connector: salesforce rejected a selected field",
+				zap.String("query", queryString),
+				zap.Error(err),
+			)
+		} else {
+			logger.Error(
+				"salesforce-connector: error querying salesforce",
+				zap.String("query", queryString),
+				zap.Error(err),
+			)
+		}
 		return nil, "", ratelimitData, err
 	}
 

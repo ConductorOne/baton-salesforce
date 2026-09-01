@@ -368,3 +368,182 @@ func TestAdditionalFieldValuesEmpty(t *testing.T) {
 	require.Nil(t, additionalFieldValues(ctx, map[string]any{"Id": "0051X"}, nil))
 	require.Nil(t, additionalFieldValues(ctx, map[string]any{"Id": "0051X"}, []string{"Missing__c"}))
 }
+
+// TestGetUserByEmailWithAdditionalFields covers the provisioning path: a newly
+// created account's resource carries the configured fields too.
+func TestGetUserByEmailWithAdditionalFields(t *testing.T) {
+	ctx := context.Background()
+
+	stub := &userQueryServer{
+		describe: func() (int, string) {
+			return http.StatusOK, describeResponse(t, "Id", "Email", "Role_Based_Access__c")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+	user, err := salesforceClient.GetUserByEmail(ctx, "user@example.com")
+	require.NoError(t, err)
+	require.Equal(
+		t,
+		map[string]any{"Role_Based_Access__c": "Tier 2 Support"},
+		user.AdditionalFields,
+	)
+
+	queries := stub.recordedQueries()
+	require.Len(t, queries, 1)
+	require.Contains(t, queries[0], "Role_Based_Access__c")
+	require.Contains(t, queries[0], "Email = 'user@example.com'")
+}
+
+// TestGetUserByEmailInvalidFieldFallback mirrors TestGetUsersInvalidFieldFallback
+// on the provisioning path, where a regression would surface as a failed account
+// creation rather than a degraded sync.
+func TestGetUserByEmailInvalidFieldFallback(t *testing.T) {
+	ctx := context.Background()
+
+	const invalidField = `[{"message":"No such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
+
+	stub := &userQueryServer{
+		describe: func() (int, string) {
+			// Describe is unavailable, so the configured names are used as-is and
+			// the query-time fallback is the only thing standing between a typo
+			// and a failed lookup.
+			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+		},
+		queryResult: func(soql string) (int, string) {
+			if strings.Contains(soql, "Role_Based_Access__c") {
+				return http.StatusBadRequest, invalidField
+			}
+			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+	user, err := salesforceClient.GetUserByEmail(ctx, "user@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	require.Equal(t, "user@example.com", user.Email)
+	require.Nil(t, user.AdditionalFields)
+
+	queries := stub.recordedQueries()
+	require.Len(t, queries, 2)
+	require.Contains(t, queries[0], "Role_Based_Access__c")
+	require.NotContains(t, queries[1], "Role_Based_Access__c")
+
+	// The field stays off for the rest of the client's life, so a later lookup
+	// doesn't repeat the failure.
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	_, err = salesforceClient.GetUserByEmail(ctx, "other@example.com")
+	require.NoError(t, err)
+	queries = stub.recordedQueries()
+	require.Len(t, queries, 3)
+	require.NotContains(t, queries[2], "Role_Based_Access__c")
+}
+
+// TestGetUsersRetriesDescribeAfterTransientFailure pins that a flaky describe
+// doesn't permanently cost us canonical-casing resolution: the next call tries
+// again, and once it succeeds the mis-cased config name is selected canonically.
+func TestGetUsersRetriesDescribeAfterTransientFailure(t *testing.T) {
+	ctx := context.Background()
+
+	var describeCalls int
+	stub := &userQueryServer{
+		describe: func() (int, string) {
+			describeCalls++
+			if describeCalls == 1 {
+				return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+			}
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	// Configured with the wrong casing, which only the describe can correct.
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"role_based_access__c"})
+
+	// First page: describe fails, so the configured casing goes into the SELECT.
+	users, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	require.Contains(t, stub.recordedQueries()[0], "role_based_access__c")
+	// The value still lands, keyed by the canonical name Salesforce reported.
+	require.Equal(
+		t,
+		map[string]any{"Role_Based_Access__c": "Tier 2 Support"},
+		users[0].AdditionalFields,
+	)
+
+	// Second page: describe is retried and succeeds, so the canonical name is used.
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	users, _, _, err = salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	require.Equal(t, 2, describeCalls)
+
+	queries := stub.recordedQueries()
+	require.Len(t, queries, 2)
+	require.Contains(t, queries[1], "Role_Based_Access__c")
+	require.NotContains(t, queries[1], "role_based_access__c")
+}
+
+// TestGetUsersStopsRetryingDescribe pins the other side of the retry: a describe
+// endpoint that is genuinely broken is not re-queried once per page forever.
+func TestGetUsersStopsRetryingDescribe(t *testing.T) {
+	ctx := context.Background()
+
+	var describeCalls int
+	stub := &userQueryServer{
+		describe: func() (int, string) {
+			describeCalls++
+			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+	for range maxDescribeAttempts + 3 {
+		require.NoError(t, uhttp.ClearCaches(ctx))
+		_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+		require.NoError(t, err)
+	}
+	require.Equal(t, maxDescribeAttempts, describeCalls)
+}
+
+// TestAdditionalFieldValuesCaseInsensitive covers the describe-unavailable path:
+// SOQL is case-insensitive but the JSON response is not, so a mis-cased config
+// name must still find its value — keyed by the name Salesforce reported.
+func TestAdditionalFieldValuesCaseInsensitive(t *testing.T) {
+	ctx := context.Background()
+
+	record := map[string]any{
+		"Id":                   "0051X",
+		"Role_Based_Access__c": "Tier 2 Support",
+		"Is_Contractor__c":     true,
+	}
+
+	values := additionalFieldValues(ctx, record, []string{
+		"role_based_access__c",
+		"IS_CONTRACTOR__C",
+		"Missing__c",
+	})
+
+	require.Equal(t, map[string]any{
+		"Role_Based_Access__c": "Tier 2 Support",
+		"Is_Contractor__c":     true,
+	}, values)
+}

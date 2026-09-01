@@ -340,21 +340,27 @@ func (c *SalesforceClient) GetUsers(
 		c.ResetAdditionalUserFieldsForSync()
 	}
 	additionalFields := c.additionalUserFieldNames(ctx)
+
+	// An additional field that Salesforce won't select fails the whole query,
+	// which would take every user down with it. When that is recoverable we drop
+	// the extra fields and retry once with the standard set, so the sync still
+	// completes. It is recoverable only on the first page: later pages replay a
+	// Salesforce-issued URL we can't rebuild.
+	//
+	// One condition, used twice on purpose. It gates both the Debug downgrade
+	// and the retry, so the log level can never say "expected, we'll recover"
+	// about a rejection that is in fact returned to the caller — which would
+	// lose the only log line carrying the offending SOQL.
+	canRecoverFromInvalidField := pageToken == "" && len(additionalFields) > 0
+
 	records, paginationUrl, ratelimitData, err := c.queryTolerating(
 		ctx,
 		newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
 		pageToken,
 		pageSize,
-		// Only this attempt can recover: it is the one carrying config-driven
-		// fields. The retry below selects the standard set, where an
-		// INVALID_FIELD is a real failure and belongs at Error.
-		len(additionalFields) > 0,
+		canRecoverFromInvalidField,
 	)
-	// An additional field that Salesforce won't select fails the whole query, which
-	// would take every user down with it. Drop the extra fields and retry once with
-	// the standard set so the sync still completes. Only the first page can hit this
-	// — later pages replay a Salesforce-issued URL that we can't rebuild.
-	if err != nil && pageToken == "" && len(additionalFields) > 0 && isInvalidFieldError(err) {
+	if err != nil && canRecoverFromInvalidField && isInvalidFieldError(err) {
 		logger.Warn(
 			"salesforce-client: Salesforce rejected an additional User field, syncing without additional fields",
 			zap.Strings("additional_fields", additionalFields),

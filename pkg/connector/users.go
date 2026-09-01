@@ -111,7 +111,14 @@ func userResource(
 	// onto a C1 attribute. The five keys above stay authoritative.
 	for name, value := range user.AdditionalFields {
 		if _, exists := profile[name]; exists {
-			ctxzap.Extract(ctx).Warn(
+			// Debug, not Warn: this fires once per user, so a warning would emit
+			// one line per synced user. It is also all but unreachable —
+			// NormalizeAdditionalFields already drops anything in
+			// TableNamesToFieldsMapping[TableNameUsers], and the standard keys
+			// above are snake_case, which no Salesforce field API name can be.
+			// The guard stays because it is what makes "the standard keys are
+			// authoritative" true by construction rather than by argument.
+			ctxzap.Extract(ctx).Debug(
 				"salesforce-connector: additional field collides with a standard profile key, skipping it",
 				zap.String("field", name),
 				zap.String("user_id", user.ID),

@@ -2,17 +2,42 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/jwt"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const oauthTokenPath = "/services/oauth2/token" //nolint:gosec // false positive: this is an API path, not a credential
+
+// tokenExchangeError classifies a failed token exchange for exit.LogExit.
+//
+// A credential rejection is tagged Unauthenticated so the process exits 16,
+// which is what the shared sync-test workflow's auth-error check looks for;
+// Salesforce answers a bad client secret or an unauthorized JWT with 400/401/403.
+// Everything else — a DNS failure, a timeout, a 5xx, or the HTTP 420
+// interstitial Salesforce serves while an org is spinning up — is left
+// unclassified rather than reported to an operator as bad credentials.
+//
+// uhttp.WrapErrors joins the status with the cause instead of formatting it into
+// a string, so status.Code still resolves through the join while errors.Is /
+// errors.As can still reach the underlying *oauth2.RetrieveError.
+func tokenExchangeError(message string, err error) error {
+	var retrieveErr *oauth2.RetrieveError
+	if errors.As(err, &retrieveErr) && retrieveErr.Response != nil {
+		switch retrieveErr.Response.StatusCode {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+			return uhttp.WrapErrors(codes.Unauthenticated, message, err)
+		}
+	}
+	return fmt.Errorf("%s: %w", message, err)
+}
 
 // NewJWTBearerTokenSource exchanges a signed JWT assertion for a Salesforce access token (RFC 7523).
 func NewJWTBearerTokenSource(ctx context.Context, clientID, subject, loginURL string, privateKey []byte) (oauth2.TokenSource, error) {
@@ -34,11 +59,7 @@ func NewJWTBearerTokenSource(ctx context.Context, clientID, subject, loginURL st
 	// Validate credentials eagerly so errors surface at startup.
 	tok, err := ts.Token()
 	if err != nil {
-		// Tag the failure with gRPC Unauthenticated so exit.LogExit surfaces
-		// exit code 16 (see baton-sdk/pkg/exit). Anything else, including the
-		// SDK's default, downgrades to Unknown (2), which the sync-test action
-		// treats as a config-validation error rather than an auth error.
-		return nil, status.Errorf(codes.Unauthenticated, "baton-salesforce: JWT bearer token exchange failed: %v", err)
+		return nil, tokenExchangeError("baton-salesforce: JWT bearer token exchange failed", err)
 	}
 	return oauth2.ReuseTokenSource(tok, ts), nil
 }
@@ -62,7 +83,7 @@ func NewClientCredentialsTokenSource(ctx context.Context, clientID, clientSecret
 	// Validate credentials eagerly so errors surface at startup.
 	tok, err := ts.Token()
 	if err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "baton-salesforce: client credentials token exchange failed: %v", err)
+		return nil, tokenExchangeError("baton-salesforce: client credentials token exchange failed", err)
 	}
 	return oauth2.ReuseTokenSource(tok, ts), nil
 }

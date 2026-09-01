@@ -8,7 +8,6 @@ import (
 
 const (
 	SalesforcePK                     = "Id"
-	allFieldsKeyword                 = "Fields(standard)"
 	TableNameGroupMemberships        = "GroupMember"
 	TableNameGroups                  = "Group"
 	TableNamePermissionAssignments   = "PermissionSetAssignment"
@@ -151,11 +150,7 @@ func NewQuery(tableName string, selectors ...string) *SalesforceQuery {
 	if len(selectors) == 0 {
 		selectors = TableNamesToFieldsMapping[tableName]
 	}
-	if len(selectors) == 1 && selectors[0] == "*" {
-		selectors[0] = allFieldsKeyword
-	} else {
-		selectors = append(selectors, SalesforcePK)
-	}
+	selectors = append(selectors, SalesforcePK)
 	return &SalesforceQuery{
 		sb: sqlbuilder.
 			Select(selectors...).

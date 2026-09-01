@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -59,9 +60,24 @@ var userTypesToSkip = map[string]bool{
 }
 
 type salesforceHttpTransport struct {
-	base        http.RoundTripper
-	rateLimit   *v2.RateLimitDescription
+	base http.RoundTripper
+	// rateLimit is written by RoundTrip on whichever goroutine drives the HTTP
+	// request and read by every caller in request.go, so it has to be atomic:
+	// two in-flight requests otherwise race on it. It stays one shared slot —
+	// with concurrent requests a caller can read a sibling's reading, which is
+	// the same approximation this transport has always made — but reading it is
+	// now at least well defined.
+	rateLimit   atomic.Pointer[v2.RateLimitDescription]
 	tokenSource oauth2.TokenSource
+}
+
+// currentRateLimit returns the most recent rate-limit reading, or nil if the
+// last response carried no Sforce-Limit-Info header.
+func (t *salesforceHttpTransport) currentRateLimit() *v2.RateLimitDescription {
+	if t == nil {
+		return nil
+	}
+	return t.rateLimit.Load()
 }
 
 func New(
@@ -115,9 +131,11 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		)
 		return err
 	}
+	// rateLimit starts as a nil pointer: there is no reading until a response
+	// carries one. It used to be seeded with an empty description, which was
+	// indistinguishable from a real all-zero reading.
 	interceptedTransport := salesforceHttpTransport{
 		base:        httpClient.Transport,
-		rateLimit:   &v2.RateLimitDescription{},
 		tokenSource: c.TokenSource,
 	}
 
@@ -182,7 +200,7 @@ func (c *SalesforceClient) Ping(ctx context.Context) (
 		LimitsPath,
 		nil,
 	)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, fmt.Errorf("salesforce-connector: error validating credentials: %w", err)
 	}
@@ -297,6 +315,14 @@ func (c *SalesforceClient) GetUsers(
 	logger := ctxzap.Extract(ctx)
 	if syncNonStandardUsers {
 		logger.Debug("salesforce-client: syncing non-standard users")
+	}
+	// An empty page token is the first page of a full user sync. Re-open field
+	// resolution here so a describe outage, or an INVALID_FIELD that tripped the
+	// fallback on an earlier sync, does not keep the feature off until the
+	// process restarts. Later pages carry a Salesforce-issued URL and leave the
+	// decision made at the top of this sync alone.
+	if pageToken == "" {
+		c.ResetAdditionalUserFieldsForSync()
 	}
 	additionalFields := c.additionalUserFieldNames(ctx)
 	records, paginationUrl, ratelimitData, err := c.query(

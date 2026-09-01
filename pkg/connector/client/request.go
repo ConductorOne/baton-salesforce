@@ -70,7 +70,7 @@ func (c *SalesforceClient) query(
 	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
 	records, err := c.client.Query(ctx, queryString)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		// INVALID_FIELD means one of the selected fields doesn't exist on the
 		// object or isn't visible to the integration user. Callers that select
@@ -138,7 +138,7 @@ func (c *SalesforceClient) queryWithAPIVersion(
 	}
 
 	records, err := c.client.Query(ctx, queryString)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		// INVALID_TYPE (e.g. BotDefinition on an org without Agentforce) is expected,
 		// so log it at Debug instead of Error. The error is still returned either way;
@@ -215,7 +215,7 @@ func (c *SalesforceClient) CreateObject(
 		created = created.Set(key, value)
 	}
 	created, err = created.Create(ctx)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, err
 	}
@@ -250,7 +250,7 @@ func (c *SalesforceClient) UpdateObject(
 		obj = obj.Set(key, value)
 	}
 	_, err = obj.Update(ctx)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, fmt.Errorf("baton-salesforce: failed to update %s: %w", tableName, err)
 	}
@@ -280,7 +280,7 @@ func (c *SalesforceClient) DeleteObject(
 		Set("Id", id).
 		Delete(ctx)
 
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	return ratelimitData, err
 }
 
@@ -300,7 +300,7 @@ func (c *SalesforceClient) getOneUser(ctx context.Context, userId string) (
 		return nil, nil, err
 	}
 
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if user == nil {
 		return nil, ratelimitData, fmt.Errorf("missing user %s", userId)
 	}
@@ -317,7 +317,7 @@ func (c *SalesforceClient) updateUser(
 	error,
 ) {
 	user, err := user.Set(fieldName, value).Update(ctx)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, err
 	}

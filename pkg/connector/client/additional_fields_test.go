@@ -315,14 +315,67 @@ func TestGetUsersInvalidFieldFallback(t *testing.T) {
 	require.Contains(t, queries[0], "Role_Based_Access__c")
 	require.NotContains(t, queries[1], "Role_Based_Access__c")
 
-	// The field stays off for the rest of the client's life, so page two doesn't
-	// repeat the failure.
+	// For the rest of THIS sync the field stays off, so no later query repeats
+	// the failure. GetUserByEmail shares the client's resolution state and does
+	// not start a new sync, which makes it the observable stand-in for a later
+	// page (a real page two replays a Salesforce-issued URL we can't rebuild).
 	require.NoError(t, uhttp.ClearCaches(ctx))
-	_, _, _, err = salesforceClient.GetUsers(ctx, "", 100, true, false)
+	_, err = salesforceClient.GetUserByEmail(ctx, "user@example.com")
 	require.NoError(t, err)
 	queries = stub.recordedQueries()
 	require.Len(t, queries, 3)
 	require.NotContains(t, queries[2], "Role_Based_Access__c")
+}
+
+// TestGetUsersReResolvesOnNextSync is the other half of the fallback contract:
+// switching the fields off lasts for the sync that hit the error, not for the
+// life of the process. A hosted connector runs for days, so a customer who
+// fixes a misspelled field name has to see it take effect without a restart.
+func TestGetUsersReResolvesOnNextSync(t *testing.T) {
+	ctx := context.Background()
+
+	const invalidField = `[{"message":"No such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
+
+	var describeWorks bool
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			if !describeWorks {
+				return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+			}
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(soql string) (int, string) {
+			if strings.Contains(soql, "Role_Based_Access__c") && !describeWorks {
+				return http.StatusBadRequest, invalidField
+			}
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	// Sync one: the field is rejected and switched off for the rest of the sync.
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+	users, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	require.Nil(t, users[0].AdditionalFields)
+
+	// The org is fixed (field created, or the integration user granted access).
+	describeWorks = true
+
+	// Sync two re-resolves from config without a restart, and the field is back.
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	users, _, _, err = salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	require.Equal(
+		t,
+		map[string]any{"Role_Based_Access__c": "Tier 2 Support"},
+		users[0].AdditionalFields,
+	)
+	require.Contains(t, stub.recordedQueries()[2], "Role_Based_Access__c")
 }
 
 // TestGetUsersWithoutAdditionalFields pins the default: no config, no describe
@@ -511,15 +564,18 @@ func TestGetUsersRetriesDescribeAfterTransientFailure(t *testing.T) {
 	require.NotContains(t, queries[1], "role_based_access__c")
 }
 
-// TestGetUsersStopsRetryingDescribe pins the other side of the retry: a describe
-// endpoint that is genuinely broken is not re-queried once per page forever.
-func TestGetUsersStopsRetryingDescribe(t *testing.T) {
+// TestGetUsersCapsDescribeAttemptsPerSync pins the other side of the retry: a
+// describe endpoint that is genuinely broken is retried a bounded number of
+// times per sync, not once per call — and the budget re-opens on the next sync.
+func TestGetUsersCapsDescribeAttemptsPerSync(t *testing.T) {
 	ctx := context.Background()
 
 	stub := &userQueryServer{
 		describe: func(int) (int, string) {
 			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
 		},
+		// The query succeeds even with the unresolved field, so the INVALID_FIELD
+		// fallback never fires and the describe budget is what's under test.
 		queryResult: func(string) (int, string) {
 			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
 		},
@@ -527,12 +583,24 @@ func TestGetUsersStopsRetryingDescribe(t *testing.T) {
 	server := stub.start(t)
 
 	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	// One sync: the first page plus several provisioning lookups, none of which
+	// starts a new sync. Only the first maxDescribeAttempts of them describe.
+	_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
 	for range maxDescribeAttempts + 3 {
 		require.NoError(t, uhttp.ClearCaches(ctx))
-		_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+		_, err = salesforceClient.GetUserByEmail(ctx, "user@example.com")
 		require.NoError(t, err)
 	}
 	require.Equal(t, maxDescribeAttempts, stub.recordedDescribeCalls())
+
+	// A new sync re-opens the budget rather than staying given up for the life
+	// of the process.
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	_, _, _, err = salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Equal(t, maxDescribeAttempts+1, stub.recordedDescribeCalls())
 }
 
 // TestAdditionalFieldValuesCaseInsensitive covers the describe-unavailable path:
@@ -557,4 +625,86 @@ func TestAdditionalFieldValuesCaseInsensitive(t *testing.T) {
 		"Role_Based_Access__c": "Tier 2 Support",
 		"Is_Contractor__c":     true,
 	}, values)
+}
+
+// TestGetUserByEmailMatchesGetUsers pins that the provisioning lookup and the
+// sync build the same SalesforceUser from the same record. LicenseDefinitionKey
+// was the gap: it is in the standard SELECT and userResource feeds it to
+// accountTypeForUser, so omitting it here classified a user created through
+// provisioning as HUMAN while the next sync classified them as SERVICE.
+func TestGetUserByEmailMatchesGetUsers(t *testing.T) {
+	ctx := context.Background()
+
+	record := standardUserRecord(map[string]any{
+		"FirstName": "Ada",
+		"LastName":  "Lovelace",
+		"Profile": map[string]any{
+			"UserLicense": map[string]any{
+				"LicenseDefinitionKey": "PID_Integration",
+			},
+		},
+		"Role_Based_Access__c": "Tier 2 Support",
+	})
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, record)
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	synced, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, synced, 1)
+
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	provisioned, err := salesforceClient.GetUserByEmail(ctx, "user@example.com")
+	require.NoError(t, err)
+
+	require.Equal(t, "PID_Integration", synced[0].LicenseDefinitionKey)
+	require.Equal(t, synced[0], provisioned)
+}
+
+// TestAdditionalUserFieldsConcurrentResolution exercises the double-checked
+// locking around the describe. The describe now runs outside the mutex so a
+// slow one can't park every concurrent caller, which means two callers can race
+// into it; whoever stores first wins and everyone must observe the same list.
+// Meaningful under -race.
+func TestAdditionalUserFieldsConcurrentResolution(t *testing.T) {
+	ctx := context.Background()
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	const callers = 8
+	results := make([][]string, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i] = salesforceClient.additionalUserFieldNames(ctx)
+		}()
+	}
+	wg.Wait()
+
+	for i, got := range results {
+		require.Equal(t, []string{"Role_Based_Access__c"}, got, "caller %d", i)
+	}
 }

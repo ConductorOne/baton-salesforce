@@ -243,6 +243,13 @@ func TestUserResourceEmitsProfileAndStatusAtBothLevels(t *testing.T) {
 		require.Equal(t, v2.UserTrait_Status_STATUS_ENABLED, trait.GetStatus().GetStatus())
 		require.Equal(t, resource.GetProfile().AsMap(), trait.GetProfile().AsMap())
 		require.Equal(t, "Tier 2 Support", trait.GetProfile().AsMap()["Role_Based_Access__c"])
+
+		// rs.GetProfile / rs.GetStatus are the accessors SDK consumers go
+		// through (resource_attrs.go); they read the resource level and fall
+		// back to the trait. Assert them too, so the test covers what is read
+		// and not only what is written.
+		require.Equal(t, "Tier 2 Support", rs.GetProfile(resource).AsMap()["Role_Based_Access__c"])
+		require.Equal(t, v2.Status_RESOURCE_STATUS_ENABLED, rs.GetStatus(resource).GetStatus())
 	})
 
 	// The regression this guards: with only WithResourceStatus, NewUserTrait
@@ -267,5 +274,6 @@ func TestUserResourceEmitsProfileAndStatusAtBothLevels(t *testing.T) {
 		require.Equal(t, v2.Status_RESOURCE_STATUS_DISABLED, resource.GetStatus().GetStatus())
 		require.Equal(t, v2.UserTrait_Status_STATUS_DISABLED, trait.GetStatus().GetStatus())
 		require.Equal(t, resource.GetProfile().AsMap(), trait.GetProfile().AsMap())
+		require.Equal(t, v2.Status_RESOURCE_STATUS_DISABLED, rs.GetStatus(resource).GetStatus())
 	})
 }

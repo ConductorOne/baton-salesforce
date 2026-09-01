@@ -101,13 +101,44 @@ func NormalizeAdditionalFields(ctx context.Context, tableName string, configured
 // alongside the standard ones. The list is normalized here; it is checked
 // against the object's describe lazily, on first use.
 func (c *SalesforceClient) SetAdditionalUserFields(ctx context.Context, fields []string) {
+	normalized := NormalizeAdditionalFields(ctx, TableNameUsers, fields)
+
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()
 
-	c.configuredUserFields = NormalizeAdditionalFields(ctx, TableNameUsers, fields)
+	c.configuredUserFields = normalized
+	c.clearAdditionalUserFieldResolutionLocked()
+}
+
+// clearAdditionalUserFieldResolutionLocked drops everything derived from the
+// configured list, so the next call re-runs the describe. It does NOT touch
+// configuredUserFields — that is the operator's config and only
+// SetAdditionalUserFields replaces it.
+func (c *SalesforceClient) clearAdditionalUserFieldResolutionLocked() {
 	c.additionalUserFields = nil
 	c.additionalUserFieldsResolved = false
 	c.describeAttempts = 0
+}
+
+// ResetAdditionalUserFieldsForSync re-opens field resolution at the start of a
+// full user sync.
+//
+// Without it, resolution is decided once and never revisited: a describe
+// outage, or one INVALID_FIELD that trips the query-time fallback, would keep
+// the extra fields off for the rest of the process. A hosted connector runs for
+// days, so a customer who corrects a misspelled field name — or an admin who
+// grants the integration user field-level access to one that was invisible —
+// would see nothing change until someone restarted it. Re-resolving once per
+// sync bounds the cost at one describe per sync while letting the feature
+// recover on its own.
+func (c *SalesforceClient) ResetAdditionalUserFieldsForSync() {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	if len(c.configuredUserFields) == 0 {
+		return
+	}
+	c.clearAdditionalUserFieldResolutionLocked()
 }
 
 // describeFieldNames returns the field API names of an SObject, keyed by their
@@ -166,21 +197,63 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 // configured names; additionalFieldValues matches record keys
 // case-insensitively, so a mis-cased name still yields its value.
 func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []string {
+	configured, done := c.additionalUserFieldsSnapshot()
+	if done {
+		return configured
+	}
+
+	// The describe runs WITHOUT the mutex. Holding it across a network
+	// round-trip would park every concurrent caller — a parallel syncer, or a
+	// GetUserByEmail on the provisioning path — behind one HTTP request, and a
+	// describe that hangs would hold them until the client's timeout fires.
+	// Racing callers may each issue a describe; one duplicate GET is a far
+	// better trade than serializing them. Initialize, which describeFieldNames
+	// calls, does not touch this mutex (salesforce.go:83).
+	logger := ctxzap.Extract(ctx)
+	available, err := c.describeFieldNames(ctx, TableNameUsers)
+
+	return c.storeAdditionalUserFields(logger, available, err)
+}
+
+// additionalUserFieldsSnapshot reports the fields to use and whether resolution
+// is already settled. When it returns false the caller must run a describe and
+// hand the outcome to storeAdditionalUserFields.
+func (c *SalesforceClient) additionalUserFieldsSnapshot() ([]string, bool) {
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()
 
 	if c.additionalUserFieldsResolved {
+		return c.additionalUserFields, true
+	}
+	if len(c.configuredUserFields) == 0 {
+		c.additionalUserFieldsResolved = true
+		return nil, true
+	}
+	return nil, false
+}
+
+// storeAdditionalUserFields folds a describe result into the client's state and
+// returns the fields to select.
+func (c *SalesforceClient) storeAdditionalUserFields(
+	logger *zap.Logger,
+	available map[string]string,
+	describeErr error,
+) []string {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	// While we were out of the lock another goroutine may have resolved the
+	// list, or the query-time fallback may have switched the fields off. Either
+	// way that decision wins over this describe.
+	if c.additionalUserFieldsResolved {
 		return c.additionalUserFields
 	}
-
 	if len(c.configuredUserFields) == 0 {
 		c.additionalUserFieldsResolved = true
 		return nil
 	}
 
-	logger := ctxzap.Extract(ctx)
-	available, err := c.describeFieldNames(ctx, TableNameUsers)
-	if err != nil {
+	if describeErr != nil {
 		c.describeAttempts++
 		exhausted := c.describeAttempts >= maxDescribeAttempts
 		logger.Warn(
@@ -188,7 +261,7 @@ func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []strin
 			zap.Strings("additional_fields", c.configuredUserFields),
 			zap.Int("attempt", c.describeAttempts),
 			zap.Bool("will_retry", !exhausted),
-			zap.Error(err),
+			zap.Error(describeErr),
 		)
 		if exhausted {
 			c.additionalUserFields = c.configuredUserFields
@@ -219,14 +292,18 @@ func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []strin
 	return c.additionalUserFields
 }
 
-// disableAdditionalUserFields drops the extra fields for the rest of this
-// client's life. Called when Salesforce rejects them at query time, so that
+// disableAdditionalUserFields drops the extra fields for the rest of the
+// current sync. Called when Salesforce rejects them at query time, so that
 // every later page and every later query uses the standard field set.
+//
+// configuredUserFields is deliberately left alone: the next
+// ResetAdditionalUserFieldsForSync re-resolves from it, so a corrected field
+// name or a newly granted permission takes effect on the next sync instead of
+// needing a process restart.
 func (c *SalesforceClient) disableAdditionalUserFields() {
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()
 
-	c.configuredUserFields = nil
 	c.additionalUserFields = nil
 	c.additionalUserFieldsResolved = true
 	c.describeAttempts = maxDescribeAttempts
@@ -310,11 +387,10 @@ func additionalFieldValues(
 		case bool:
 			values[key] = value
 		case float64:
+			// Every numeric Salesforce value arrives here: records are decoded
+			// by encoding/json into map[string]any, which represents all JSON
+			// numbers as float64.
 			values[key] = value
-		case int:
-			values[key] = float64(value)
-		case int64:
-			values[key] = float64(value)
 		default:
 			logger.Debug(
 				"salesforce-client: skipping additional field with unsupported value type",

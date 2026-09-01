@@ -180,15 +180,21 @@ func (c *SalesforceClient) GetUserByEmail(
 		}
 
 		users = append(users, &SalesforceUser{
-			ID:               record.ID(),
-			Username:         record.StringField("Username"),
-			Email:            record.StringField("Email"),
-			FirstName:        record.StringField("FirstName"),
-			LastName:         record.StringField("LastName"),
-			UserType:         record.StringField("UserType"),
-			IsActive:         isActive,
-			LastLoginDate:    lastLogin,
-			AdditionalFields: additionalFieldValues(ctx, record, additionalFields),
+			ID:        record.ID(),
+			Username:  record.StringField("Username"),
+			Email:     record.StringField("Email"),
+			FirstName: record.StringField("FirstName"),
+			LastName:  record.StringField("LastName"),
+			UserType:  record.StringField("UserType"),
+			// Profile.UserLicense.LicenseDefinitionKey is already in the standard
+			// SELECT, and userResource feeds it to accountTypeForUser to decide
+			// SERVICE vs HUMAN. Leaving it unset here classified a user built on
+			// the provisioning path differently from the same user built by a
+			// sync.
+			LicenseDefinitionKey: licenseDefinitionKey(record),
+			IsActive:             isActive,
+			LastLoginDate:        lastLogin,
+			AdditionalFields:     additionalFieldValues(ctx, record, additionalFields),
 		})
 	}
 

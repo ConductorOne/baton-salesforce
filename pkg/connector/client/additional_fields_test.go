@@ -589,8 +589,9 @@ func TestGetUserByEmailInvalidFieldFallback(t *testing.T) {
 	require.Contains(t, queries[0], "Role_Based_Access__c")
 	require.NotContains(t, queries[1], "Role_Based_Access__c")
 
-	// The field stays off for the rest of the client's life, so a later lookup
-	// doesn't repeat the failure.
+	// The field stays off until the next full user sync re-opens resolution, so
+	// a later lookup doesn't repeat the failure. (Only GetUsers on its first page
+	// resets; see disableAdditionalUserFields.)
 	require.NoError(t, uhttp.ClearCaches(ctx))
 	_, err = salesforceClient.GetUserByEmail(ctx, "other@example.com")
 	require.NoError(t, err)
@@ -892,4 +893,52 @@ func TestInitializeIsConcurrencySafe(t *testing.T) {
 	}
 	require.NotNil(t, salesforceClient.client)
 	require.NotNil(t, salesforceClient.salesforceTransport)
+}
+
+// TestInvalidFieldLogsErrorForNonRecoveringCallers pins the scope of the
+// INVALID_FIELD log downgrade. The recovering User queries log it at Debug —
+// they retry and report the recovery themselves — but every other caller, and
+// the standard-fields retry itself, must keep the Error line, since it is the
+// only log carrying the offending SOQL.
+func TestInvalidFieldLogsErrorForNonRecoveringCallers(t *testing.T) {
+	const invalidField = `[{"message":"No such column 'Nope__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
+	const errorMessage = "error querying salesforce"
+	const debugMessage = "salesforce rejected a selected field"
+
+	newClient := func(t *testing.T, ctx context.Context, fields []string) *SalesforceClient {
+		t.Helper()
+
+		stub := &userQueryServer{
+			describe: func(int) (int, string) {
+				return http.StatusOK, describeResponse(t, "Id", "Nope__c")
+			},
+			queryResult: func(string) (int, string) {
+				return http.StatusBadRequest, invalidField
+			},
+		}
+		return newTestClient(t, ctx, stub.start(t).URL, fields)
+	}
+
+	t.Run("recovering user query logs at debug", func(t *testing.T) {
+		ctx, logs := recordingContext()
+		salesforceClient := newClient(t, ctx, []string{"Nope__c"})
+
+		// Both attempts fail here: the first with the extra field (tolerated,
+		// Debug), the retry with the standard set (real failure, Error).
+		_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+		require.Error(t, err)
+		require.True(t, logs.contains(debugMessage), "recoverable rejection was not logged at debug")
+		require.True(t, logs.contains(errorMessage), "the standard-fields retry lost its error log")
+	})
+
+	t.Run("other callers keep the error log", func(t *testing.T) {
+		ctx, logs := recordingContext()
+		// No additional fields configured, so nothing can recover.
+		salesforceClient := newClient(t, ctx, nil)
+
+		_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+		require.Error(t, err)
+		require.True(t, logs.contains(errorMessage), "a non-recoverable rejection lost its error log")
+		require.False(t, logs.contains(debugMessage))
+	})
 }

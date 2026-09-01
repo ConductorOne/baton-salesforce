@@ -138,11 +138,14 @@ func (c *SalesforceClient) GetUserByEmail(
 	// While we're not syncing Chatter users, we need to support creating them so we can possibly then upgrade them.
 	// this is slightly Weird behavior but there's a future where we do a more nuanced thing here.
 	additionalFields := c.additionalUserFieldNames(ctx)
-	records, _, _, err := c.query(
+	records, _, _, err := c.queryTolerating(
 		ctx,
 		NewQuery(TableNameUsers, userSelectFields(additionalFields)...).WhereEq("Email", email),
 		"",
 		1,
+		// See GetUsers: only the attempt carrying config-driven fields tolerates
+		// an INVALID_FIELD at Debug; the retry below is held to Error.
+		len(additionalFields) > 0,
 	)
 	// Same guard as GetUsers: a field Salesforce won't select must not make
 	// looking up a user impossible. See GetUsers for the full rationale.

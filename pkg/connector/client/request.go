@@ -62,6 +62,32 @@ func (c *SalesforceClient) query(
 	*v2.RateLimitDescription,
 	error,
 ) {
+	return c.queryTolerating(ctx, query, paginationPath, pageSize, false)
+}
+
+// queryTolerating behaves like query, but when tolerateInvalidField is set an
+// INVALID_FIELD rejection is logged at Debug instead of Error.
+//
+// Only the User queries that select config-driven fields pass true: they retry
+// without the extra fields and log that recovery themselves, so an Error here
+// would page on a customer misconfiguration the connector handles — the same
+// treatment queryWithAPIVersion gives an expected INVALID_TYPE. Every other
+// caller keeps the Error line, because for them an INVALID_FIELD is fatal (the
+// integration user losing field-level access to a standard field, say) and this
+// is the only log that carries the offending SOQL; the SDK's log of the returned
+// error does not.
+func (c *SalesforceClient) queryTolerating(
+	ctx context.Context,
+	query *SalesforceQuery,
+	paginationPath string,
+	pageSize int,
+	tolerateInvalidField bool,
+) (
+	[]simpleforce.SObject,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
 	err := c.Initialize(ctx)
 	if err != nil {
 		return nil, "", nil, err
@@ -72,14 +98,7 @@ func (c *SalesforceClient) query(
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
-		// INVALID_FIELD means one of the selected fields doesn't exist on the
-		// object or isn't visible to the integration user. Callers that select
-		// config-driven fields recover from it by retrying with the standard
-		// field set and log that recovery themselves (see GetUsers), so log it at
-		// Debug here rather than paging on a customer misconfiguration — the same
-		// treatment queryWithAPIVersion gives an expected INVALID_TYPE. The error
-		// is still returned, so a caller that can't recover surfaces it upward.
-		if isInvalidFieldError(err) {
+		if tolerateInvalidField && isInvalidFieldError(err) {
 			logger.Debug(
 				"salesforce-connector: salesforce rejected a selected field",
 				zap.String("query", queryString),

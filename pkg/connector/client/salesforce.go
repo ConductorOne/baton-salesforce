@@ -340,11 +340,15 @@ func (c *SalesforceClient) GetUsers(
 		c.ResetAdditionalUserFieldsForSync()
 	}
 	additionalFields := c.additionalUserFieldNames(ctx)
-	records, paginationUrl, ratelimitData, err := c.query(
+	records, paginationUrl, ratelimitData, err := c.queryTolerating(
 		ctx,
 		newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
 		pageToken,
 		pageSize,
+		// Only this attempt can recover: it is the one carrying config-driven
+		// fields. The retry below selects the standard set, where an
+		// INVALID_FIELD is a real failure and belongs at Error.
+		len(additionalFields) > 0,
 	)
 	// An additional field that Salesforce won't select fails the whole query, which
 	// would take every user down with it. Drop the extra fields and retry once with

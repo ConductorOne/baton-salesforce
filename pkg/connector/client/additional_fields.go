@@ -310,14 +310,19 @@ func (c *SalesforceClient) storeAdditionalUserFields(
 	return c.additionalUserFields
 }
 
-// disableAdditionalUserFields drops the extra fields for the rest of the
-// current sync. Called when Salesforce rejects them at query time, so that
-// every later page and every later query uses the standard field set.
+// disableAdditionalUserFields drops the extra fields until the next full user
+// sync re-opens resolution. Called when Salesforce rejects them at query time,
+// so that every later page and every later query uses the standard field set.
 //
-// configuredUserFields is deliberately left alone: the next
-// ResetAdditionalUserFieldsForSync re-resolves from it, so a corrected field
-// name or a newly granted permission takes effect on the next sync instead of
-// needing a process restart.
+// "Until the next full user sync" precisely: ResetAdditionalUserFieldsForSync is
+// what re-opens resolution, and only GetUsers on its first page calls it. Trip
+// this from the GetUserByEmail provisioning path and the fields stay off until a
+// sync runs — deliberate, since re-resolving per provisioning call would mean a
+// describe in the middle of a burst of them.
+//
+// configuredUserFields is deliberately left alone, so a corrected field name or
+// a newly granted permission takes effect on that next sync rather than needing
+// a process restart.
 func (c *SalesforceClient) disableAdditionalUserFields() {
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()

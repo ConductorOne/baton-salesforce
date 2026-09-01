@@ -15,11 +15,6 @@ import (
 )
 
 const (
-	// DescribePathFmt is the SObject describe endpoint, used to check that a
-	// configured field API name actually exists on an object before we put it in
-	// a SELECT. Formatted with the SObject name.
-	DescribePathFmt = "/services/data/v64.0/sobjects/%s/describe"
-
 	// maxAdditionalFields caps how many extra fields config can append to a
 	// SELECT. SOQL has a 100k character query limit; this keeps a misconfigured
 	// list from getting anywhere near it.
@@ -32,6 +27,23 @@ const (
 	// per page of a sync against a describe endpoint that is genuinely broken.
 	maxDescribeAttempts = 3
 )
+
+// describePath is the SObject describe endpoint, used to check that a
+// configured field API name actually exists on an object before we put it in a
+// SELECT.
+//
+// The version is taken from simpleforce.DefaultAPIVersion, which is the version
+// the SOQL itself runs at (Client.Query formats
+// "/services/data/v<DefaultAPIVersion>/query?q=", force.go:83). The two have to
+// agree: describing against a newer version than the query would accept a field
+// that only exists in the newer schema, put it in the SELECT, and let Salesforce
+// reject the whole query with INVALID_FIELD — which drops every configured
+// field for that sync, not just the offending one. That is precisely the outcome
+// the describe check exists to prevent. It is the same version skew
+// queryWithAPIVersion works around for BotDefinition.
+func describePath(tableName string) string {
+	return fmt.Sprintf("/services/data/v%s/sobjects/%s/describe", simpleforce.DefaultAPIVersion, tableName)
+}
 
 // additionalFieldNamePattern matches a bare Salesforce field API name: a letter
 // followed by letters, digits, and underscores (custom fields end in "__c",
@@ -159,7 +171,7 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 	body, err := c.client.ApexREST(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf(DescribePathFmt, tableName),
+		describePath(tableName),
 		nil,
 	)
 	if err != nil {
@@ -213,7 +225,8 @@ func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []strin
 	// describe that hangs would hold them until the client's timeout fires.
 	// Racing callers may each issue a describe; one duplicate GET is a far
 	// better trade than serializing them. Initialize, which describeFieldNames
-	// calls, does not touch this mutex (salesforce.go:83).
+	// calls, takes its own initMutex and never this one, so there is no lock
+	// ordering between the two.
 	logger := ctxzap.Extract(ctx)
 	available, err := c.describeFieldNames(ctx, TableNameUsers)
 

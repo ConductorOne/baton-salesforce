@@ -37,7 +37,15 @@ type SalesforceClient struct {
 	Username            string
 	password            string
 	securityToken       string
-	initialized         bool
+
+	// initMutex guards the one-time setup below. Initialize writes client,
+	// salesforceTransport and initialized together; without this, two concurrent
+	// callers both see initialized == false, both build a client and transport,
+	// and their writes interleave — leaving a caller using a client whose
+	// transport is not the one in salesforceTransport, so currentRateLimit reads
+	// a slot that caller's requests never write.
+	initMutex   sync.Mutex
+	initialized bool
 
 	// Extra User fields to select, from config. configuredUserFields is the
 	// normalized config; additionalUserFields is the subset that survived the
@@ -97,6 +105,13 @@ func New(
 }
 
 func (c *SalesforceClient) Initialize(ctx context.Context) error {
+	// Held across the login round-trip on purpose: setup must happen exactly
+	// once, so concurrent callers have to queue behind the first rather than
+	// each log in. After that the lock is uncontended and the fast path below
+	// returns immediately.
+	c.initMutex.Lock()
+	defer c.initMutex.Unlock()
+
 	logger := ctxzap.Extract(ctx)
 	if c.initialized {
 		return nil

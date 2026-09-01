@@ -28,6 +28,8 @@ type userQueryServer struct {
 	// describeCalls counts describe requests. Guarded by mutex like queries:
 	// it is written on the handler goroutine and read from the test goroutine.
 	describeCalls int
+	// paths holds the URL path of every request, in order. Same guard.
+	paths []string
 
 	// describe answers the Nth describe request, N being 1-based.
 	describe    func(call int) (int, string)
@@ -38,6 +40,12 @@ func (s *userQueryServer) recordedQueries() []string {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return append([]string(nil), s.queries...)
+}
+
+func (s *userQueryServer) recordedPaths() []string {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return append([]string(nil), s.paths...)
 }
 
 func (s *userQueryServer) recordedDescribeCalls() int {
@@ -51,6 +59,10 @@ func (s *userQueryServer) start(t *testing.T) *httptest.Server {
 
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set(uhttp.ContentType, "application/json")
+
+		s.mutex.Lock()
+		s.paths = append(s.paths, request.URL.Path)
+		s.mutex.Unlock()
 
 		if strings.HasSuffix(request.URL.Path, "/describe") {
 			s.mutex.Lock()
@@ -779,4 +791,105 @@ func TestAdditionalUserFieldsConcurrentResolution(t *testing.T) {
 	for i, got := range results {
 		require.Equal(t, []string{"Role_Based_Access__c"}, got, "caller %d", i)
 	}
+}
+
+// TestDescribeUsesTheSameAPIVersionAsTheQuery guards the layering: the describe
+// check only keeps bad names out of the SELECT if it is describing the same
+// schema the SELECT will run against. Describing a newer version would admit a
+// field that exists only there, and Salesforce would then reject the whole
+// query with INVALID_FIELD — dropping every configured field for that sync,
+// which is the failure the describe check exists to prevent.
+func TestDescribeUsesTheSameAPIVersionAsTheQuery(t *testing.T) {
+	ctx := context.Background()
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+	_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+
+	// Compare the versions the two requests actually used rather than asserting
+	// a literal, so bumping simpleforce keeps this honest instead of stale.
+	// Segments are matched by position after "data" rather than by index:
+	// ApexREST joins instanceURL and path with a "/" that the path already has,
+	// so a describe URL carries a leading "//".
+	apiVersion := func(path string) string {
+		segments := strings.Split(path, "/")
+		for i, segment := range segments {
+			if segment == "data" && i+1 < len(segments) {
+				return segments[i+1]
+			}
+		}
+		require.Failf(t, "no API version in path", "path %q", path)
+		return ""
+	}
+
+	var describeVersion, queryVersion string
+	for _, path := range stub.recordedPaths() {
+		switch {
+		case strings.HasSuffix(path, "/describe"):
+			describeVersion = apiVersion(path)
+		case strings.HasSuffix(path, "/query"):
+			queryVersion = apiVersion(path)
+		}
+	}
+
+	require.NotEmpty(t, describeVersion, "no describe request recorded")
+	require.NotEmpty(t, queryVersion, "no query request recorded")
+	require.Equal(t, queryVersion, describeVersion,
+		"describe validates against a different API version than the SOQL runs at")
+}
+
+// TestInitializeIsConcurrencySafe covers the setup this branch made reachable
+// from more than one goroutine: Initialize writes client, salesforceTransport
+// and initialized together, and a torn init leaves a caller using a client whose
+// transport is not the one currentRateLimit reads. Meaningful under -race.
+func TestInitializeIsConcurrencySafe(t *testing.T) {
+	ctx := context.Background()
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusOK, describeResponse(t, "Id")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
+		},
+	}
+	server := stub.start(t)
+
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	// Deliberately NOT pre-initialized, unlike newTestClient.
+	salesforceClient := New(
+		server.URL,
+		oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "mock-access-token"}),
+		"",
+		"",
+		"",
+	)
+
+	const callers = 8
+	var wg sync.WaitGroup
+	errs := make([]error, callers)
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = salesforceClient.Initialize(ctx)
+		}()
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		require.NoError(t, err, "caller %d", i)
+	}
+	require.NotNil(t, salesforceClient.client)
+	require.NotNil(t, salesforceClient.salesforceTransport)
 }

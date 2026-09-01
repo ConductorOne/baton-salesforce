@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -336,16 +337,19 @@ func TestGetUsersReResolvesOnNextSync(t *testing.T) {
 
 	const invalidField = `[{"message":"No such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
 
-	var describeWorks bool
+	// Read on the httptest handler goroutines, written here on the test
+	// goroutine — the same cross-goroutine handoff the stub guards describeCalls
+	// for. A socket round-trip is not a happens-before edge.
+	var describeWorks atomic.Bool
 	stub := &userQueryServer{
 		describe: func(int) (int, string) {
-			if !describeWorks {
+			if !describeWorks.Load() {
 				return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
 			}
 			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
 		},
 		queryResult: func(soql string) (int, string) {
-			if strings.Contains(soql, "Role_Based_Access__c") && !describeWorks {
+			if strings.Contains(soql, "Role_Based_Access__c") && !describeWorks.Load() {
 				return http.StatusBadRequest, invalidField
 			}
 			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
@@ -363,7 +367,7 @@ func TestGetUsersReResolvesOnNextSync(t *testing.T) {
 	require.Nil(t, users[0].AdditionalFields)
 
 	// The org is fixed (field created, or the integration user granted access).
-	describeWorks = true
+	describeWorks.Store(true)
 
 	// Sync two re-resolves from config without a restart, and the field is back.
 	require.NoError(t, uhttp.ClearCaches(ctx))

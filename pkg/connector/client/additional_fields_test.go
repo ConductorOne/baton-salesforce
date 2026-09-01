@@ -20,8 +20,12 @@ type userQueryServer struct {
 	mutex sync.Mutex
 	// queries holds every SOQL string the client sent, in order.
 	queries []string
+	// describeCalls counts describe requests. Guarded by mutex like queries:
+	// it is written on the handler goroutine and read from the test goroutine.
+	describeCalls int
 
-	describe    func() (int, string)
+	// describe answers the Nth describe request, N being 1-based.
+	describe    func(call int) (int, string)
 	queryResult func(soql string) (int, string)
 }
 
@@ -31,6 +35,12 @@ func (s *userQueryServer) recordedQueries() []string {
 	return append([]string(nil), s.queries...)
 }
 
+func (s *userQueryServer) recordedDescribeCalls() int {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	return s.describeCalls
+}
+
 func (s *userQueryServer) start(t *testing.T) *httptest.Server {
 	t.Helper()
 
@@ -38,7 +48,12 @@ func (s *userQueryServer) start(t *testing.T) *httptest.Server {
 		writer.Header().Set(uhttp.ContentType, "application/json")
 
 		if strings.HasSuffix(request.URL.Path, "/describe") {
-			status, body := s.describe()
+			s.mutex.Lock()
+			s.describeCalls++
+			calls := s.describeCalls
+			s.mutex.Unlock()
+
+			status, body := s.describe(calls)
 			writer.WriteHeader(status)
 			_, _ = writer.Write([]byte(body))
 			return
@@ -202,7 +217,7 @@ func TestGetUsersWithAdditionalFields(t *testing.T) {
 	ctx := context.Background()
 
 	stub := &userQueryServer{
-		describe: func() (int, string) {
+		describe: func(int) (int, string) {
 			return http.StatusOK, describeResponse(t, "Id", "Username", "Role_Based_Access__c")
 		},
 		queryResult: func(string) (int, string) {
@@ -237,7 +252,7 @@ func TestGetUsersDropsUnknownAdditionalFields(t *testing.T) {
 	ctx := context.Background()
 
 	stub := &userQueryServer{
-		describe: func() (int, string) {
+		describe: func(int) (int, string) {
 			// Salesforce reports the canonical casing, which is what we select.
 			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
 		},
@@ -276,7 +291,7 @@ func TestGetUsersInvalidFieldFallback(t *testing.T) {
 	const invalidField = `[{"message":"\nSELECT Role_Based_Access__c\n       ^\nERROR at Row:1:Column:8\nNo such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
 
 	stub := &userQueryServer{
-		describe: func() (int, string) {
+		describe: func(int) (int, string) {
 			// Describe is unavailable, so the configured names are used as-is.
 			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
 		},
@@ -316,7 +331,7 @@ func TestGetUsersWithoutAdditionalFields(t *testing.T) {
 	ctx := context.Background()
 
 	stub := &userQueryServer{
-		describe: func() (int, string) {
+		describe: func(int) (int, string) {
 			t.Error("describe should not be called when no additional fields are configured")
 			return http.StatusOK, describeResponse(t)
 		},
@@ -375,7 +390,7 @@ func TestGetUserByEmailWithAdditionalFields(t *testing.T) {
 	ctx := context.Background()
 
 	stub := &userQueryServer{
-		describe: func() (int, string) {
+		describe: func(int) (int, string) {
 			return http.StatusOK, describeResponse(t, "Id", "Email", "Role_Based_Access__c")
 		},
 		queryResult: func(string) (int, string) {
@@ -410,7 +425,7 @@ func TestGetUserByEmailInvalidFieldFallback(t *testing.T) {
 	const invalidField = `[{"message":"No such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
 
 	stub := &userQueryServer{
-		describe: func() (int, string) {
+		describe: func(int) (int, string) {
 			// Describe is unavailable, so the configured names are used as-is and
 			// the query-time fallback is the only thing standing between a typo
 			// and a failed lookup.
@@ -453,11 +468,9 @@ func TestGetUserByEmailInvalidFieldFallback(t *testing.T) {
 func TestGetUsersRetriesDescribeAfterTransientFailure(t *testing.T) {
 	ctx := context.Background()
 
-	var describeCalls int
 	stub := &userQueryServer{
-		describe: func() (int, string) {
-			describeCalls++
-			if describeCalls == 1 {
+		describe: func(call int) (int, string) {
+			if call == 1 {
 				return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
 			}
 			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
@@ -490,7 +503,7 @@ func TestGetUsersRetriesDescribeAfterTransientFailure(t *testing.T) {
 	users, _, _, err = salesforceClient.GetUsers(ctx, "", 100, true, false)
 	require.NoError(t, err)
 	require.Len(t, users, 1)
-	require.Equal(t, 2, describeCalls)
+	require.Equal(t, 2, stub.recordedDescribeCalls())
 
 	queries := stub.recordedQueries()
 	require.Len(t, queries, 2)
@@ -503,10 +516,8 @@ func TestGetUsersRetriesDescribeAfterTransientFailure(t *testing.T) {
 func TestGetUsersStopsRetryingDescribe(t *testing.T) {
 	ctx := context.Background()
 
-	var describeCalls int
 	stub := &userQueryServer{
-		describe: func() (int, string) {
-			describeCalls++
+		describe: func(int) (int, string) {
 			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
 		},
 		queryResult: func(string) (int, string) {
@@ -521,7 +532,7 @@ func TestGetUsersStopsRetryingDescribe(t *testing.T) {
 		_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
 		require.NoError(t, err)
 	}
-	require.Equal(t, maxDescribeAttempts, describeCalls)
+	require.Equal(t, maxDescribeAttempts, stub.recordedDescribeCalls())
 }
 
 // TestAdditionalFieldValuesCaseInsensitive covers the describe-unavailable path:

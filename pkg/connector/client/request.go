@@ -65,23 +65,30 @@ func (c *SalesforceClient) query(
 	return c.queryTolerating(ctx, query, paginationPath, pageSize, false)
 }
 
-// queryTolerating behaves like query, but when tolerateInvalidField is set an
-// INVALID_FIELD rejection is logged at Debug instead of Error.
+// queryTolerating behaves like query, but when tolerateFieldError is set a
+// rejection the caller can recover from is logged at Debug instead of Error.
 //
 // Only the User queries that select config-driven fields pass true: they retry
 // without the extra fields and log that recovery themselves, so an Error here
-// would page on a customer misconfiguration the connector handles — the same
-// treatment queryWithAPIVersion gives an expected INVALID_TYPE. Every other
-// caller keeps the Error line, because for them an INVALID_FIELD is fatal (the
+// would add to the noise from a customer misconfiguration the connector handles
+// — the same treatment queryWithAPIVersion gives an expected INVALID_TYPE. Every
+// other caller keeps the Error line, because for them the rejection is fatal (the
 // integration user losing field-level access to a standard field, say) and this
 // is the only log that carries the offending SOQL; the SDK's log of the returned
 // error does not.
+//
+// This REDUCES the Error-level noise for a handled rejection; it does not remove
+// it. The vendored simpleforce fork's parseUhttpError logs two Error lines
+// (errorHelpers.go:94 and :105) for any non-2xx, into this same ctxzap stream and
+// before this one — so the observed sequence on the tolerated path is
+// warn → error → error → debug. Silencing those needs parseUhttpError to respect
+// status severity (4xx → Warn), which is a change to the fork, not to this repo.
 func (c *SalesforceClient) queryTolerating(
 	ctx context.Context,
 	query *SalesforceQuery,
 	paginationPath string,
 	pageSize int,
-	tolerateInvalidField bool,
+	tolerateFieldError bool,
 ) (
 	[]simpleforce.SObject,
 	string,
@@ -98,7 +105,7 @@ func (c *SalesforceClient) queryTolerating(
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
-		if tolerateInvalidField && isAdditionalFieldQueryError(err) {
+		if tolerateFieldError && isAdditionalFieldQueryError(err) {
 			logger.Debug(
 				"salesforce-connector: salesforce rejected a selected field",
 				zap.String("query", queryString),

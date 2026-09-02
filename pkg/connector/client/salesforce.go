@@ -363,16 +363,16 @@ func (c *SalesforceClient) GetUsers(
 	// and the retry, so the log level can never say "expected, we'll recover"
 	// about a rejection that is in fact returned to the caller — which would
 	// lose the only log line carrying the offending SOQL.
-	canRecoverFromInvalidField := pageToken == "" && len(additionalFields) > 0
+	canRecoverFromFieldError := pageToken == "" && len(additionalFields) > 0
 
 	records, paginationUrl, ratelimitData, err := c.queryTolerating(
 		ctx,
 		newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
 		pageToken,
 		pageSize,
-		canRecoverFromInvalidField,
+		canRecoverFromFieldError,
 	)
-	if err != nil && canRecoverFromInvalidField && isAdditionalFieldQueryError(err) {
+	if err != nil && canRecoverFromFieldError && isAdditionalFieldQueryError(err) {
 		logger.Warn(
 			"salesforce-client: Salesforce rejected an additional User field, syncing without additional fields",
 			zap.Strings("additional_fields", additionalFields),

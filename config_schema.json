@@ -160,9 +160,9 @@
       "boolField": {}
     },
     {
-      "name": "salesforce-additional-user-fields",
+      "name": "sync-additional-user-fields",
       "displayName": "Additional User Fields",
-      "description": "Salesforce User field API names to sync into the ConductorOne user profile, ex: Role_Based_Access__c. Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning.",
+      "description": "Salesforce User field API names to sync into the ConductorOne user profile, ex: Role_Based_Access__c. Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning. Up to 50 fields; extras are dropped with a warning.",
       "stringSliceField": {}
     },
     {
@@ -255,7 +255,7 @@
         "sync-connected-apps",
         "sync-deactivated-users",
         "sync-non-standard-users",
-        "salesforce-additional-user-fields",
+        "sync-additional-user-fields",
         "license-to-least-privileged-profile-mapping"
       ]
     },
@@ -269,7 +269,7 @@
         "sync-connected-apps",
         "sync-deactivated-users",
         "sync-non-standard-users",
-        "salesforce-additional-user-fields",
+        "sync-additional-user-fields",
         "license-to-least-privileged-profile-mapping",
         "oauth2-token"
       ],
@@ -289,7 +289,7 @@
         "sync-connected-apps",
         "sync-deactivated-users",
         "sync-non-standard-users",
-        "salesforce-additional-user-fields",
+        "sync-additional-user-fields",
         "license-to-least-privileged-profile-mapping"
       ]
     },
@@ -305,7 +305,7 @@
         "sync-connected-apps",
         "sync-deactivated-users",
         "sync-non-standard-users",
-        "salesforce-additional-user-fields",
+        "sync-additional-user-fields",
         "license-to-least-privileged-profile-mapping"
       ]
     }

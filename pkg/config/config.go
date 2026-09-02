@@ -67,11 +67,15 @@ var (
 		field.WithDefaultValue(false),
 	)
 	AdditionalUserFields = field.StringSliceField(
-		"salesforce-additional-user-fields",
+		// sync-*, not salesforce-*: the salesforce- prefix marks credential and
+		// connection fields, while this is a sync-scoping option like
+		// sync-connected-apps and sync-deactivated-users.
+		"sync-additional-user-fields",
 		field.WithDisplayName("Additional User Fields"),
 		field.WithDescription(
 			"Salesforce User field API names to sync into the ConductorOne user profile, ex: Role_Based_Access__c. "+
-				"Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning.",
+				"Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning. "+
+				"Up to 50 fields; extras are dropped with a warning.",
 		),
 	)
 	LicenseToLeastPrivilegedProfileMapping = field.StringMapField(

@@ -971,3 +971,53 @@ func TestAdditionalFieldValuesLargeNumberPrecision(t *testing.T) {
 	// Values inside 2^53 — the overwhelmingly common case — are exact.
 	require.Equal(t, float64(42), values["Seat_Count__c"])
 }
+
+// TestGetUsersDoesNotReResolveMidSync guards against drift between the SELECT
+// and the extraction list. Page two replays a Salesforce-issued nextRecordsUrl
+// whose SELECT was frozen on page one, so if page one ran with the raw
+// configured names (describe down) and page two re-resolved successfully and
+// dropped one, that field would silently vanish from page-two profiles while
+// page-one users kept it.
+func TestGetUsersDoesNotReResolveMidSync(t *testing.T) {
+	ctx := context.Background()
+
+	var describeWorks atomic.Bool
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			if !describeWorks.Load() {
+				return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+			}
+			// Would drop Role_Based_Access__c if page two were allowed to re-resolve.
+			return http.StatusOK, describeResponse(t, "Id", "Username")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	// Page one: describe is down, so the configured name goes into the SELECT.
+	firstPage, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, firstPage, 1)
+	require.Equal(t, "Tier 2 Support", firstPage[0].AdditionalFields["Role_Based_Access__c"])
+
+	describeCallsAfterPageOne := stub.recordedDescribeCalls()
+
+	// Page two, same sync. The describe is healthy again and would now drop the
+	// field — but the SELECT is already fixed, so the field must still be read.
+	describeWorks.Store(true)
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	secondPage, _, _, err := salesforceClient.GetUsers(ctx, "/services/data/v54.0/query/01g-2000", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, secondPage, 1)
+	require.Equal(t, firstPage[0].AdditionalFields, secondPage[0].AdditionalFields,
+		"page two extracted a different field set than page one selected")
+
+	require.Equal(t, describeCallsAfterPageOne, stub.recordedDescribeCalls(),
+		"page two re-resolved; the SELECT it replays was fixed on page one")
+}

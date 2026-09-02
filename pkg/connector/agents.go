@@ -33,10 +33,11 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		profile["bot_user_id"] = agent.BotUserID
 	}
 
-	// Set on both the trait and the resource: the trait field is deprecated but
-	// still part of this connector's emitted output, and the SDK only mirrors
-	// trait -> resource, so dropping it would empty AgentTrait.Profile for any
-	// consumer still reading it. See the note in userResource.
+	// Written explicitly at both levels; see the note in userResource for why
+	// neither half is redundant. In short: the trait field is deprecated but
+	// still part of this connector's emitted output, and the resource field is
+	// only populated for free while syncAgentTraitToResource's back-compat
+	// mirror survives.
 	agentTraitOptions := []rs.AgentTraitOption{
 		//nolint:staticcheck // intentionally writes the deprecated trait profile for backwards compatibility
 		rs.WithAgentProfile(profile),

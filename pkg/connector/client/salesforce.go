@@ -336,10 +336,17 @@ func (c *SalesforceClient) GetUsers(
 	// fallback on an earlier sync, does not keep the feature off until the
 	// process restarts. Later pages carry a Salesforce-issued URL and leave the
 	// decision made at the top of this sync alone.
+	//
+	// Resolution happens here, on page one, and only here: later pages reuse
+	// that list rather than re-resolving, because their SELECT was frozen when
+	// page one built it.
+	var additionalFields []string
 	if pageToken == "" {
 		c.ResetAdditionalUserFieldsForSync()
+		additionalFields = c.additionalUserFieldNames(ctx)
+	} else {
+		additionalFields = c.currentAdditionalUserFields()
 	}
-	additionalFields := c.additionalUserFieldNames(ctx)
 
 	// An additional field that Salesforce won't select fails the whole query,
 	// which would take every user down with it. When that is recoverable we drop

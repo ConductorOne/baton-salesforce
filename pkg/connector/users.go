@@ -128,17 +128,26 @@ func userResource(
 		profile[name] = value
 	}
 
-	// Profile and status are set at BOTH levels on purpose.
+	// Profile and status are written EXPLICITLY at both levels, on purpose.
+	// Please don't collapse this to one of them.
 	//
-	// They live on the resource now (WithResourceProfile / WithResourceStatus
-	// below), but the deprecated UserTrait fields are still part of what this
-	// connector has always emitted, and BUGBOT.md treats emitted user data as a
-	// stable API. Dropping the trait options is not neutral: the SDK only
-	// mirrors trait -> resource, never the reverse, so trait profile would go
-	// empty, and NewUserTrait defaults an unset trait status to ENABLED — which
-	// would report every deactivated user as active to anything still reading
-	// the trait. The SDK itself writes these same deprecated fields under an
-	// equivalent suppression, for the same reason (see resource.NewUserTrait).
+	// Dropping the TRAIT options is not neutral: the SDK only mirrors
+	// trait -> resource, never the reverse, so the trait profile would go empty,
+	// and NewUserTrait defaults an unset trait status to ENABLED — which reports
+	// every deactivated user as active to anything still reading the trait.
+	// BUGBOT.md treats emitted user data as a stable API. The SDK itself writes
+	// these deprecated fields under an equivalent suppression (resource.NewUserTrait).
+	//
+	// Dropping the RESOURCE options looks free today, because
+	// syncUserTraitToResource copies trait -> resource whenever the resource
+	// field is unset — so the values would land either way. But that mirror is
+	// an explicitly temporary back-compat shim for connectors that have not
+	// migrated. When it goes, the trait options stop populating the resource and
+	// these fields silently empty at the level that actually reaches the c1z
+	// (translate_v2.go reads r.GetProfile()/r.GetStatus() with no fallback).
+	// Writing both means whichever half the SDK drops first, the other still
+	// carries the data — and this PR already hit the mirrored-only failure once,
+	// in the other direction.
 	userTraitOptions := []rs.UserTraitOption{
 		//nolint:staticcheck // intentionally writes the deprecated trait profile/status for backwards compatibility
 		rs.WithUserProfile(profile),

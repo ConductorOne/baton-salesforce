@@ -213,6 +213,25 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 // After maxDescribeAttempts failures we stop asking and settle for the
 // configured names; additionalFieldValues matches record keys
 // case-insensitively, so a mis-cased name still yields its value.
+// currentAdditionalUserFields returns the fields already in force, without
+// describing. Pages after the first must use this: they replay a
+// Salesforce-issued nextRecordsUrl whose SELECT was fixed on page one
+// (getQueryString ignores the built query when paginationPath is set), so
+// re-resolving mid-sync would leave additionalFieldValues reading a list that no
+// longer matches the columns the response actually carries — a field would
+// silently vanish from page-2 profiles while page-1 users kept it.
+func (c *SalesforceClient) currentAdditionalUserFields() []string {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	if c.additionalUserFieldsResolved {
+		return c.additionalUserFields
+	}
+	// Resolution did not settle on page one (the describe failed), so the raw
+	// configured names went into that SELECT. Keep using them.
+	return c.configuredUserFields
+}
+
 func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []string {
 	configured, done := c.additionalUserFieldsSnapshot()
 	if done {

@@ -98,6 +98,7 @@ Flags:
       --security-token string                                        Salesforce security token (optional if trusted IP is configured) ($BATON_SECURITY_TOKEN)
       --skip-entitlements-and-grants                                 This must be set to skip syncing of entitlements and grants ($BATON_SKIP_ENTITLEMENTS_AND_GRANTS)
       --skip-full-sync                                               This must be set to skip a full sync ($BATON_SKIP_FULL_SYNC)
+      --sync-additional-user-fields strings                          Salesforce User field API names to sync into the ConductorOne user profile, ex: Role_Based_Access__c. Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning. Up to 50 fields; extras are dropped with a warning. ($BATON_SYNC_ADDITIONAL_USER_FIELDS)
       --sync-connected-apps                                          Optionally sync access to connected apps ($BATON_SYNC_CONNECTED_APPS)
       --sync-deactivated-users                                       Optionally sync deactivated users ($BATON_SYNC_DEACTIVATED_USERS) (default true)
       --sync-non-standard-users                                      Optionally sync non-standard user types (Customer Community, etc) ($BATON_SYNC_NON_STANDARD_USERS)

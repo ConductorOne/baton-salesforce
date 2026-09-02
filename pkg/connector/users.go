@@ -35,6 +35,22 @@ const (
 	xOrgProxyLicenseKey         = "PID_XOrg_Proxy_User" // cross-org proxy
 )
 
+// resourceStatusFromUserStatus mirrors the deprecated UserTrait status enum onto the
+// resource-level status enum. The two enums are shape-compatible; keep the mapping
+// explicit so future divergence is caught at compile time.
+func resourceStatusFromUserStatus(s v2.UserTrait_Status_Status) v2.Status_ResourceStatus {
+	switch s {
+	case v2.UserTrait_Status_STATUS_ENABLED:
+		return v2.Status_RESOURCE_STATUS_ENABLED
+	case v2.UserTrait_Status_STATUS_DISABLED:
+		return v2.Status_RESOURCE_STATUS_DISABLED
+	case v2.UserTrait_Status_STATUS_DELETED:
+		return v2.Status_RESOURCE_STATUS_DELETED
+	default:
+		return v2.Status_RESOURCE_STATUS_UNSPECIFIED
+	}
+}
+
 // accountTypeForUser classifies a user as SERVICE (non-human) or HUMAN from immutable
 // signals — UserType and the license key — not mutable names.
 func accountTypeForUser(userType, licenseDefinitionKey string) v2.UserTrait_AccountType {
@@ -90,10 +106,54 @@ func userResource(
 		"id":           user.ID,
 	}
 
+	// Any extra User fields named in config land in the profile under their
+	// Salesforce API name (e.g. "Role_Based_Access__c"), so they can be mapped
+	// onto a C1 attribute. The five keys above stay authoritative.
+	for name, value := range user.AdditionalFields {
+		if _, exists := profile[name]; exists {
+			// Debug, not Warn: this fires once per user, so a warning would emit
+			// one line per synced user. It is also all but unreachable —
+			// NormalizeAdditionalFields already drops anything in
+			// TableNamesToFieldsMapping[TableNameUsers], and the standard keys
+			// above are snake_case, which no Salesforce field API name can be.
+			// The guard stays because it is what makes "the standard keys are
+			// authoritative" true by construction rather than by argument.
+			ctxzap.Extract(ctx).Debug(
+				"salesforce-connector: additional field collides with a standard profile key, skipping it",
+				zap.String("field", name),
+				zap.String("user_id", user.ID),
+			)
+			continue
+		}
+		profile[name] = value
+	}
+
+	// Profile and status are written EXPLICITLY at both levels, on purpose.
+	// Please don't collapse this to one of them.
+	//
+	// Dropping the TRAIT options is not neutral: the SDK only mirrors
+	// trait -> resource, never the reverse, so the trait profile would go empty,
+	// and NewUserTrait defaults an unset trait status to ENABLED — which reports
+	// every deactivated user as active to anything still reading the trait.
+	// BUGBOT.md treats emitted user data as a stable API. The SDK itself writes
+	// these deprecated fields under an equivalent suppression (resource.NewUserTrait).
+	//
+	// Dropping the RESOURCE options looks free today, because
+	// syncUserTraitToResource copies trait -> resource whenever the resource
+	// field is unset — so the values would land either way. But that mirror is
+	// an explicitly temporary back-compat shim for connectors that have not
+	// migrated. When it goes, the trait options stop populating the resource and
+	// these fields silently empty at the level that actually reaches the c1z
+	// (translate_v2.go reads r.GetProfile()/r.GetStatus() with no fallback).
+	// Writing both means whichever half the SDK drops first, the other still
+	// carries the data — and this PR already hit the mirrored-only failure once,
+	// in the other direction.
 	userTraitOptions := []rs.UserTraitOption{
+		//nolint:staticcheck // intentionally writes the deprecated trait profile/status for backwards compatibility
 		rs.WithUserProfile(profile),
-		rs.WithEmail(email, true),
+		//nolint:staticcheck // intentionally writes the deprecated trait profile/status for backwards compatibility
 		rs.WithStatus(status),
+		rs.WithEmail(email, true),
 		rs.WithUserLogin(user.Username),
 		rs.WithAccountType(accountTypeForUser(user.UserType, user.LicenseDefinitionKey)),
 	}
@@ -107,6 +167,8 @@ func userResource(
 		resourceTypeUser,
 		user.ID,
 		userTraitOptions,
+		rs.WithResourceProfile(profile),
+		rs.WithResourceStatus(resourceStatusFromUserStatus(status), ""),
 	)
 	if err != nil {
 		return nil, err

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
@@ -35,7 +37,30 @@ type SalesforceClient struct {
 	Username            string
 	password            string
 	securityToken       string
-	initialized         bool
+
+	// initMutex guards the one-time setup below. Initialize writes client,
+	// salesforceTransport and initialized together; without this, two concurrent
+	// callers both see initialized == false, both build a client and transport,
+	// and their writes interleave — leaving a caller using a client whose
+	// transport is not the one in salesforceTransport, so currentRateLimit reads
+	// a slot that caller's requests never write.
+	initMutex   sync.Mutex
+	initialized bool
+
+	// Extra User fields to select, from config. configuredUserFields is the
+	// normalized config; additionalUserFields is the subset that survived the
+	// describe check. See additional_fields.go.
+	additionalUserFieldsMutex    sync.Mutex
+	configuredUserFields         []string
+	additionalUserFields         []string
+	additionalUserFieldsResolved bool
+	describeAttempts             int
+	// syncUserFields is the list page one of the current user sync fixed into
+	// its SELECT; later pages read it verbatim. syncUserFieldsSet separates "no
+	// snapshot yet" (a fresh client resuming mid-sync from a checkpointed page
+	// token) from "page one fixed an empty list". See additional_fields.go.
+	syncUserFields    []string
+	syncUserFieldsSet bool
 }
 
 // Gathered from the UserType field found here:
@@ -49,9 +74,24 @@ var userTypesToSkip = map[string]bool{
 }
 
 type salesforceHttpTransport struct {
-	base        http.RoundTripper
-	rateLimit   *v2.RateLimitDescription
+	base http.RoundTripper
+	// rateLimit is written by RoundTrip on whichever goroutine drives the HTTP
+	// request and read by every caller in request.go, so it has to be atomic:
+	// two in-flight requests otherwise race on it. It stays one shared slot —
+	// with concurrent requests a caller can read a sibling's reading, which is
+	// the same approximation this transport has always made — but reading it is
+	// now at least well defined.
+	rateLimit   atomic.Pointer[v2.RateLimitDescription]
 	tokenSource oauth2.TokenSource
+}
+
+// currentRateLimit returns the most recent rate-limit reading, or nil if the
+// last response carried no Sforce-Limit-Info header.
+func (t *salesforceHttpTransport) currentRateLimit() *v2.RateLimitDescription {
+	if t == nil {
+		return nil
+	}
+	return t.rateLimit.Load()
 }
 
 func New(
@@ -71,6 +111,13 @@ func New(
 }
 
 func (c *SalesforceClient) Initialize(ctx context.Context) error {
+	// Held across the login round-trip on purpose: setup must happen exactly
+	// once, so concurrent callers have to queue behind the first rather than
+	// each log in. After that the lock is uncontended and the fast path below
+	// returns immediately.
+	c.initMutex.Lock()
+	defer c.initMutex.Unlock()
+
 	logger := ctxzap.Extract(ctx)
 	if c.initialized {
 		return nil
@@ -105,9 +152,11 @@ func (c *SalesforceClient) Initialize(ctx context.Context) error {
 		)
 		return err
 	}
+	// rateLimit starts as a nil pointer: there is no reading until a response
+	// carries one. It used to be seeded with an empty description, which was
+	// indistinguishable from a real all-zero reading.
 	interceptedTransport := salesforceHttpTransport{
 		base:        httpClient.Transport,
-		rateLimit:   &v2.RateLimitDescription{},
 		tokenSource: c.TokenSource,
 	}
 
@@ -172,7 +221,7 @@ func (c *SalesforceClient) Ping(ctx context.Context) (
 		LimitsPath,
 		nil,
 	)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, fmt.Errorf("salesforce-connector: error validating credentials: %w", err)
 	}
@@ -259,6 +308,19 @@ func licenseDefinitionKey(record simpleforce.SObject) string {
 	return key
 }
 
+// newUserQuery builds a User SELECT over the given fields. Unless
+// syncNonStandardUsers is set it filters to Standard users only — full
+// Salesforce users with standard licenses. Other types like Partner, Portal, or
+// Chatter users have limited access and are excluded.
+// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
+func newUserQuery(fields []string, syncNonStandardUsers bool) *SalesforceQuery {
+	query := NewQuery(TableNameUsers, fields...)
+	if syncNonStandardUsers {
+		return query
+	}
+	return query.WhereEq("UserType", "Standard")
+}
+
 func (c *SalesforceClient) GetUsers(
 	ctx context.Context,
 	pageToken string,
@@ -271,24 +333,65 @@ func (c *SalesforceClient) GetUsers(
 	*v2.RateLimitDescription,
 	error,
 ) {
-	// Build the conditional query based on syncNonStandardUsers
 	logger := ctxzap.Extract(ctx)
-	var query *SalesforceQuery
 	if syncNonStandardUsers {
 		logger.Debug("salesforce-client: syncing non-standard users")
-		query = NewQuery(TableNameUsers) // No user type filter
-	} else {
-		// Filter for Standard users only - these are full Salesforce users with standard licenses.
-		// Other types like Partner, Portal, or Chatter users have limited access and are excluded.
-		// See https://developer.salesforce.com/docs/atlas.en-us.object_reference.meta/object_reference/sforce_api_objects_user.htm
-		query = NewQuery(TableNameUsers).WhereEq("UserType", "Standard")
 	}
-	records, paginationUrl, ratelimitData, err := c.query(
+	// An empty page token is the first page of a full user sync. Re-open field
+	// resolution here so a describe outage, or an INVALID_FIELD that tripped the
+	// fallback on an earlier sync, does not keep the feature off until the
+	// process restarts. Later pages carry a Salesforce-issued URL and leave the
+	// decision made at the top of this sync alone.
+	//
+	// Resolution happens here, on page one, and only here: later pages reuse
+	// that list rather than re-resolving, because their SELECT was frozen when
+	// page one built it.
+	var additionalFields []string
+	if pageToken == "" {
+		additionalFields = c.beginUserSyncFields(ctx)
+	} else {
+		additionalFields = c.userSyncFields(ctx)
+	}
+
+	// An additional field that Salesforce won't select fails the whole query,
+	// which would take every user down with it. When that is recoverable we drop
+	// the extra fields and retry once with the standard set, so the sync still
+	// completes. It is recoverable only on the first page: later pages replay a
+	// Salesforce-issued URL we can't rebuild.
+	//
+	// One condition, used twice on purpose. It gates both the Debug downgrade
+	// and the retry, so the log level can never say "expected, we'll recover"
+	// about a rejection that is in fact returned to the caller — which would
+	// lose the only log line carrying the offending SOQL.
+	canRecoverFromFieldError := pageToken == "" && len(additionalFields) > 0
+
+	records, paginationUrl, ratelimitData, err := c.queryTolerating(
 		ctx,
-		query,
+		newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
 		pageToken,
 		pageSize,
+		canRecoverFromFieldError,
 	)
+	if err != nil && canRecoverFromFieldError && isAdditionalFieldQueryError(err) {
+		logger.Warn(
+			"salesforce-client: Salesforce rejected an additional User field, syncing without additional fields",
+			zap.Strings("additional_fields", additionalFields),
+			zap.Error(err),
+		)
+		c.disableAdditionalUserFields()
+		additionalFields = nil
+		// Page one is about to re-query with the standard set, so the snapshot
+		// later pages read has to follow. Done here rather than inside
+		// disableAdditionalUserFields, which the provisioning path also calls:
+		// only page one may write this.
+		c.setUserSyncFields(nil)
+		records, paginationUrl, ratelimitData, err = c.query(
+			ctx,
+			newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),
+			pageToken,
+			pageSize,
+		)
+	}
 	if err != nil {
 		return nil, "", ratelimitData, err
 	}
@@ -320,6 +423,7 @@ func (c *SalesforceClient) GetUsers(
 			LicenseDefinitionKey: licenseDefinitionKey(record),
 			IsActive:             isActive,
 			LastLoginDate:        lastLogin,
+			AdditionalFields:     additionalFieldValues(ctx, record, additionalFields),
 		})
 	}
 	return users, paginationUrl, ratelimitData, nil

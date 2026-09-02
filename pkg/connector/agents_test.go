@@ -68,7 +68,11 @@ func TestAgentsList(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, agentTrait)
 		// Status is intentionally unset (BotVersion-only, out of scope for v1).
+		// Pinned at both levels, like the profile below and like
+		// TestUserResourceEmitsProfileAndStatusAtBothLevels does for users.
 		require.Equal(t, v2.Status_RESOURCE_STATUS_UNSPECIFIED, serviceAgent.GetStatus().GetStatus())
+		//nolint:staticcheck // intentionally reads the deprecated trait status to pin backwards compatibility
+		require.Equal(t, v2.AgentTrait_AGENT_STATUS_UNSPECIFIED, agentTrait.GetStatus())
 		// BotUserId is populated for the Service Agent, so identity_resource_id
 		// links the agent to its runtime user resource.
 		identity := agentTrait.GetIdentityResourceId()

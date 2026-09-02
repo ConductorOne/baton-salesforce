@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -941,4 +942,32 @@ func TestInvalidFieldLogsErrorForNonRecoveringCallers(t *testing.T) {
 		require.True(t, logs.contains(errorMessage), "a non-recoverable rejection lost its error log")
 		require.False(t, logs.contains(debugMessage))
 	})
+}
+
+// TestAdditionalFieldValuesLargeNumberPrecision pins a known limitation rather
+// than asserting desired behaviour. Salesforce Number and Auto Number fields
+// allow 18 digits, but simpleforce decodes records with json.Unmarshal and no
+// UseNumber (force.go:97), so anything past float64's exact-integer range is
+// already rounded before it reaches us. Rendering it as a string here would not
+// recover the digits — only disguise the rounding — so it passes through as a
+// number and docs/connector.mdx tells operators to use a Text field instead.
+func TestAdditionalFieldValuesLargeNumberPrecision(t *testing.T) {
+	ctx := context.Background()
+
+	var record map[string]any
+	require.NoError(t, json.Unmarshal(
+		[]byte(`{"Id":"0051X","Employee_ID__c":123456789012345678,"Seat_Count__c":42}`),
+		&record,
+	))
+
+	values := additionalFieldValues(ctx, record, []string{"Employee_ID__c", "Seat_Count__c"})
+
+	// Rounded on the way in, not by us: the exact value never survives the decode.
+	require.Equal(t, float64(123456789012345678), values["Employee_ID__c"])
+	require.NotEqual(t, "123456789012345678",
+		strconv.FormatFloat(values["Employee_ID__c"].(float64), 'f', -1, 64),
+		"if this passes, simpleforce started preserving integer precision and the docs note can go")
+
+	// Values inside 2^53 — the overwhelmingly common case — are exact.
+	require.Equal(t, float64(42), values["Seat_Count__c"])
 }

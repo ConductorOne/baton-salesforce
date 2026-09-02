@@ -211,21 +211,44 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 func (c *SalesforceClient) beginUserSyncFields(ctx context.Context) []string {
 	c.ResetAdditionalUserFieldsForSync()
 	fields := c.additionalUserFieldNames(ctx)
-
-	c.additionalUserFieldsMutex.Lock()
-	defer c.additionalUserFieldsMutex.Unlock()
-	c.syncUserFields = fields
+	c.setUserSyncFields(fields)
 	return fields
 }
 
-// userSyncFields returns the list beginUserSyncFields fixed for this sync, for
-// pages after the first to extract against. Written only by beginUserSyncFields,
-// so the provisioning path cannot retarget an in-flight sync.
-func (c *SalesforceClient) userSyncFields() []string {
+func (c *SalesforceClient) setUserSyncFields(fields []string) {
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()
 
-	return c.syncUserFields
+	c.syncUserFields = fields
+	c.syncUserFieldsSet = true
+}
+
+// userSyncFields returns the list beginUserSyncFields fixed for this sync, for
+// pages after the first to extract against. Written only by page one, so the
+// provisioning path cannot retarget an in-flight sync.
+//
+// With no snapshot it resolves instead of returning nothing. That happens when
+// the process restarts mid-sync: the page token is checkpointed in the c1z, so
+// the SDK can resume on a fresh client straight into a later page, and returning
+// nil there would silently drop the fields from every remaining page while the
+// pages written before the restart kept them. syncUserFieldsSet is what
+// distinguishes "no snapshot yet" from "page one legitimately fixed an empty
+// list" — the latter is what disableAdditionalUserFields leaves behind. The
+// re-resolved list may differ from the one the replayed SELECT was built with,
+// but additionalFieldValues matches record keys and skips what isn't there, so a
+// mismatch costs nothing beyond the fields that genuinely aren't in the response.
+func (c *SalesforceClient) userSyncFields(ctx context.Context) []string {
+	c.additionalUserFieldsMutex.Lock()
+	if c.syncUserFieldsSet {
+		fields := c.syncUserFields
+		c.additionalUserFieldsMutex.Unlock()
+		return fields
+	}
+	c.additionalUserFieldsMutex.Unlock()
+
+	fields := c.additionalUserFieldNames(ctx)
+	c.setUserSyncFields(fields)
+	return fields
 }
 
 // additionalUserFieldNames returns the configured extra User fields that are
@@ -361,6 +384,13 @@ func (c *SalesforceClient) disableAdditionalUserFields() {
 	c.additionalUserFields = nil
 	c.additionalUserFieldsResolved = true
 	c.describeAttempts = maxDescribeAttempts
+
+	// The sync's snapshot has to follow. Page one is about to re-query with the
+	// standard field set, so later pages must extract against that — leaving the
+	// rejected names in the snapshot would have them looking for columns the
+	// replayed nextRecordsUrl never selected. syncUserFieldsSet stays true: the
+	// list is now legitimately empty, not merely unrecorded.
+	c.syncUserFields = nil
 }
 
 // userSelectFields is the SELECT list for a User query: the standard fields

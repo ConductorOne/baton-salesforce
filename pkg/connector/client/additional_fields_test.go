@@ -1069,3 +1069,68 @@ func TestProvisioningCannotRetargetAnInFlightSync(t *testing.T) {
 	require.Equal(t, firstPage[0].AdditionalFields, secondPage[0].AdditionalFields,
 		"a provisioning lookup retargeted an in-flight sync")
 }
+
+// TestInvalidFieldFallbackClearsTheSyncSnapshot pins that the page-one snapshot
+// follows the fallback. After the fallback, page one has queried the standard
+// field set, so later pages must extract against that — a stale snapshot would
+// have them hunting for columns the replayed nextRecordsUrl never selected.
+func TestInvalidFieldFallbackClearsTheSyncSnapshot(t *testing.T) {
+	ctx := context.Background()
+
+	const invalidField = `[{"message":"No such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+		},
+		queryResult: func(soql string) (int, string) {
+			if strings.Contains(soql, "Role_Based_Access__c") {
+				return http.StatusBadRequest, invalidField
+			}
+			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	_, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Empty(t, salesforceClient.userSyncFields(ctx),
+		"the rejected field survived in the sync snapshot")
+
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	secondPage, _, _, err := salesforceClient.GetUsers(ctx, "/services/data/v54.0/query/01g-2000", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, secondPage, 1)
+	require.Nil(t, secondPage[0].AdditionalFields)
+}
+
+// TestResumingMidSyncStillSelectsAdditionalFields covers a restart. The page
+// token is checkpointed in the c1z, so the SDK can resume on a fresh client
+// straight into a later page — with no page one to have taken a snapshot.
+// Returning nothing there would drop the fields from every remaining page while
+// the pages written before the restart kept them.
+func TestResumingMidSyncStillSelectsAdditionalFields(t *testing.T) {
+	ctx := context.Background()
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	// Fresh client, resuming straight into page two.
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+	resumed, _, _, err := salesforceClient.GetUsers(ctx, "/services/data/v54.0/query/01g-2000", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, resumed, 1)
+	require.Equal(t, "Tier 2 Support", resumed[0].AdditionalFields["Role_Based_Access__c"],
+		"a mid-sync resume dropped the additional fields")
+}

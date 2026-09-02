@@ -380,6 +380,11 @@ func (c *SalesforceClient) GetUsers(
 		)
 		c.disableAdditionalUserFields()
 		additionalFields = nil
+		// Page one is about to re-query with the standard set, so the snapshot
+		// later pages read has to follow. Done here rather than inside
+		// disableAdditionalUserFields, which the provisioning path also calls:
+		// only page one may write this.
+		c.setUserSyncFields(nil)
 		records, paginationUrl, ratelimitData, err = c.query(
 			ctx,
 			newUserQuery(userSelectFields(additionalFields), syncNonStandardUsers),

@@ -1134,3 +1134,48 @@ func TestResumingMidSyncStillSelectsAdditionalFields(t *testing.T) {
 	require.Equal(t, "Tier 2 Support", resumed[0].AdditionalFields["Role_Based_Access__c"],
 		"a mid-sync resume dropped the additional fields")
 }
+
+// TestProvisioningFallbackDoesNotWipeTheSyncSnapshot is the fallback-path twin
+// of TestProvisioningCannotRetargetAnInFlightSync. A provisioning lookup that
+// trips INVALID_FIELD must not clear the snapshot of a sync between pages: those
+// pages replay a nextRecordsUrl that still selects the columns page one asked
+// for, so dropping the list would make the fields vanish for exactly those users.
+func TestProvisioningFallbackDoesNotWipeTheSyncSnapshot(t *testing.T) {
+	ctx := context.Background()
+
+	const invalidField = `[{"message":"No such column 'Role_Based_Access__c' on entity 'User'.","errorCode":"INVALID_FIELD"}]`
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			return http.StatusOK, describeResponse(t, "Id", "Role_Based_Access__c")
+		},
+		queryResult: func(soql string) (int, string) {
+			// Only the provisioning lookup is rejected; the sync's queries are fine.
+			if strings.Contains(soql, "Email = ") && strings.Contains(soql, "Role_Based_Access__c") {
+				return http.StatusBadRequest, invalidField
+			}
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	firstPage, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Equal(t, "Tier 2 Support", firstPage[0].AdditionalFields["Role_Based_Access__c"])
+
+	// Provisioning lookup interleaves and trips the fallback.
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	_, err = salesforceClient.GetUserByEmail(ctx, "user@example.com")
+	require.NoError(t, err)
+
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	secondPage, _, _, err := salesforceClient.GetUsers(ctx, "/services/data/v54.0/query/01g-2000", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, secondPage, 1)
+	require.Equal(t, firstPage[0].AdditionalFields, secondPage[0].AdditionalFields,
+		"a provisioning fallback wiped the in-flight sync's snapshot")
+}

@@ -385,12 +385,11 @@ func (c *SalesforceClient) disableAdditionalUserFields() {
 	c.additionalUserFieldsResolved = true
 	c.describeAttempts = maxDescribeAttempts
 
-	// The sync's snapshot has to follow. Page one is about to re-query with the
-	// standard field set, so later pages must extract against that — leaving the
-	// rejected names in the snapshot would have them looking for columns the
-	// replayed nextRecordsUrl never selected. syncUserFieldsSet stays true: the
-	// list is now legitimately empty, not merely unrecorded.
-	c.syncUserFields = nil
+	// syncUserFields is deliberately NOT touched here. GetUserByEmail calls this
+	// too, and a provisioning lookup must not wipe the snapshot of a sync that is
+	// between pages — those pages replay a nextRecordsUrl that still selects the
+	// columns page one asked for. GetUsers clears the snapshot itself when its
+	// own page-one fallback fires.
 }
 
 // userSelectFields is the SELECT list for a User query: the standard fields

@@ -197,6 +197,37 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 	return names, nil
 }
 
+// beginUserSyncFields resolves the extra User fields for a whole sync and
+// records them, returning the list page one puts in its SELECT.
+//
+// The list is stored rather than re-derived because pages after the first replay
+// a Salesforce-issued nextRecordsUrl whose SELECT was fixed here (getQueryString
+// ignores the built query when paginationPath is set). Anything that re-derived
+// it mid-sync — a describe retry, or a GetUserByEmail on the provisioning path
+// resolving or tripping disableAdditionalUserFields between pages — would leave
+// additionalFieldValues reading later pages against columns those responses do
+// not carry, and the field would silently vanish from page-2 profiles while
+// page-1 users kept it.
+func (c *SalesforceClient) beginUserSyncFields(ctx context.Context) []string {
+	c.ResetAdditionalUserFieldsForSync()
+	fields := c.additionalUserFieldNames(ctx)
+
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+	c.syncUserFields = fields
+	return fields
+}
+
+// userSyncFields returns the list beginUserSyncFields fixed for this sync, for
+// pages after the first to extract against. Written only by beginUserSyncFields,
+// so the provisioning path cannot retarget an in-flight sync.
+func (c *SalesforceClient) userSyncFields() []string {
+	c.additionalUserFieldsMutex.Lock()
+	defer c.additionalUserFieldsMutex.Unlock()
+
+	return c.syncUserFields
+}
+
 // additionalUserFieldNames returns the configured extra User fields that are
 // safe to select, resolving them against the User describe once.
 //
@@ -213,25 +244,6 @@ func (c *SalesforceClient) describeFieldNames(ctx context.Context, tableName str
 // After maxDescribeAttempts failures we stop asking and settle for the
 // configured names; additionalFieldValues matches record keys
 // case-insensitively, so a mis-cased name still yields its value.
-// currentAdditionalUserFields returns the fields already in force, without
-// describing. Pages after the first must use this: they replay a
-// Salesforce-issued nextRecordsUrl whose SELECT was fixed on page one
-// (getQueryString ignores the built query when paginationPath is set), so
-// re-resolving mid-sync would leave additionalFieldValues reading a list that no
-// longer matches the columns the response actually carries — a field would
-// silently vanish from page-2 profiles while page-1 users kept it.
-func (c *SalesforceClient) currentAdditionalUserFields() []string {
-	c.additionalUserFieldsMutex.Lock()
-	defer c.additionalUserFieldsMutex.Unlock()
-
-	if c.additionalUserFieldsResolved {
-		return c.additionalUserFields
-	}
-	// Resolution did not settle on page one (the describe failed), so the raw
-	// configured names went into that SELECT. Keep using them.
-	return c.configuredUserFields
-}
-
 func (c *SalesforceClient) additionalUserFieldNames(ctx context.Context) []string {
 	configured, done := c.additionalUserFieldsSnapshot()
 	if done {

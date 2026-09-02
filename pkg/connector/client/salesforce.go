@@ -55,6 +55,10 @@ type SalesforceClient struct {
 	additionalUserFields         []string
 	additionalUserFieldsResolved bool
 	describeAttempts             int
+	// syncUserFields is the list page one of the current user sync fixed into
+	// its SELECT. Written only by beginUserSyncFields; later pages read it
+	// verbatim. See additional_fields.go.
+	syncUserFields []string
 }
 
 // Gathered from the UserType field found here:
@@ -342,10 +346,9 @@ func (c *SalesforceClient) GetUsers(
 	// page one built it.
 	var additionalFields []string
 	if pageToken == "" {
-		c.ResetAdditionalUserFieldsForSync()
-		additionalFields = c.additionalUserFieldNames(ctx)
+		additionalFields = c.beginUserSyncFields(ctx)
 	} else {
-		additionalFields = c.currentAdditionalUserFields()
+		additionalFields = c.userSyncFields()
 	}
 
 	// An additional field that Salesforce won't select fails the whole query,

@@ -1021,3 +1021,51 @@ func TestGetUsersDoesNotReResolveMidSync(t *testing.T) {
 	require.Equal(t, describeCallsAfterPageOne, stub.recordedDescribeCalls(),
 		"page two re-resolved; the SELECT it replays was fixed on page one")
 }
+
+// TestProvisioningCannotRetargetAnInFlightSync covers the other way page-one's
+// SELECT and later pages' extraction could drift: GetUserByEmail shares the
+// client's resolution state, so a provisioning lookup landing between pages
+// could resolve (or trip the INVALID_FIELD fallback) and change what later pages
+// extract — against a SELECT that was already fixed.
+func TestProvisioningCannotRetargetAnInFlightSync(t *testing.T) {
+	ctx := context.Background()
+
+	var describeWorks atomic.Bool
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			if !describeWorks.Load() {
+				return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+			}
+			// Would drop Role_Based_Access__c if it could still take effect.
+			return http.StatusOK, describeResponse(t, "Id", "Username")
+		},
+		queryResult: func(string) (int, string) {
+			return http.StatusOK, usersResponse(t, standardUserRecord(map[string]any{
+				"Role_Based_Access__c": "Tier 2 Support",
+			}))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"Role_Based_Access__c"})
+
+	firstPage, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, firstPage, 1)
+	require.Equal(t, "Tier 2 Support", firstPage[0].AdditionalFields["Role_Based_Access__c"])
+
+	// A provisioning lookup interleaves, and its describe now succeeds — so it
+	// resolves the client's shared state to a narrower list.
+	describeWorks.Store(true)
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	_, err = salesforceClient.GetUserByEmail(ctx, "user@example.com")
+	require.NoError(t, err)
+
+	// Page two of the sync still extracts against what page one selected.
+	require.NoError(t, uhttp.ClearCaches(ctx))
+	secondPage, _, _, err := salesforceClient.GetUsers(ctx, "/services/data/v54.0/query/01g-2000", 100, true, false)
+	require.NoError(t, err)
+	require.Len(t, secondPage, 1)
+	require.Equal(t, firstPage[0].AdditionalFields, secondPage[0].AdditionalFields,
+		"a provisioning lookup retargeted an in-flight sync")
+}

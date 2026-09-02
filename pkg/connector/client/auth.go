@@ -18,12 +18,16 @@ const oauthTokenPath = "/services/oauth2/token" //nolint:gosec // false positive
 
 // tokenExchangeError classifies a failed token exchange for exit.LogExit.
 //
-// A credential rejection is tagged Unauthenticated so the process exits 16,
-// which is what the shared sync-test workflow's auth-error check looks for;
-// Salesforce answers a bad client secret or an unauthorized JWT with 400/401/403.
+// A rejected credential is Unauthenticated (exit 16) and a refused one is
+// PermissionDenied (exit 7); the shared sync-test workflow's auth-error check
+// accepts either. Salesforce answers a bad client secret or an unsigned JWT with
+// 400/401, and a 403 for a request whose credentials are fine but which the org
+// will not grant — an app not approved for this user, say — so folding 403 in
+// with the rest would report that to an operator as bad credentials.
+//
 // Everything else — a DNS failure, a timeout, a 5xx, or the HTTP 420
 // interstitial Salesforce serves while an org is spinning up — is left
-// unclassified rather than reported to an operator as bad credentials.
+// unclassified rather than reported as an auth problem at all.
 //
 // uhttp.WrapErrors joins the status with the cause instead of formatting it into
 // a string, so status.Code still resolves through the join while errors.Is /
@@ -32,8 +36,10 @@ func tokenExchangeError(message string, err error) error {
 	var retrieveErr *oauth2.RetrieveError
 	if errors.As(err, &retrieveErr) && retrieveErr.Response != nil {
 		switch retrieveErr.Response.StatusCode {
-		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+		case http.StatusBadRequest, http.StatusUnauthorized:
 			return uhttp.WrapErrors(codes.Unauthenticated, message, err)
+		case http.StatusForbidden:
+			return uhttp.WrapErrors(codes.PermissionDenied, message, err)
 		}
 	}
 	return fmt.Errorf("%s: %w", message, err)

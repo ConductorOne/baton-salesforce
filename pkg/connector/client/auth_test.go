@@ -39,10 +39,12 @@ func TestTokenExchangeErrorClassification(t *testing.T) {
 			expectedCode: codes.Unauthenticated,
 		},
 		{
-			name:         "forbidden",
+			// Credentials are fine, the org just won't grant the request. The
+			// sync-test auth-error check accepts exit 7 as well as 16.
+			name:         "forbidden is a refusal, not a bad credential",
 			status:       http.StatusForbidden,
 			body:         `{"error":"access_denied"}`,
-			expectedCode: codes.Unauthenticated,
+			expectedCode: codes.PermissionDenied,
 		},
 		{
 			// Salesforce serves HTTP 420 with an HTML interstitial while an org

@@ -1056,10 +1056,13 @@ func TestProvisioningCannotRetargetAnInFlightSync(t *testing.T) {
 
 	// A provisioning lookup interleaves, and its describe now succeeds — so it
 	// resolves the client's shared state to a narrower list.
+	describesBefore := stub.recordedDescribeCalls()
 	describeWorks.Store(true)
 	require.NoError(t, uhttp.ClearCaches(ctx))
 	_, err = salesforceClient.GetUserByEmail(ctx, "user@example.com")
 	require.NoError(t, err)
+	require.Greater(t, stub.recordedDescribeCalls(), describesBefore,
+		"the provisioning lookup never re-resolved, so this proves nothing")
 
 	// Page two of the sync still extracts against what page one selected.
 	require.NoError(t, uhttp.ClearCaches(ctx))
@@ -1171,6 +1174,25 @@ func TestProvisioningFallbackDoesNotWipeTheSyncSnapshot(t *testing.T) {
 	require.NoError(t, uhttp.ClearCaches(ctx))
 	_, err = salesforceClient.GetUserByEmail(ctx, "user@example.com")
 	require.NoError(t, err)
+
+	// The fallback must actually have fired, or this test proves nothing: a
+	// regression that stopped the provisioning path selecting additional fields
+	// would leave the snapshot untouched for the wrong reason and still pass.
+	var rejected, retried bool
+	for _, soql := range stub.recordedQueries() {
+		if !strings.Contains(soql, "Email = ") {
+			continue
+		}
+		if strings.Contains(soql, "Role_Based_Access__c") {
+			rejected = true
+			continue
+		}
+		if rejected {
+			retried = true
+		}
+	}
+	require.True(t, rejected, "the provisioning lookup never selected the additional field")
+	require.True(t, retried, "the provisioning lookup never retried without it")
 
 	require.NoError(t, uhttp.ClearCaches(ctx))
 	secondPage, _, _, err := salesforceClient.GetUsers(ctx, "/services/data/v54.0/query/01g-2000", 100, true, false)

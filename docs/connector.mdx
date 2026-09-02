@@ -57,7 +57,7 @@ Use the exact Salesforce field API name, including the `__c` suffix on custom fi
 <Note>
 Relationship traversals (such as `Manager.Name`) are not supported — name fields that live directly on the User object.
 
-A field name that doesn't exist on the User object, or that the connector's Salesforce user can't see, is skipped with a warning in the logs. The rest of the sync is unaffected, so a typo here can't stop your users from syncing.
+A field name that doesn't exist on the User object, or that the connector's Salesforce user can't see, is skipped with a warning in the logs. The rest of the sync is unaffected, so a typo here can't stop your users from syncing. After you correct a field name, or grant the connector's Salesforce user access to a field it couldn't see, the change is picked up automatically — allow up to an hour, as the connector caches the User object's field list.
 
 Numeric fields are synced as numbers, and values above 9,007,199,254,740,992 (2^53) lose precision — an 18-digit Number or Auto Number field arrives rounded. If you need an exact large identifier, use a Text or Formula (Text) field on the User object instead.
 </Note>

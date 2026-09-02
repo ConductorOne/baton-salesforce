@@ -141,13 +141,24 @@ func (c *SalesforceClient) clearAdditionalUserFieldResolutionLocked() {
 // full user sync.
 //
 // Without it, resolution is decided once and never revisited: a describe
-// outage, or one INVALID_FIELD that trips the query-time fallback, would keep
+// outage, or one rejected query that trips the query-time fallback, would keep
 // the extra fields off for the rest of the process. A hosted connector runs for
 // days, so a customer who corrects a misspelled field name — or an admin who
 // grants the integration user field-level access to one that was invisible —
 // would see nothing change until someone restarted it. Re-resolving once per
 // sync bounds the cost at one describe per sync while letting the feature
 // recover on its own.
+//
+// One caveat on how fast that recovery is visible: the describe is a GET through
+// uhttp.BaseHttpClient, whose response cache is on by default, so a SUCCESSFUL
+// describe is reused for the cache TTL rather than re-fetched every sync. A newly
+// created field or a newly granted permission is therefore picked up within that
+// window, not necessarily on the very next sync. Failure responses are not
+// cached, so the transient-describe-failure retry above is unaffected. Bypassing
+// it would mean issuing the describe outside simpleforce's ApexREST so the
+// request can carry Cache-Control: no-cache (BaseHttpClient.Do only consults the
+// cache when that header is absent), which means re-implementing its auth and
+// error handling — not worth it to turn "within the hour" into "next sync".
 func (c *SalesforceClient) ResetAdditionalUserFieldsForSync() {
 	c.additionalUserFieldsMutex.Lock()
 	defer c.additionalUserFieldsMutex.Unlock()
@@ -409,6 +420,36 @@ func userSelectFields(additional []string) []string {
 func isInvalidFieldError(err error) bool {
 	var sfErr simpleforce.SalesforceError
 	return errors.As(err, &sfErr) && sfErr.ErrorCode == "INVALID_FIELD"
+}
+
+// isMalformedQueryError reports whether Salesforce rejected a query as
+// unparseable. A configured field name can cause this without being an
+// INVALID_FIELD: additionalFieldNamePattern admits SOQL reserved words ("from",
+// "where", "null", …), which read as syntax rather than as a column.
+func isMalformedQueryError(err error) bool {
+	var sfErr simpleforce.SalesforceError
+	return errors.As(err, &sfErr) && sfErr.ErrorCode == "MALFORMED_QUERY"
+}
+
+// isAdditionalFieldQueryError reports whether a rejected User query is one the
+// extra fields could have caused, and which dropping them might therefore fix.
+//
+// Both codes are needed. The describe check normally keeps a reserved word out
+// of the SELECT, but it is not guaranteed to run — one transient describe
+// failure is enough for storeAdditionalUserFields to hand back the configured
+// names verbatim — and a reserved word that reaches the query produces
+// MALFORMED_QUERY, not INVALID_FIELD. Keying only on the latter left a
+// misconfiguration able to fail the whole user sync, which is exactly what
+// docs/connector.mdx promises cannot happen.
+//
+// Rather than enumerate SOQL's reserved words in the name pattern — a list that
+// is long, version-dependent, and would still miss whatever else Salesforce
+// declines to parse — recovery is keyed on the query failing at all in a way the
+// extra fields plausibly caused. Callers only consult this when they actually
+// have extra fields to drop, and the retry without them surfaces any error that
+// was not their fault.
+func isAdditionalFieldQueryError(err error) bool {
+	return isInvalidFieldError(err) || isMalformedQueryError(err)
 }
 
 // additionalFieldValues reads the configured extra fields off a User record.

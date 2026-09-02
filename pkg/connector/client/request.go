@@ -98,7 +98,7 @@ func (c *SalesforceClient) queryTolerating(
 	records, err := c.client.Query(ctx, queryString)
 	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
-		if tolerateInvalidField && isInvalidFieldError(err) {
+		if tolerateInvalidField && isAdditionalFieldQueryError(err) {
 			logger.Debug(
 				"salesforce-connector: salesforce rejected a selected field",
 				zap.String("query", queryString),

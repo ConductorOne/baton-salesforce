@@ -372,7 +372,7 @@ func (c *SalesforceClient) GetUsers(
 		pageSize,
 		canRecoverFromInvalidField,
 	)
-	if err != nil && canRecoverFromInvalidField && isInvalidFieldError(err) {
+	if err != nil && canRecoverFromInvalidField && isAdditionalFieldQueryError(err) {
 		logger.Warn(
 			"salesforce-client: Salesforce rejected an additional User field, syncing without additional fields",
 			zap.Strings("additional_fields", additionalFields),

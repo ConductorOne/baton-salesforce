@@ -1201,3 +1201,41 @@ func TestProvisioningFallbackDoesNotWipeTheSyncSnapshot(t *testing.T) {
 	require.Equal(t, firstPage[0].AdditionalFields, secondPage[0].AdditionalFields,
 		"a provisioning fallback wiped the in-flight sync's snapshot")
 }
+
+// TestGetUsersMalformedQueryFallback closes the last hole in the three-layer
+// defense. additionalFieldNamePattern admits SOQL reserved words, and the
+// describe check that would normally catch one is not guaranteed to run — a
+// single transient failure hands back the configured names verbatim. Such a name
+// reads as syntax, so Salesforce answers MALFORMED_QUERY rather than
+// INVALID_FIELD, and keying recovery only on the latter let a misconfiguration
+// fail the whole user sync.
+func TestGetUsersMalformedQueryFallback(t *testing.T) {
+	ctx := context.Background()
+
+	const malformed = `[{"message":"\nSELECT ... from\n           ^\nERROR at Row:1:Column:12\nunexpected token: 'from'","errorCode":"MALFORMED_QUERY"}]`
+
+	stub := &userQueryServer{
+		describe: func(int) (int, string) {
+			// Describe unavailable, so the reserved word reaches the SELECT.
+			return http.StatusInternalServerError, `[{"message":"boom","errorCode":"SERVER_ERROR"}]`
+		},
+		queryResult: func(soql string) (int, string) {
+			if strings.Contains(soql, "from,") || strings.Contains(soql, ", from") {
+				return http.StatusBadRequest, malformed
+			}
+			return http.StatusOK, usersResponse(t, standardUserRecord(nil))
+		},
+	}
+	server := stub.start(t)
+
+	salesforceClient := newTestClient(t, ctx, server.URL, []string{"from"})
+	users, _, _, err := salesforceClient.GetUsers(ctx, "", 100, true, false)
+	require.NoError(t, err, "a reserved word in config failed the whole user sync")
+	require.Len(t, users, 1)
+	require.Nil(t, users[0].AdditionalFields)
+
+	queries := stub.recordedQueries()
+	require.Len(t, queries, 2)
+	require.Contains(t, queries[0], "from")
+	require.NotContains(t, queries[1], ", from")
+}

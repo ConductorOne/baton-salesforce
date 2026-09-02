@@ -149,7 +149,7 @@ func (c *SalesforceClient) GetUserByEmail(
 	)
 	// Same guard as GetUsers: a field Salesforce won't select must not make
 	// looking up a user impossible. See GetUsers for the full rationale.
-	if err != nil && len(additionalFields) > 0 && isInvalidFieldError(err) {
+	if err != nil && len(additionalFields) > 0 && isAdditionalFieldQueryError(err) {
 		ctxzap.Extract(ctx).Warn(
 			"salesforce-client: Salesforce rejected an additional User field, querying without additional fields",
 			zap.Strings("additional_fields", additionalFields),

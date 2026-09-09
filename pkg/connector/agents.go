@@ -33,7 +33,13 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		profile["bot_user_id"] = agent.BotUserID
 	}
 
+	// Written explicitly at both levels; see the note in userResource for why
+	// neither half is redundant. In short: the trait field is deprecated but
+	// still part of this connector's emitted output, and the resource field is
+	// only populated for free while syncAgentTraitToResource's back-compat
+	// mirror survives.
 	agentTraitOptions := []rs.AgentTraitOption{
+		//nolint:staticcheck // intentionally writes the deprecated trait profile for backwards compatibility
 		rs.WithAgentProfile(profile),
 	}
 
@@ -47,14 +53,15 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		}))
 	}
 
-	// AgentTrait status is left unset: BotDefinition has no queryable status
-	// field. Activation status lives on BotVersion (API v63.0+), which would
-	// raise this syncer's API-version floor and require a per-agent subquery, so
-	// it is intentionally out of scope for this v1 discovery syncer.
+	// Status is left unset: BotDefinition has no queryable status field.
+	// Activation status lives on BotVersion (API v63.0+), which would raise
+	// this syncer's API-version floor and require a per-agent subquery, so it
+	// is intentionally out of scope for this v1 discovery syncer.
 	return rs.NewResource(
 		name,
 		resourceTypeAgent,
 		agent.ID,
+		rs.WithResourceProfile(profile),
 		rs.WithAgentTrait(agentTraitOptions...),
 	)
 }

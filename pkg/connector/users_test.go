@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/conductorone/baton-salesforce/pkg/connector/client"
 	"github.com/conductorone/baton-salesforce/test"
 	v2 "github.com/conductorone/baton-sdk/pb/c1/connector/v2"
+	"github.com/conductorone/baton-sdk/pkg/annotations"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
 	"github.com/stretchr/testify/require"
@@ -123,4 +125,155 @@ func TestAccountTypeForUser(t *testing.T) {
 			require.Equal(t, tc.want, accountTypeForUser(tc.userType, tc.licenseKey))
 		})
 	}
+}
+
+// TestUserResourceAdditionalFields pins how configured extra Salesforce fields
+// reach C1: they land in the user profile under their field API name, which is
+// what an access review maps onto an attribute.
+func TestUserResourceAdditionalFields(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("additional fields land in the profile", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:        "0051X",
+				Username:  "user@example.com",
+				Email:     "user@example.com",
+				FirstName: "Ada",
+				LastName:  "Lovelace",
+				UserType:  "Standard",
+				IsActive:  true,
+				AdditionalFields: map[string]any{
+					"Role_Based_Access__c": "Tier 2 Support",
+					"Is_Contractor__c":     true,
+				},
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		profile := resource.GetProfile().AsMap()
+		require.Equal(t, "Tier 2 Support", profile["Role_Based_Access__c"])
+		require.Equal(t, true, profile["Is_Contractor__c"])
+		// The standard keys are untouched.
+		require.Equal(t, "Ada Lovelace", profile["full_name"])
+		require.Equal(t, "user@example.com", profile["email"])
+	})
+
+	t.Run("additional fields never overwrite a standard profile key", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:               "0051X",
+				Username:         "user@example.com",
+				Email:            "user@example.com",
+				UserType:         "Standard",
+				AdditionalFields: map[string]any{"email": "spoofed@example.com"},
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		require.Equal(t, "user@example.com", resource.GetProfile().AsMap()["email"])
+	})
+
+	t.Run("no additional fields leaves the profile as-is", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:       "0051X",
+				Username: "user@example.com",
+				Email:    "user@example.com",
+				UserType: "Standard",
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		require.Len(t, resource.GetProfile().AsMap(), 5)
+	})
+}
+
+// TestUserResourceEmitsProfileAndStatusAtBothLevels pins the backwards-compat
+// contract around the deprecated UserTrait fields. Profile and status moved to
+// the resource in baton-sdk v0.25.0, but the SDK only mirrors trait -> resource,
+// never the reverse — so setting only the resource-level options silently empties
+// UserTrait.Profile and lets NewUserTrait's ENABLED default stand in for a
+// deactivated user's real status. Both levels must agree.
+//
+//nolint:staticcheck // intentionally reads the deprecated trait profile/status to pin backwards compatibility
+func TestUserResourceEmitsProfileAndStatusAtBothLevels(t *testing.T) {
+	ctx := context.Background()
+
+	userTraitOf := func(t *testing.T, resource *v2.Resource) *v2.UserTrait {
+		t.Helper()
+
+		trait := &v2.UserTrait{}
+		annos := annotations.Annotations(resource.GetAnnotations())
+		picked, err := annos.Pick(trait)
+		require.NoError(t, err)
+		require.True(t, picked, "resource carries no user trait")
+		return trait
+	}
+
+	t.Run("active user", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:               "0051X",
+				Username:         "user@example.com",
+				Email:            "user@example.com",
+				FirstName:        "Ada",
+				LastName:         "Lovelace",
+				UserType:         "Standard",
+				IsActive:         true,
+				AdditionalFields: map[string]any{"Role_Based_Access__c": "Tier 2 Support"},
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		trait := userTraitOf(t, resource)
+		require.Equal(t, v2.Status_RESOURCE_STATUS_ENABLED, resource.GetStatus().GetStatus())
+		require.Equal(t, v2.UserTrait_Status_STATUS_ENABLED, trait.GetStatus().GetStatus())
+		require.Equal(t, resource.GetProfile().AsMap(), trait.GetProfile().AsMap())
+		require.Equal(t, "Tier 2 Support", trait.GetProfile().AsMap()["Role_Based_Access__c"])
+
+		// rs.GetProfile / rs.GetStatus are the accessors SDK consumers go
+		// through (resource_attrs.go); they read the resource level and fall
+		// back to the trait. Assert them too, so the test covers what is read
+		// and not only what is written.
+		require.Equal(t, "Tier 2 Support", rs.GetProfile(resource).AsMap()["Role_Based_Access__c"])
+		require.Equal(t, v2.Status_RESOURCE_STATUS_ENABLED, rs.GetStatus(resource).GetStatus())
+	})
+
+	// The regression this guards: with only WithResourceStatus, NewUserTrait
+	// defaults the unset trait status to ENABLED, reporting a deactivated user
+	// as active to anything still reading the trait.
+	t.Run("deactivated user", func(t *testing.T) {
+		resource, err := userResource(
+			ctx,
+			&client.SalesforceUser{
+				ID:       "0051X",
+				Username: "user@example.com",
+				Email:    "user@example.com",
+				UserType: "Standard",
+				IsActive: false,
+			},
+			nil,
+			false,
+		)
+		require.NoError(t, err)
+
+		trait := userTraitOf(t, resource)
+		require.Equal(t, v2.Status_RESOURCE_STATUS_DISABLED, resource.GetStatus().GetStatus())
+		require.Equal(t, v2.UserTrait_Status_STATUS_DISABLED, trait.GetStatus().GetStatus())
+		require.Equal(t, resource.GetProfile().AsMap(), trait.GetProfile().AsMap())
+		require.Equal(t, v2.Status_RESOURCE_STATUS_DISABLED, rs.GetStatus(resource).GetStatus())
+	})
 }

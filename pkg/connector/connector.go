@@ -250,6 +250,7 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 		zap.Bool("syncDeactivatedUsers", cfg.SyncDeactivatedUsers),
 		zap.Bool("syncNonStandardUsers", cfg.SyncNonStandardUsers),
 		zap.Any("licenseToLeastProfileMapping", cfg.GetLicenseToLeastPrivilegedProfileMapping()),
+		zap.Strings("additionalUserFields", cfg.SyncAdditionalUserFields),
 	)
 
 	var salesforceClient *client.SalesforceClient
@@ -290,6 +291,11 @@ func New(ctx context.Context, cfg *config.Salesforce, opts *cli.ConnectorOpts) (
 			cfg.SecurityToken,
 		)
 	}
+
+	// Extra User fields to pull into the user profile. Names are normalized here
+	// and checked against the User object's describe on first use, so a typo
+	// drops one field with a warning instead of failing the sync.
+	salesforceClient.SetAdditionalUserFields(ctx, cfg.SyncAdditionalUserFields)
 
 	salesforce := Salesforce{
 		client:                       salesforceClient,

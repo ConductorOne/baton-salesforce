@@ -62,6 +62,39 @@ func (c *SalesforceClient) query(
 	*v2.RateLimitDescription,
 	error,
 ) {
+	return c.queryTolerating(ctx, query, paginationPath, pageSize, false)
+}
+
+// queryTolerating behaves like query, but when tolerateFieldError is set a
+// rejection the caller can recover from is logged at Debug instead of Error.
+//
+// Only the User queries that select config-driven fields pass true: they retry
+// without the extra fields and log that recovery themselves, so an Error here
+// would add to the noise from a customer misconfiguration the connector handles
+// — the same treatment queryWithAPIVersion gives an expected INVALID_TYPE. Every
+// other caller keeps the Error line, because for them the rejection is fatal (the
+// integration user losing field-level access to a standard field, say) and this
+// is the only log that carries the offending SOQL; the SDK's log of the returned
+// error does not.
+//
+// This REDUCES the Error-level noise for a handled rejection; it does not remove
+// it. The vendored simpleforce fork's parseUhttpError logs two Error lines
+// (errorHelpers.go:94 and :105) for any non-2xx, into this same ctxzap stream and
+// before this one — so the observed sequence on the tolerated path is
+// warn → error → error → debug. Silencing those needs parseUhttpError to respect
+// status severity (4xx → Warn), which is a change to the fork, not to this repo.
+func (c *SalesforceClient) queryTolerating(
+	ctx context.Context,
+	query *SalesforceQuery,
+	paginationPath string,
+	pageSize int,
+	tolerateFieldError bool,
+) (
+	[]simpleforce.SObject,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
 	err := c.Initialize(ctx)
 	if err != nil {
 		return nil, "", nil, err
@@ -70,13 +103,21 @@ func (c *SalesforceClient) query(
 	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
 	records, err := c.client.Query(ctx, queryString)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
-		logger.Error(
-			"salesforce-connector: error querying salesforce",
-			zap.String("query", queryString),
-			zap.Error(err),
-		)
+		if tolerateFieldError && isAdditionalFieldQueryError(err) {
+			logger.Debug(
+				"salesforce-connector: salesforce rejected a selected field",
+				zap.String("query", queryString),
+				zap.Error(err),
+			)
+		} else {
+			logger.Error(
+				"salesforce-connector: error querying salesforce",
+				zap.String("query", queryString),
+				zap.Error(err),
+			)
+		}
 		return nil, "", ratelimitData, err
 	}
 
@@ -123,7 +164,7 @@ func (c *SalesforceClient) queryWithAPIVersion(
 	}
 
 	records, err := c.client.Query(ctx, queryString)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		// INVALID_TYPE (e.g. BotDefinition on an org without Agentforce) is expected,
 		// so log it at Debug instead of Error. The error is still returned either way;
@@ -200,7 +241,7 @@ func (c *SalesforceClient) CreateObject(
 		created = created.Set(key, value)
 	}
 	created, err = created.Create(ctx)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, err
 	}
@@ -235,7 +276,7 @@ func (c *SalesforceClient) UpdateObject(
 		obj = obj.Set(key, value)
 	}
 	_, err = obj.Update(ctx)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, fmt.Errorf("baton-salesforce: failed to update %s: %w", tableName, err)
 	}
@@ -265,7 +306,7 @@ func (c *SalesforceClient) DeleteObject(
 		Set("Id", id).
 		Delete(ctx)
 
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	return ratelimitData, err
 }
 
@@ -285,7 +326,7 @@ func (c *SalesforceClient) getOneUser(ctx context.Context, userId string) (
 		return nil, nil, err
 	}
 
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if user == nil {
 		return nil, ratelimitData, fmt.Errorf("missing user %s", userId)
 	}
@@ -302,7 +343,7 @@ func (c *SalesforceClient) updateUser(
 	error,
 ) {
 	user, err := user.Set(fieldName, value).Update(ctx)
-	ratelimitData := c.salesforceTransport.rateLimit
+	ratelimitData := c.salesforceTransport.currentRateLimit()
 	if err != nil {
 		return ratelimitData, err
 	}

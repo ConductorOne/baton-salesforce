@@ -12,6 +12,9 @@ type SalesforceUser struct {
 	LicenseDefinitionKey string     `json:"license_definition_key"`
 	IsActive             bool       `json:"is_active"`
 	LastLoginDate        *time.Time `json:"last_login_date"`
+	// AdditionalFields holds the values of the extra User fields named in
+	// config, keyed by Salesforce field API name. Nil when none are configured.
+	AdditionalFields map[string]any `json:"additional_fields"`
 }
 
 type SalesforceGroupMembership struct {

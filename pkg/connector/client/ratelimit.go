@@ -31,7 +31,7 @@ func (t *salesforceHttpTransport) RoundTrip(request *http.Request) (*http.Respon
 		}
 	}
 
-	t.rateLimit = nil // clear previous
+	t.rateLimit.Store(nil) // clear previous
 	response, err := t.base.RoundTrip(request)
 	if err != nil {
 		return response, err
@@ -41,7 +41,9 @@ func (t *salesforceHttpTransport) RoundTrip(request *http.Request) (*http.Respon
 		var remaining int64
 		var limit int64
 		if found, err := fmt.Sscanf(rateLimitInfo[0], RateLimitFmt, &remaining, &limit); err == nil && found == 2 {
-			t.rateLimit = &v2.RateLimitDescription{
+			// Build the description before publishing it, so a concurrent
+			// reader never observes a half-populated one.
+			description := &v2.RateLimitDescription{
 				Status:    v2.RateLimitDescription_STATUS_OK,
 				Limit:     limit,
 				Remaining: remaining,
@@ -52,8 +54,9 @@ func (t *salesforceHttpTransport) RoundTrip(request *http.Request) (*http.Respon
 				ResetAt: nil,
 			}
 			if remaining > limit {
-				t.rateLimit.Status = v2.RateLimitDescription_STATUS_OVERLIMIT
+				description.Status = v2.RateLimitDescription_STATUS_OVERLIMIT
 			}
+			t.rateLimit.Store(description)
 		}
 	}
 	return response, nil

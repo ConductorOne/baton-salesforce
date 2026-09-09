@@ -66,6 +66,18 @@ var (
 		field.WithDescription("Optionally sync non-standard user types (Customer Community, etc)"),
 		field.WithDefaultValue(false),
 	)
+	AdditionalUserFields = field.StringSliceField(
+		// sync-*, not salesforce-*: the salesforce- prefix marks credential and
+		// connection fields, while this is a sync-scoping option like
+		// sync-connected-apps and sync-deactivated-users.
+		"sync-additional-user-fields",
+		field.WithDisplayName("Additional User Fields"),
+		field.WithDescription(
+			"Salesforce User field API names to sync into the ConductorOne user profile, ex: Role_Based_Access__c. "+
+				"Custom fields must include the __c suffix. Names that do not exist on the User object are skipped with a warning. "+
+				"Up to 50 fields; extras are dropped with a warning.",
+		),
+	)
 	LicenseToLeastPrivilegedProfileMapping = field.StringMapField(
 		"license-to-least-privileged-profile-mapping",
 		field.WithDisplayName("License to Least Privileged Profile Mapping"),
@@ -114,6 +126,7 @@ var (
 		SyncConnectedApps,
 		SyncDeactivatedUsers,
 		SyncNonStandardUsers,
+		AdditionalUserFields,
 		LicenseToLeastPrivilegedProfileMapping,
 		Oauth2TokenField,
 		ClientIDField,
@@ -142,6 +155,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping},
 				Default: false,
 			},
@@ -155,6 +169,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping,
 					Oauth2TokenField,
 				},
@@ -174,6 +189,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping,
 				},
 				Default: false,
@@ -190,6 +206,7 @@ var (
 					SyncConnectedApps,
 					SyncDeactivatedUsers,
 					SyncNonStandardUsers,
+					AdditionalUserFields,
 					LicenseToLeastPrivilegedProfileMapping,
 				},
 				Default: false,

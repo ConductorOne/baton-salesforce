@@ -170,7 +170,6 @@ func query(ctx context.Context, db *sql.DB, queryString string) ([]simpleforce.S
 	hackString := strings.ReplaceAll(queryString, ", Profile.UserLicense.LicenseDefinitionKey", "")
 	hackString = strings.ReplaceAll(hackString, ",Profile.UserLicense.LicenseDefinitionKey", "")
 	hackString = strings.ReplaceAll(hackString, ".Name", "")
-	hackString = strings.ReplaceAll(hackString, "Fields(standard)", "Id,*")
 
 	var err error
 	hackString, err = resolveSubqueries(ctx, db, hackString)

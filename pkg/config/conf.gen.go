@@ -12,6 +12,7 @@ type Salesforce struct {
 	SyncConnectedApps bool `mapstructure:"sync-connected-apps"`
 	SyncDeactivatedUsers bool `mapstructure:"sync-deactivated-users"`
 	SyncNonStandardUsers bool `mapstructure:"sync-non-standard-users"`
+	SyncAdditionalUserFields []string `mapstructure:"sync-additional-user-fields"`
 	LicenseToLeastPrivilegedProfileMapping map[string]any `mapstructure:"license-to-least-privileged-profile-mapping"`
 	Oauth2Token string `mapstructure:"oauth2-token"`
 	SalesforceClientId string `mapstructure:"salesforce-client-id"`

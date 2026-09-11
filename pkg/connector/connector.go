@@ -65,6 +65,7 @@ func (d *Salesforce) ResourceSyncers(ctx context.Context) []connectorbuilder.Res
 		newProfileBuilder(d.client, d.licenseToLeastProfileMapping),
 		newRoleBuilder(d.client),
 		newPermissionSetGroupBuilder(d.client),
+		newLicenseBuilder(d.client),
 		newTerritoryBuilder(d.client),
 		// The agent resource type is gated by the OptInRequired annotation, so
 		// it is registered unconditionally and only synced when opted into.

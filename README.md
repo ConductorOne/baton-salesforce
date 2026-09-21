@@ -19,7 +19,7 @@ baton resources
 ## docker
 
 ```
-docker run --rm -v $(pwd):/out -e BATON_INSTANCE_URL=acme.my.salesforce.com -e BATON_USER_USERNAME_FOR_EMAIL=false ghcr.io/conductorone/baton-salesforce:latest -f "/out/sync.c1z"
+docker run --rm -v $(pwd):/out -e BATON_INSTANCE_URL=acme.my.salesforce.com -e BATON_USER_USERNAME_FOR_EMAIL=false public.ecr.aws/conductorone/baton-salesforce:latest -f "/out/sync.c1z"
 docker run --rm -v $(pwd):/out ghcr.io/conductorone/baton:latest -f "/out/sync.c1z" resources
 ```
 

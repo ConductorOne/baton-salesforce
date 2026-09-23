@@ -54,6 +54,24 @@
     },
     {
       "resourceType": {
+        "id": "license",
+        "displayName": "License",
+        "traits": [
+          "TRAIT_LICENSE_PROFILE"
+        ],
+        "annotations": [
+          {
+            "@type": "type.googleapis.com/c1.connector.v2.SkipEntitlementsAndGrants"
+          }
+        ]
+      },
+      "capabilities": [
+        "CAPABILITY_SYNC"
+      ],
+      "permissions": {}
+    },
+    {
+      "resourceType": {
         "id": "permission",
         "displayName": "Permission Set"
       },

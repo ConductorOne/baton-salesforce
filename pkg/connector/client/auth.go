@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/jwt"
@@ -66,16 +67,20 @@ func NewClientCredentialsTokenSource(ctx context.Context, clientID, clientSecret
 }
 
 // tokenExchangeError maps a rejected token request to a gRPC status so the
-// connector exits with Unauthenticated/PermissionDenied instead of Unknown.
+// connector exits with a meaningful code instead of Unknown. Salesforce returns
+// 400 for invalid_client/invalid_grant, so 400 maps to Unauthenticated rather
+// than the uhttp default of InvalidArgument.
 func tokenExchangeError(flow string, err error) error {
 	msg := fmt.Sprintf("baton-salesforce: %s token exchange failed: %v", flow, err)
 	var retrieveErr *oauth2.RetrieveError
 	if errors.As(err, &retrieveErr) && retrieveErr.Response != nil {
-		switch retrieveErr.Response.StatusCode {
+		switch code := retrieveErr.Response.StatusCode; code {
 		case http.StatusBadRequest, http.StatusUnauthorized:
 			return status.Error(codes.Unauthenticated, msg)
 		case http.StatusForbidden:
 			return status.Error(codes.PermissionDenied, msg)
+		default:
+			return status.Error(uhttp.GrpcCodeFromHTTPStatus(code), msg)
 		}
 	}
 	return fmt.Errorf("baton-salesforce: %s token exchange failed: %w", flow, err)

@@ -21,7 +21,9 @@ func TestNewClientCredentialsTokenSourceErrorCodes(t *testing.T) {
 		{"invalid client", http.StatusBadRequest, `{"error":"invalid_client","error_description":"invalid client credentials"}`, codes.Unauthenticated},
 		{"unauthorized", http.StatusUnauthorized, `{"error":"invalid_token"}`, codes.Unauthenticated},
 		{"forbidden", http.StatusForbidden, `{"error":"insufficient_scope"}`, codes.PermissionDenied},
-		{"server error", http.StatusInternalServerError, `{"error":"server_error"}`, codes.Unknown},
+		{"rate limited", http.StatusTooManyRequests, `{"error":"rate_limited"}`, codes.Unavailable},
+		{"server error", http.StatusInternalServerError, `{"error":"server_error"}`, codes.Unavailable},
+		{"not implemented", http.StatusNotImplemented, `{"error":"not_implemented"}`, codes.Unimplemented},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

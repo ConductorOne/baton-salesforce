@@ -105,7 +105,6 @@ func userResource(
 		resourceTypeUser,
 		user.ID,
 		userTraitOptions,
-		// profile and status have moved from UserTrait to Resource-level attributes.
 		rs.WithResourceProfile(profile),
 		rs.WithResourceStatus(status, ""),
 	)

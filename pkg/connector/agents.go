@@ -54,7 +54,6 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		resourceTypeAgent,
 		agent.ID,
 		rs.WithAgentTrait(agentTraitOptions...),
-		// profile has moved from AgentTrait to a Resource-level attribute.
 		rs.WithResourceProfile(profile),
 	)
 }

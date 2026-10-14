@@ -76,7 +76,6 @@ func TestAgentsList(t *testing.T) {
 		require.Equal(t, resourceTypeUser.Id, identity.ResourceType)
 		require.Equal(t, "0051X", identity.Resource)
 
-		// profile is now a Resource-level attribute; read it via GetProfile.
 		profile := rs.GetProfile(serviceAgent)
 		require.NotNil(t, profile)
 		for key, want := range map[string]string{

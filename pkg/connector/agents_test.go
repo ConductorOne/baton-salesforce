@@ -68,7 +68,7 @@ func TestAgentsList(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, agentTrait)
 		// Status is intentionally unset (BotVersion-only, out of scope for v1).
-		require.Equal(t, v2.AgentTrait_AGENT_STATUS_UNSPECIFIED, agentTrait.GetStatus())
+		require.Nil(t, rs.GetStatus(serviceAgent))
 		// BotUserId is populated for the Service Agent, so identity_resource_id
 		// links the agent to its runtime user resource.
 		identity := agentTrait.GetIdentityResourceId()
@@ -76,11 +76,19 @@ func TestAgentsList(t *testing.T) {
 		require.Equal(t, resourceTypeUser.Id, identity.ResourceType)
 		require.Equal(t, "0051X", identity.Resource)
 
-		profile := agentTrait.GetProfile().AsMap()
-		require.Equal(t, "0Xx000000000001", profile["id"])
-		require.Equal(t, "Service_Agent", profile["developer_name"])
-		require.Equal(t, "Service Agent", profile["master_label"])
-		require.Equal(t, "0051X", profile["bot_user_id"])
+		// profile is now a Resource-level attribute; read it via GetProfile.
+		profile := rs.GetProfile(serviceAgent)
+		require.NotNil(t, profile)
+		for key, want := range map[string]string{
+			"id":             "0Xx000000000001",
+			"developer_name": "Service_Agent",
+			"master_label":   "Service Agent",
+			"bot_user_id":    "0051X",
+		} {
+			got, ok := rs.GetProfileStringValue(profile, key)
+			require.True(t, ok, key)
+			require.Equal(t, want, got, key)
+		}
 	})
 
 	t.Run("should leave identity unset when BotUserId is empty", func(t *testing.T) {
@@ -99,8 +107,7 @@ func TestAgentsList(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, agentTrait.GetIdentityResourceId())
 
-		profile := agentTrait.GetProfile().AsMap()
-		_, hasBotUserID := profile["bot_user_id"]
+		_, hasBotUserID := rs.GetProfileStringValue(rs.GetProfile(orderBot), "bot_user_id")
 		require.False(t, hasBotUserID)
 	})
 }

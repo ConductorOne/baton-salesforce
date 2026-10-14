@@ -2,12 +2,17 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 
+	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 	"golang.org/x/oauth2/jwt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const oauthTokenPath = "/services/oauth2/token" //nolint:gosec // false positive: this is an API path, not a credential
@@ -32,7 +37,7 @@ func NewJWTBearerTokenSource(ctx context.Context, clientID, subject, loginURL st
 	// Validate credentials eagerly so errors surface at startup.
 	tok, err := ts.Token()
 	if err != nil {
-		return nil, fmt.Errorf("baton-salesforce: JWT bearer token exchange failed: %w", err)
+		return nil, tokenExchangeError("JWT bearer", err)
 	}
 	return oauth2.ReuseTokenSource(tok, ts), nil
 }
@@ -56,7 +61,27 @@ func NewClientCredentialsTokenSource(ctx context.Context, clientID, clientSecret
 	// Validate credentials eagerly so errors surface at startup.
 	tok, err := ts.Token()
 	if err != nil {
-		return nil, fmt.Errorf("baton-salesforce: client credentials token exchange failed: %w", err)
+		return nil, tokenExchangeError("client credentials", err)
 	}
 	return oauth2.ReuseTokenSource(tok, ts), nil
+}
+
+// tokenExchangeError maps a rejected token request to a gRPC status so the
+// connector exits with a meaningful code instead of Unknown. Salesforce returns
+// 400 for invalid_client/invalid_grant, so 400 maps to Unauthenticated rather
+// than the uhttp default of InvalidArgument.
+func tokenExchangeError(flow string, err error) error {
+	msg := fmt.Sprintf("baton-salesforce: %s token exchange failed: %v", flow, err)
+	var retrieveErr *oauth2.RetrieveError
+	if errors.As(err, &retrieveErr) && retrieveErr.Response != nil {
+		switch code := retrieveErr.Response.StatusCode; code {
+		case http.StatusBadRequest, http.StatusUnauthorized:
+			return status.Error(codes.Unauthenticated, msg)
+		case http.StatusForbidden:
+			return status.Error(codes.PermissionDenied, msg)
+		default:
+			return status.Error(uhttp.GrpcCodeFromHTTPStatus(code), msg)
+		}
+	}
+	return fmt.Errorf("baton-salesforce: %s token exchange failed: %w", flow, err)
 }

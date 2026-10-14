@@ -33,9 +33,7 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		profile["bot_user_id"] = agent.BotUserID
 	}
 
-	agentTraitOptions := []rs.AgentTraitOption{
-		rs.WithAgentProfile(profile),
-	}
+	agentTraitOptions := []rs.AgentTraitOption{}
 
 	// BotDefinition.BotUserId is a queryable reference to the User the agent runs
 	// as (object reference, API v60.0+). When present, link the agent to that
@@ -56,6 +54,7 @@ func agentResource(_ context.Context, agent *client.BotDefinition) (*v2.Resource
 		resourceTypeAgent,
 		agent.ID,
 		rs.WithAgentTrait(agentTraitOptions...),
+		rs.WithResourceProfile(profile),
 	)
 }
 

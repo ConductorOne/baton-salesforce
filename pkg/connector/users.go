@@ -63,17 +63,17 @@ func userResource(
 		user.FirstName,
 		user.LastName,
 	)
-	status := v2.UserTrait_Status_STATUS_DISABLED
+	status := v2.Status_RESOURCE_STATUS_DISABLED
 
 	if user.IsActive {
 		if userLogin != nil && userLogin.IsFrozen {
-			status = v2.UserTrait_Status_STATUS_DISABLED
+			status = v2.Status_RESOURCE_STATUS_DISABLED
 			ctxzap.Extract(ctx).Debug(
 				"salesforce-connector: marking active user disabled because UserLogin.IsFrozen is true",
 				zap.String("user_id", user.ID),
 			)
 		} else {
-			status = v2.UserTrait_Status_STATUS_ENABLED
+			status = v2.Status_RESOURCE_STATUS_ENABLED
 		}
 	}
 
@@ -91,9 +91,7 @@ func userResource(
 	}
 
 	userTraitOptions := []rs.UserTraitOption{
-		rs.WithUserProfile(profile),
 		rs.WithEmail(email, true),
-		rs.WithStatus(status),
 		rs.WithUserLogin(user.Username),
 		rs.WithAccountType(accountTypeForUser(user.UserType, user.LicenseDefinitionKey)),
 	}
@@ -107,6 +105,8 @@ func userResource(
 		resourceTypeUser,
 		user.ID,
 		userTraitOptions,
+		rs.WithResourceProfile(profile),
+		rs.WithResourceStatus(status, ""),
 	)
 	if err != nil {
 		return nil, err

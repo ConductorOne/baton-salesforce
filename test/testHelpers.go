@@ -406,6 +406,29 @@ func handleInsert(ctx context.Context, db *sql.DB, request *http.Request) ([]byt
 		}
 	}
 
+	// For PermissionSetAssignment the unique constraint is (AssigneeId, PermissionSetId).
+	// Return DUPLICATE_VALUE matching real Salesforce behavior.
+	if tableName == client.TableNamePermissionAssignments {
+		assigneeID, _ := body["AssigneeId"].(string)
+		permissionSetID, _ := body["PermissionSetId"].(string)
+		rows, err := query(ctx, db, fmt.Sprintf(
+			"SELECT Id FROM %s WHERE AssigneeId = '%s' AND PermissionSetId = '%s'",
+			tableName, assigneeID, permissionSetID,
+		))
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) > 0 {
+			errBody, _ := json.Marshal([]map[string]interface{}{
+				{
+					"errorCode": "DUPLICATE_VALUE",
+					"message":   fmt.Sprintf("Duplicate PermissionSetAssignment. Permission Set: %s", permissionSetID),
+				},
+			})
+			return nil, &salesforceAPIError{statusCode: http.StatusBadRequest, body: errBody}
+		}
+	}
+
 	// For GroupMemberships, short-circuit with success if the row already exists.
 	if tableName == client.TableNameGroupMemberships {
 		conditions := make([]string, 0)

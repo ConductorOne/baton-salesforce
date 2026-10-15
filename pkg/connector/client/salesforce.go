@@ -785,7 +785,7 @@ func (c *SalesforceClient) AddUserToPermissionSet(
 	userId string,
 	permissionSetId string,
 ) (*v2.RateLimitDescription, error) {
-	return c.CreateObject(
+	ratelimitData, err := c.CreateObject(
 		ctx,
 		TableNamePermissionAssignments,
 		map[string]interface{}{
@@ -793,6 +793,13 @@ func (c *SalesforceClient) AddUserToPermissionSet(
 			"PermissionSetId": permissionSetId,
 		},
 	)
+	if err != nil {
+		if isSalesforceDuplicateError(err) {
+			return ratelimitData, ErrObjectAlreadyExists
+		}
+		return ratelimitData, err
+	}
+	return ratelimitData, nil
 }
 
 func (c *SalesforceClient) RemoveUserFromPermissionSet(

@@ -165,3 +165,108 @@ func TestPermissionsList(t *testing.T) {
 		require.Len(t, grantsAfter, 1)
 	})
 }
+
+func TestPermissionsGrantIdempotent(t *testing.T) {
+	ctx := context.Background()
+
+	server, db, err := test.FixturesServer(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer test.TearDownDB(ctx, db)
+	defer server.Close()
+
+	salesforceClient, err := test.Client(ctx, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newPermissionBuilder(salesforceClient)
+
+	permission, _ := permissionResource(&client.SalesforcePermission{ID: "345X"})
+	ent := &v2.Entitlement{
+		Id:       entitlement.NewEntitlementID(permission, permissionSetAssignmentEntitlementName),
+		Resource: permission,
+		Slug:     permissionSetAssignmentEntitlementName,
+	}
+
+	t.Run("should grant a new permission set assignment", func(t *testing.T) {
+		principal := &v2.Resource{
+			Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: "0052X"},
+		}
+
+		annos, err := c.Grant(ctx, principal, ent)
+		require.NoError(t, err)
+
+		var alreadyExists v2.GrantAlreadyExists
+		found, err := test.UnmarshalFromAnys(&alreadyExists, annos)
+		require.NoError(t, err)
+		require.False(t, found)
+	})
+
+	t.Run("should return GrantAlreadyExists when the assignment exists", func(t *testing.T) {
+		// 0051X is already assigned to permission set 345X.
+		principal := &v2.Resource{
+			Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: "0051X"},
+		}
+
+		annos, err := c.Grant(ctx, principal, ent)
+		require.NoError(t, err)
+
+		var alreadyExists v2.GrantAlreadyExists
+		found, err := test.UnmarshalFromAnys(&alreadyExists, annos)
+		require.NoError(t, err)
+		require.True(t, found, "expected GrantAlreadyExists annotation")
+	})
+}
+
+func TestPermissionsRevokeIdempotent(t *testing.T) {
+	ctx := context.Background()
+
+	server, db, err := test.FixturesServer(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer test.TearDownDB(ctx, db)
+	defer server.Close()
+
+	salesforceClient, err := test.Client(ctx, server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := newPermissionBuilder(salesforceClient)
+
+	permission, _ := permissionResource(&client.SalesforcePermission{ID: "345X"})
+	ent := &v2.Entitlement{
+		Id:       entitlement.NewEntitlementID(permission, permissionSetAssignmentEntitlementName),
+		Resource: permission,
+		Slug:     permissionSetAssignmentEntitlementName,
+	}
+	newGrant := func(userID string) *v2.Grant {
+		return &v2.Grant{
+			Entitlement: ent,
+			Principal:   &v2.Resource{Id: &v2.ResourceId{ResourceType: resourceTypeUser.Id, Resource: userID}},
+		}
+	}
+
+	t.Run("should revoke an existing permission set assignment", func(t *testing.T) {
+		// 0051X is assigned to permission set 345X.
+		annos, err := c.Revoke(ctx, newGrant("0051X"))
+		require.NoError(t, err)
+
+		var alreadyRevoked v2.GrantAlreadyRevoked
+		found, err := test.UnmarshalFromAnys(&alreadyRevoked, annos)
+		require.NoError(t, err)
+		require.False(t, found)
+	})
+
+	t.Run("should return GrantAlreadyRevoked when the assignment does not exist", func(t *testing.T) {
+		// 0052X is not assigned to permission set 345X.
+		annos, err := c.Revoke(ctx, newGrant("0052X"))
+		require.NoError(t, err)
+
+		var alreadyRevoked v2.GrantAlreadyRevoked
+		found, err := test.UnmarshalFromAnys(&alreadyRevoked, annos)
+		require.NoError(t, err)
+		require.True(t, found, "expected GrantAlreadyRevoked annotation")
+	})
+}

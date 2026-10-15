@@ -2,6 +2,7 @@ package connector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -222,7 +223,14 @@ func (o *permissionBuilder) Grant(
 		entitlement.Resource.Id.Resource,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
-	return outputAnnotations, err
+	if err != nil {
+		if errors.Is(err, client.ErrObjectAlreadyExists) {
+			outputAnnotations.Append(&v2.GrantAlreadyExists{})
+			return outputAnnotations, nil
+		}
+		return outputAnnotations, err
+	}
+	return outputAnnotations, nil
 }
 
 func (o *permissionBuilder) Revoke(
@@ -239,7 +247,14 @@ func (o *permissionBuilder) Revoke(
 		grant.Entitlement.Resource.Id.Resource,
 	)
 	outputAnnotations := client.WithRateLimitAnnotations(ratelimitData)
-	return outputAnnotations, err
+	if err != nil {
+		if errors.Is(err, client.ErrObjectNotFound) {
+			outputAnnotations.Append(&v2.GrantAlreadyRevoked{})
+			return outputAnnotations, nil
+		}
+		return outputAnnotations, err
+	}
+	return outputAnnotations, nil
 }
 
 func newPermissionBuilder(client *client.SalesforceClient) *permissionBuilder {

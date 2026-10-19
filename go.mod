@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/conductorone/baton-sdk v0.41.0
-	github.com/conductorone/simpleforce v0.0.7
+	github.com/conductorone/simpleforce v0.0.8
 	github.com/ennyjfrick/ruleguard-logfatal v0.0.2
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0

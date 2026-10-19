@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/conductorone/simpleforce"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -140,11 +141,13 @@ func (c *SalesforceClient) GetUserByEmail(
 	// this is slightly Weird behavior but there's a future where we do a more nuanced thing here.
 	query := NewQuery(TableNameUsers).
 		WhereEq("Email", email)
+	// CreateAccount decides whether to create or reactivate from this read.
 	records, _, _, err := c.query(
 		ctx,
 		query,
 		"",
 		1,
+		simpleforce.WithNoCache(),
 	)
 	if err != nil {
 		return nil, err

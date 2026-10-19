@@ -92,8 +92,8 @@ github.com/conductorone/dpop/integrations/dpop_grpc v0.3.0 h1:R2uxHBtStgUn7cxbAn
 github.com/conductorone/dpop/integrations/dpop_grpc v0.3.0/go.mod h1:f30gFNZHGkbPlufIDqzg5cr7llQQS0r5VQ+bJCnrDik=
 github.com/conductorone/dpop/integrations/dpop_oauth2 v0.3.0 h1:g9OX0PW9DQyrGy/Tp2lesky/V1VH55cTY8z0Iq0ksOo=
 github.com/conductorone/dpop/integrations/dpop_oauth2 v0.3.0/go.mod h1:RZqiSQdi4NXnoZtB3qG3XYN/6L4dHZy6jctEr5K5oPk=
-github.com/conductorone/simpleforce v0.0.7 h1:L0K1HjERwUkkhpa6ufhgOwEcDEEQw2aKG+qac6Q0LWY=
-github.com/conductorone/simpleforce v0.0.7/go.mod h1:tMDwWIw6MK5GjiJCZdiwh2YIwmm0P2vU6AsOwNzsNWs=
+github.com/conductorone/simpleforce v0.0.8 h1:rZeukpTaqByqji+Ivp4TiXSAq3kD8oHJ25Ins0UBQRE=
+github.com/conductorone/simpleforce v0.0.8/go.mod h1:4EDHfmVlB0AVXOyaaha6SokK6BOgTi7GMZaKYNfgsSc=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

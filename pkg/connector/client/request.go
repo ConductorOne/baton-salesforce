@@ -50,12 +50,14 @@ func getQueryString(
 // passed a pagination URL, it just hits that endpoint. Otherwise, it builds the
 // SOQL query string and hits the query endpoint with it. Either way, the method
 // returns a list of `SObject` records, ratelimit data gleaned from headers, and
-// the next pagination URL.
+// the next pagination URL. Pass simpleforce.WithNoCache() when the result
+// decides a write, so it can't come from an outdated cached response.
 func (c *SalesforceClient) query(
 	ctx context.Context,
 	query *SalesforceQuery,
 	paginationPath string,
 	pageSize int,
+	opts ...simpleforce.RequestOption,
 ) (
 	[]simpleforce.SObject,
 	string,
@@ -69,7 +71,7 @@ func (c *SalesforceClient) query(
 
 	logger := ctxzap.Extract(ctx)
 	queryString := getQueryString(query, paginationPath, pageSize)
-	records, err := c.client.Query(ctx, queryString)
+	records, err := c.client.Query(ctx, queryString, opts...)
 	ratelimitData := c.salesforceTransport.rateLimit
 	if err != nil {
 		logger.Error(
@@ -152,11 +154,14 @@ func (c *SalesforceClient) getSObject(
 	error,
 ) {
 	logger := ctxzap.Extract(ctx)
+	// getSObject backs the lookups Grant and Revoke use to decide whether to
+	// write, so it must see the current state in Salesforce.
 	records, _, ratelimitData, err := c.query(
 		ctx,
 		query,
 		"",
 		-1,
+		simpleforce.WithNoCache(),
 	)
 	if err != nil {
 		return nil, ratelimitData, err
@@ -278,9 +283,10 @@ func (c *SalesforceClient) getOneUser(ctx context.Context, userId string) (
 	if err != nil {
 		return nil, nil, err
 	}
+	// Callers decide role and profile writes from this read, so skip the cache.
 	user, err := c.client.
 		SObject(TableNameUsers).
-		Get(ctx, userId)
+		GetWithOptions(ctx, userId, simpleforce.WithNoCache())
 	if err != nil {
 		return nil, nil, err
 	}

@@ -982,7 +982,7 @@ func (c *SalesforceClient) GetOnePermissionSetGroupAssignment(
 		WhereEq("AssigneeId", userId).
 		WhereEq("PermissionSetGroupId", permissionSetGroupId)
 
-	records, _, _, err := c.query(ctx, query, "", 1)
+	records, _, _, err := c.query(ctx, query, "", 1, simpleforce.WithNoCache())
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,6 @@ import (
 	"net/mail"
 	"time"
 
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
 	"github.com/conductorone/simpleforce"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -97,14 +96,9 @@ func (c *SalesforceClient) GetUserByEmailWithRetry(
 ) {
 	maxRetries := 3
 	baseDelay := time.Second
-	var err error
 
 	for attempt := range maxRetries {
-		// Clear cache or we won't get new responses
-		err = uhttp.ClearCaches(ctx)
-		if err != nil {
-			return nil, err
-		}
+		// GetUserByEmail skips the HTTP cache, so each attempt sees new users.
 		user, err := c.GetUserByEmail(ctx, email)
 		if err == nil {
 			return user, nil

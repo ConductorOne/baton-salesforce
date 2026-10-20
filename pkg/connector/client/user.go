@@ -7,7 +7,7 @@ import (
 	"net/mail"
 	"time"
 
-	"github.com/conductorone/baton-sdk/pkg/uhttp"
+	"github.com/conductorone/simpleforce"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -96,14 +96,9 @@ func (c *SalesforceClient) GetUserByEmailWithRetry(
 ) {
 	maxRetries := 3
 	baseDelay := time.Second
-	var err error
 
 	for attempt := range maxRetries {
-		// Clear cache or we won't get new responses
-		err = uhttp.ClearCaches(ctx)
-		if err != nil {
-			return nil, err
-		}
+		// GetUserByEmail skips the HTTP cache, so each attempt sees new users.
 		user, err := c.GetUserByEmail(ctx, email)
 		if err == nil {
 			return user, nil
@@ -140,11 +135,13 @@ func (c *SalesforceClient) GetUserByEmail(
 	// this is slightly Weird behavior but there's a future where we do a more nuanced thing here.
 	query := NewQuery(TableNameUsers).
 		WhereEq("Email", email)
+	// CreateAccount decides whether to create or reactivate from this read.
 	records, _, _, err := c.query(
 		ctx,
 		query,
 		"",
 		1,
+		simpleforce.WithNoCache(),
 	)
 	if err != nil {
 		return nil, err

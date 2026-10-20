@@ -982,7 +982,7 @@ func (c *SalesforceClient) GetOnePermissionSetGroupAssignment(
 		WhereEq("AssigneeId", userId).
 		WhereEq("PermissionSetGroupId", permissionSetGroupId)
 
-	records, _, _, err := c.query(ctx, query, "", 1)
+	records, _, _, err := c.query(ctx, query, "", 1, simpleforce.WithNoCache())
 	if err != nil {
 		return nil, err
 	}
@@ -1216,11 +1216,13 @@ func (c *SalesforceClient) GetUserLogin(
 	error,
 ) {
 	query := NewQuery(TableNameUserLogin).WhereEq("UserId", userId)
+	// CreateAccount reads this right after creating or reactivating the user.
 	records, _, ratelimitData, err := c.query(
 		ctx,
 		query,
 		"",
 		1,
+		simpleforce.WithNoCache(),
 	)
 	if err != nil {
 		return nil, ratelimitData, err

@@ -82,6 +82,16 @@ func (obj *SObject) Describe(ctx context.Context) *SObjectMeta {
 // If query is successful, the SObject is updated in-place and exact same address is returned; otherwise, nil is
 // returned if failed.
 func (obj *SObject) Get(ctx context.Context, id ...string) (*SObject, error) {
+	oid := ""
+	if len(id) > 0 {
+		oid = id[0]
+	}
+	return obj.GetWithOptions(ctx, oid)
+}
+
+// GetWithOptions is Get with request options, e.g. WithNoCache. An empty id
+// falls back to the SObject's own ID.
+func (obj *SObject) GetWithOptions(ctx context.Context, id string, opts ...RequestOption) (*SObject, error) {
 	l := ctxzap.Extract(ctx)
 
 	if obj.Type() == "" || obj.client() == nil {
@@ -90,8 +100,8 @@ func (obj *SObject) Get(ctx context.Context, id ...string) (*SObject, error) {
 	}
 
 	oid := obj.ID()
-	if len(id) > 0 {
-		oid = id[0]
+	if id != "" {
+		oid = id
 	}
 	if oid == "" {
 		l.Warn("oid not found")
@@ -99,7 +109,7 @@ func (obj *SObject) Get(ctx context.Context, id ...string) (*SObject, error) {
 	}
 
 	url := obj.client().makeURL("sobjects/" + obj.Type() + "/" + oid)
-	data, err := obj.client().httpRequest(ctx, http.MethodGet, url, nil)
+	data, err := obj.client().httpRequest(ctx, http.MethodGet, url, nil, opts...)
 	if err != nil {
 		l.Warn("failed to process http request", zap.Error(err))
 		return nil, err

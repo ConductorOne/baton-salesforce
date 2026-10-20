@@ -68,8 +68,27 @@ func (client *Client) SetSidLoc(sid string, loc string) {
 	client.instanceURL = loc
 }
 
+// RequestOption customizes an outgoing HTTP request before it is sent.
+// Options run after simpleforce sets its own Authorization and Content-Type
+// headers, so an option that sets either one overrides it.
+type RequestOption func(req *http.Request)
+
+// WithHeader sets the header key to value on the request, replacing any
+// existing value.
+func WithHeader(key, value string) RequestOption {
+	return func(req *http.Request) {
+		req.Header.Set(key, value)
+	}
+}
+
+// WithNoCache makes the request skip the uhttp response cache, so the result
+// reflects the current state in Salesforce rather than an earlier response.
+func WithNoCache() RequestOption {
+	return WithHeader("Cache-Control", "no-cache")
+}
+
 // Query runs an SOQL query. q could either be the SOQL string or the nextRecordsURL.
-func (client *Client) Query(ctx context.Context, q string) (*QueryResult, error) {
+func (client *Client) Query(ctx context.Context, q string, opts ...RequestOption) (*QueryResult, error) {
 	if !client.isLoggedIn() {
 		return nil, ErrAuthentication
 	}
@@ -88,7 +107,7 @@ func (client *Client) Query(ctx context.Context, q string) (*QueryResult, error)
 		u = fmt.Sprintf(formatString, baseURL, client.apiVersion, url.QueryEscape(q))
 	}
 
-	data, err := client.httpRequest(ctx, http.MethodGet, u, nil)
+	data, err := client.httpRequest(ctx, http.MethodGet, u, nil, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +260,7 @@ func (client *Client) LoginPassword(ctx context.Context, username, password, tok
 }
 
 // httpRequest executes an HTTP request to the salesforce server and returns the response data in byte buffer.
-func (client *Client) httpRequest(ctx context.Context, method, url string, body io.Reader) ([]byte, error) {
+func (client *Client) httpRequest(ctx context.Context, method, url string, body io.Reader, opts ...RequestOption) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, err
@@ -249,6 +268,9 @@ func (client *Client) httpRequest(ctx context.Context, method, url string, body 
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", client.sessionID))
 	req.Header.Add("Content-Type", "application/json")
+	for _, opt := range opts {
+		opt(req)
+	}
 
 	resp, err := client.httpClient.Do(req)
 	if err != nil {

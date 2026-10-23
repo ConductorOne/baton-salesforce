@@ -13,14 +13,14 @@ import (
 // error value, no re-wrap), and nil in yields nil out.
 func TestWrapOptionalSObjectErrorPassthrough(t *testing.T) {
 	origErr := errors.New("boom")
-	got := wrapOptionalSObjectError(origErr, "Territory2", "Enterprise Territory Management 2.0", "unblock instructions")
+	got := wrapOptionalSObjectError(origErr, "territories", "Territory", "Territory2", "Enterprise Territory Management 2.0", "unblock instructions")
 	require.Equal(t, origErr, got, "non-INVALID_TYPE error must be returned value-identically, not re-wrapped")
 	// require.Same asserts the same underlying pointer, which is strictly
 	// stronger than errors.Is (a re-wrapped error would pass ErrorIs but fail
 	// Same) — this keeps the D3 value-identity pin intact.
 	require.Same(t, origErr, got, "passthrough must return the identical error value")
 
-	require.Nil(t, wrapOptionalSObjectError(nil, "Territory2", "Enterprise Territory Management 2.0", "unblock instructions"))
+	require.Nil(t, wrapOptionalSObjectError(nil, "territories", "Territory", "Territory2", "Enterprise Territory Management 2.0", "unblock instructions"))
 }
 
 // TestWrapOptionalSObjectErrorInvalidType pins the wrap branch: an INVALID_TYPE
@@ -31,7 +31,7 @@ func TestWrapOptionalSObjectErrorInvalidType(t *testing.T) {
 		Message:   "sObject type 'Territory2' is not supported.",
 		ErrorCode: "INVALID_TYPE",
 	}
-	wrapped := wrapOptionalSObjectError(sfErr, "Territory2", "Enterprise Territory Management 2.0", "unblock instructions")
+	wrapped := wrapOptionalSObjectError(sfErr, "territories", "Territory", "Territory2", "Enterprise Territory Management 2.0", "unblock instructions")
 	require.Error(t, wrapped)
 	require.Contains(t, wrapped.Error(), "Enterprise Territory Management 2.0")
 	require.Contains(t, wrapped.Error(), "INVALID_TYPE")

@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/conductorone/baton-salesforce/test"
-	"github.com/conductorone/simpleforce"
 	"github.com/conductorone/baton-sdk/pkg/pagination"
 	rs "github.com/conductorone/baton-sdk/pkg/types/resource"
+	"github.com/conductorone/simpleforce"
 	"github.com/stretchr/testify/require"
 )
 

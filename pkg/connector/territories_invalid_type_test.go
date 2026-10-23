@@ -82,4 +82,11 @@ func TestTerritoryNonInvalidTypePassthrough(t *testing.T) {
 	errMsg := err.Error()
 	require.NotContains(t, errMsg, "Enterprise Territory Management 2.0")
 	require.NotContains(t, errMsg, "disable the Territory resource type in the connector config")
+
+	// D3: the passthrough keeps the vendor error reachable and unmodified in
+	// kind — a re-wrap that dropped the classification would fail here.
+	var sfErr simpleforce.SalesforceError
+	require.True(t, errors.As(err, &sfErr))
+	require.Equal(t, "DUPLICATE_VALUE", sfErr.ErrorCode)
+	require.Contains(t, sfErr.Message, "duplicate value")
 }

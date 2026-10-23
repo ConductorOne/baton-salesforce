@@ -42,7 +42,9 @@ func wrapOptionalSObjectError(err error, sobject, prerequisite, unblock string) 
 	if !isSObjectNotSupportedError(err) {
 		return err
 	}
-	return fmt.Errorf("baton-salesforce: territories: syncing the Territory resource type requires %s to be enabled in your Salesforce org (Salesforce returned INVALID_TYPE for sobject '%s'); to unblock, %s: %w", prerequisite, sobject, unblock, err)
+	return fmt.Errorf("baton-salesforce: territories: syncing the Territory resource type requires %s to be enabled in your Salesforce org "+
+		"(Salesforce returned INVALID_TYPE for sobject '%s'); to unblock, %s: %w",
+		prerequisite, sobject, unblock, err)
 }
 
 func getQueryString(

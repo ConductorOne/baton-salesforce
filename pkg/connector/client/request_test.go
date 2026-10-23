@@ -15,7 +15,10 @@ func TestWrapOptionalSObjectErrorPassthrough(t *testing.T) {
 	origErr := errors.New("boom")
 	got := wrapOptionalSObjectError(origErr, "Territory2", "Enterprise Territory Management 2.0", "unblock instructions")
 	require.Equal(t, origErr, got, "non-INVALID_TYPE error must be returned value-identically, not re-wrapped")
-	require.True(t, origErr == got, "passthrough must return the identical error value")
+	// require.Same asserts the same underlying pointer, which is strictly
+	// stronger than errors.Is (a re-wrapped error would pass ErrorIs but fail
+	// Same) — this keeps the D3 value-identity pin intact.
+	require.Same(t, origErr, got, "passthrough must return the identical error value")
 
 	require.Nil(t, wrapOptionalSObjectError(nil, "Territory2", "Enterprise Territory Management 2.0", "unblock instructions"))
 }

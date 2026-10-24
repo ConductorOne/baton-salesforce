@@ -1269,7 +1269,9 @@ func (c *SalesforceClient) GetTerritories(
 	)
 	records, paginationURL, ratelimitData, err := c.query(ctx, q, pageToken, pageSize)
 	if err != nil {
-		return nil, "", ratelimitData, err
+		return nil, "", ratelimitData, wrapOptionalSObjectError(err, "territories", "Territory", TableNameTerritory2,
+			"Enterprise Territory Management 2.0",
+			"disable the Territory resource type in the connector config or enable Enterprise Territory Management 2.0 in the org")
 	}
 	return records, paginationURL, ratelimitData, nil
 }

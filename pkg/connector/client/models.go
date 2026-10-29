@@ -49,8 +49,11 @@ type SalesforceProfile struct {
 }
 
 type SalesforceUserLicense struct {
-	ID   string
-	Name string
+	ID            string
+	Name          string
+	TotalLicenses int64
+	UsedLicenses  int64
+	Status        string
 }
 
 type PermissionSetAssignment struct {

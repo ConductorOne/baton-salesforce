@@ -32,6 +32,24 @@ func isSObjectNotSupportedError(err error) bool {
 	return errors.As(err, &sfErr) && sfErr.ErrorCode == "INVALID_TYPE"
 }
 
+// wrapOptionalSObjectError wraps a Salesforce INVALID_TYPE error (an SObject that
+// does not exist in this org) with an actionable message naming the feature
+// prerequisite and the operator unblock. slug is the resource's connector slug
+// (the message prefix segment, e.g. "territories") and resourceLabel is the
+// human-readable resource-type name in the copy (e.g. "Territory"). Any other
+// error is returned unchanged.
+func wrapOptionalSObjectError(err error, slug, resourceLabel, sobject, prerequisite, unblock string) error {
+	if err == nil {
+		return nil
+	}
+	if !isSObjectNotSupportedError(err) {
+		return err
+	}
+	return fmt.Errorf("baton-salesforce: %s: syncing the %s resource type requires %s to be enabled in your Salesforce org "+
+		"(Salesforce returned INVALID_TYPE for sobject '%s'); to unblock, %s: %w",
+		slug, resourceLabel, prerequisite, sobject, unblock, err)
+}
+
 func getQueryString(
 	q *SalesforceQuery,
 	paginationPath string,

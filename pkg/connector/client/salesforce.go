@@ -532,6 +532,57 @@ func (c *SalesforceClient) GetProfiles(
 	return profiles, paginationUrl, ratelimitData, nil
 }
 
+func getInt64Field(record simpleforce.SObject, field string) int64 {
+	value := record.InterfaceField(field)
+	switch v := value.(type) {
+	case float64:
+		return int64(v)
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	default:
+		return 0
+	}
+}
+
+func parseUserLicense(record simpleforce.SObject) *SalesforceUserLicense {
+	return &SalesforceUserLicense{
+		ID:            record.ID(),
+		Name:          record.StringField("Name"),
+		TotalLicenses: getInt64Field(record, "TotalLicenses"),
+		UsedLicenses:  getInt64Field(record, "UsedLicenses"),
+		Status:        record.StringField("Status"),
+	}
+}
+
+func (c *SalesforceClient) GetUserLicenses(
+	ctx context.Context,
+	pageToken string,
+	pageSize int,
+) (
+	[]*SalesforceUserLicense,
+	string,
+	*v2.RateLimitDescription,
+	error,
+) {
+	query := NewQuery(TableNameUserLicenses)
+	records, paginationUrl, ratelimitData, err := c.query(
+		ctx,
+		query,
+		pageToken,
+		pageSize,
+	)
+	if err != nil {
+		return nil, "", ratelimitData, err
+	}
+	licenses := make([]*SalesforceUserLicense, 0, len(records))
+	for _, record := range records {
+		licenses = append(licenses, parseUserLicense(record))
+	}
+	return licenses, paginationUrl, ratelimitData, nil
+}
+
 func (c *SalesforceClient) GetUserLicenseByID(ctx context.Context, id string) (*SalesforceUserLicense, *v2.RateLimitDescription, error) {
 	query := NewQuery(TableNameUserLicenses).WhereEq("Id", id)
 	records, _, ratelimitData, err := c.query(
@@ -546,10 +597,7 @@ func (c *SalesforceClient) GetUserLicenseByID(ctx context.Context, id string) (*
 	if len(records) == 0 {
 		return nil, ratelimitData, nil
 	}
-	return &SalesforceUserLicense{
-		ID:   records[0].ID(),
-		Name: records[0].StringField("Name"),
-	}, ratelimitData, nil
+	return parseUserLicense(records[0]), ratelimitData, nil
 }
 
 // getAssignments DRY up some querying. This could be smarter to handle more cases.

@@ -1,4 +1,4 @@
-![Baton Logo](./docs/images/baton-logo.png)
+![Baton Logo](./baton-logo.png)
 
 # `baton-salesforce` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-salesforce.svg)](https://pkg.go.dev/github.com/conductorone/baton-salesforce) ![ci](https://github.com/conductorone/baton-salesforce/actions/workflows/ci.yaml/badge.svg) ![verify](https://github.com/conductorone/baton-salesforce/actions/workflows/verify.yaml/badge.svg)
 

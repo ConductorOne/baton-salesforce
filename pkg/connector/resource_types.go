@@ -65,6 +65,14 @@ var (
 		Description: "Requires Enterprise Territory Management 2.0 to be enabled in Salesforce.",
 		Annotations: annotations.New(&v2.SkipEntitlements{}, &v2.OptInRequired{}),
 	}
+	resourceTypeLicense = &v2.ResourceType{
+		Id:          "license",
+		DisplayName: "License",
+		Traits: []v2.ResourceType_Trait{
+			v2.ResourceType_TRAIT_LICENSE_PROFILE,
+		},
+		Annotations: annotations.New(&v2.SkipEntitlementsAndGrants{}),
+	}
 	resourceTypeAgent = &v2.ResourceType{
 		Id:          "agent",
 		DisplayName: "Agent",

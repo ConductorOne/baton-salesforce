@@ -2,7 +2,7 @@
 
 # `baton-salesforce` [![Go Reference](https://pkg.go.dev/badge/github.com/conductorone/baton-salesforce.svg)](https://pkg.go.dev/github.com/conductorone/baton-salesforce) ![ci](https://github.com/conductorone/baton-salesforce/actions/workflows/ci.yaml/badge.svg) ![verify](https://github.com/conductorone/baton-salesforce/actions/workflows/verify.yaml/badge.svg)
 
-`baton-salesforce` is a connector for built using the [Baton SDK](https://github.com/conductorone/baton-sdk).
+`baton-salesforce` is a connector for Salesforce built using the [Baton SDK](https://github.com/conductorone/baton-sdk).
 
 Check out [Baton](https://github.com/conductorone/baton) to learn more the project in general.
 
@@ -38,6 +38,24 @@ baton resources
 
 `baton-salesforce` will pull down information about the following resources:
 - Users
+- Groups
+- Roles
+- Permission sets
+- Permission set groups
+- Profiles
+- Territories (opt-in; requires Enterprise Territory Management 2.0 in the Salesforce org)
+- Agents (opt-in; Agentforce agents and Einstein Bots, backed by `BotDefinition`)
+- Connected apps (requires `--sync-connected-apps`)
+
+## Provisioning
+
+`baton-salesforce` grants and revokes access on groups, roles, profiles, permission sets, permission set groups and territories. A user holds at most one role and one profile, so granting either replaces the assignment the user already had.
+
+Accounts are created through C1 (see below) and deprovisioned by deactivating the user; Salesforce does not permit deleting a user record.
+
+## Connector actions
+
+`update_user_status` sets a Salesforce user active or inactive. It takes `resource_id`, the Salesforce User record ID, and `is_active`.
 
 ## Account provisioning
 
@@ -89,9 +107,9 @@ Flags:
       --otel-collector-endpoint string                               The endpoint of the OpenTelemetry collector to send observability data to (used for both tracing and logging if specific endpoints are not provided) ($BATON_OTEL_COLLECTOR_ENDPOINT)
   -p, --provisioning                                                 This must be set in order for provisioning actions to be enabled ($BATON_PROVISIONING)
       --salesforce-client-id string                                  OAuth Client ID / Consumer Key of the Connected App or External Client App ($BATON_SALESFORCE_CLIENT_ID)
-      --salesforce-client-secret string                              OAuth Client Secret / Consumer Secret (Client Credentials flow only) ($BATON_SALESFORCE_CLIENT_SECRET)
-      --salesforce-jwt-subject string                                Salesforce username to act on behalf of (JWT Bearer flow only) ($BATON_SALESFORCE_JWT_SUBJECT)
-      --salesforce-login-url string                                  Salesforce login URL for JWT Bearer token exchange. Defaults to https://login.salesforce.com. Use https://test.salesforce.com for sandbox orgs ($BATON_SALESFORCE_LOGIN_URL)
+      --salesforce-client-secret string                              OAuth Client Secret / Consumer Secret ($BATON_SALESFORCE_CLIENT_SECRET)
+      --salesforce-jwt-subject string                                Salesforce username of the integration user the connector will authenticate as ($BATON_SALESFORCE_JWT_SUBJECT)
+      --salesforce-login-url string                                  Salesforce login URL for JWT Bearer token exchange. ($BATON_SALESFORCE_LOGIN_URL)
       --salesforce-password string                                   Salesforce account password ($BATON_SALESFORCE_PASSWORD)
       --salesforce-private-key string                                PEM private key for JWT Bearer flow ($BATON_SALESFORCE_PRIVATE_KEY)
       --salesforce-username string                                   Salesforce account username ($BATON_SALESFORCE_USERNAME)

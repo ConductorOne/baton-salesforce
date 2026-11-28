@@ -2,7 +2,7 @@
 title: Set up a Salesforce connector
 og:title: Set up a Salesforce connector - C1 docs
 og:description: Integrate your Salesforce instance with C1 to run user access reviews, enable just-in-time access requests, and easily provision and deprovision access.
-description: C1 provides identity governance for Salesforce. Integrate your Salesforce instance with C1 to run user access reviews (UARs) and enable just-in-time access requests.
+description: Integrate your Salesforce instance with C1 to run user access reviews, enable just-in-time access requests, and easily provision and deprovision access.
 sidebarTitle: "Salesforce"
 ---
 
@@ -34,9 +34,11 @@ Learn more about which Salesforce editions support API access in the [Salesforce
 
 The Salesforce connector supports [automatic account provisioning](/product/admin/account-provisioning).
 
-This connector does not support account deprovisioning. You must deprovision accounts directly in Salesforce.
+This connector deprovisions accounts by deactivating them. Salesforce does not permit deleting a user record, so C1 sets the account inactive and the record stays in your Salesforce org.
 
-**Territories require Enterprise Territory Management 2.0 to be enabled in your Salesforce org. If this feature is not enabled, the connector will return an error when attempting to sync territories.**
+A Salesforce user holds at most one role and one profile. Granting either one replaces the assignment the user already had, so the previous role or profile stops appearing in C1 after the next sync.
+
+**Territories are opt-in and disabled by default. Enable the Territory resource type in C1 to sync them, and enable Enterprise Territory Management 2.0 in your Salesforce org. If Enterprise Territory Management 2.0 is not enabled, the connector returns an error when attempting to sync territories. Only territories belonging to your org's Active territory model sync, and territory role entitlements come from the active `RoleInTerritory2` picklist values.**
 
 ***Agents (Agentforce agents and Einstein Bots, backed by the `BotDefinition` object) are opt-in and disabled by default. Enable the Agent resource type in C1 to sync them. Agentforce or Einstein Bots must be enabled in your Salesforce org; otherwise the connector skips agents cleanly.**
 
@@ -68,14 +70,14 @@ Connector actions are custom capabilities that extend C1 automations with app-sp
 
 | Action name | Additional fields | Description |
 |-------------|-------------------|-------------|
-| update_user_status | `resource_id` (string, required) <br/>`is_active` (Boolean, required) | Updates a Salesforce user's status to active or inactive |
+| update_user_status | `resource_id` (string, required): the Salesforce User record ID, 15 or 18 characters beginning with `005`, which is the account's resource ID in C1 <br/>`is_active` (Boolean, required) | Updates a Salesforce user's status to active or inactive |
 
 ## Gather Salesforce credentials 
 
 Configuring the connector requires you to pass in credentials generated in Salesforce. Gather these credentials before you move on. 
 
 <Warning>
-The connector user must have the **API Enabled** and **Manage Users** system permissions. If syncing connected apps, also add **Customize Application**. If using provisioning, also add **Manage Roles and Role Hierarchy** and **Manage Groups**.
+The connector user must have the **API Enabled** and **Manage Users** system permissions. If syncing connected apps, also add **Customize Application**. If using provisioning, also add **Manage Roles**. If you authenticate with a username and password, also add **Use Any API Auth**.
 </Warning>
 
 ### Enable API access and permissions for your Salesforce user
@@ -96,7 +98,7 @@ Click **New** to create a permission set (for example, "C1 Connector Access").
 In the permission set, click **System Permissions**, then click **Edit**.
 </Step>
 <Step>
-Enable **API Enabled** and **Manage Users**. If syncing connected apps, also enable **Customize Application**. If using provisioning, also enable **Manage Roles and Role Hierarchy** and **Manage Groups**.
+Enable **API Enabled** and **Manage Users**. If syncing connected apps, also enable **Customize Application**. If using provisioning, also enable **Manage Roles**. If you authenticate with a username and password, also enable **Use Any API Auth**.
 </Step>
 <Step>
 Click **Save**.
@@ -271,7 +273,7 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
       5. **Optional.** Check the box if you want the connector to sync users on non-standard licenses, such as external users. 
 
-      6. **Optional.** Create a map of the Salesforce license types used by your organization and the profile associated with each license type that has the fewest permissions. C1 will use this information when deprovisioning user profiles to automatically reassign the user to the least-privilege profile associated with their license type.  
+      6. **Optional.** Create a map of the Salesforce license types used by your organization and the profile associated with each license type that has the fewest permissions. C1 will use this information when deprovisioning user profiles to automatically reassign the user to the least-privilege profile associated with their license type. Each key is a Salesforce User License name and each value is a Profile name, not their IDs. Revoking a profile from a user whose license is not in the map fails.  
 
       7. Click **Save**. 
 
@@ -280,6 +282,8 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
       9. Log in and authorize C1 with your Salesforce instance.
 
       10. You will then be redirected back to the Salesforce setup page in C1, where you'll see an authorization message.
+
+      <Note>Salesforce limits refresh token idle lifetime to 30 days, in force in production since November 4, 2026. A connector that syncs on a schedule refreshes well inside that window. If a connector sits idle for longer than 30 days, re-authorize it with **Login with OAuth**. Salesforce also ends support for Connected Apps in Summer '27 in favour of External Client Apps; that migration is handled on the C1 side and needs no change to your connector configuration.</Note>
 
    If you chose **JWT Bearer**:
 
@@ -311,11 +315,11 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
    If you chose **Username and password (deprecated)**:
 
-      <Warning>Username and password authentication is deprecated. Salesforce is disabling SOAP API login for new orgs. Use JWT Bearer or Client Credentials instead.</Warning>
+      <Warning>Username and password authentication is deprecated. It uses the Salesforce SOAP API `login()` call rather than an OAuth flow, so it is governed by Salesforce's SOAP login changes and not by the OAuth 2.0 username-password retirement: from **December 1, 2026** the connector user needs the **Use Any API Auth** system permission, which you can test ahead of time from **Setup** > **Release Updates**, and `login()` retires in **Summer '27** across API versions 31.0 through 64.0. Salesforce also lets an org disable `login()` ahead of that date, through **Enable SOAP API login()** under **Setup** > **User Interface** and through the retirement's test run under **Setup** > **Release Updates**. Use JWT Bearer or Client Credentials instead; Salesforce directs customers to external client apps, which is what those two methods use.</Warning>
 
       1. Enter your Salesforce username and password in the top two fields. 
 
-      2. Enter your Salesforce security token in the **Security token** field. If trusted IP is configured on your user, entering this token is optional. If needed, refer to [Reset Your Security Token](https://help.salesforce.com/s/articleView?id=xcloud.user_security_token.htm&type=5) in the Salesforce documentation. 
+      2. Enter your Salesforce security token in the **Security token** field. A C1-hosted connector always needs this token, because it connects from C1's network rather than from yours. The token is optional only for a self-hosted connector running inside a trusted IP range you have configured in Salesforce. The token is part of every login, so re-enter it here whenever the connector account's password changes. To obtain it, refer to [Reset Your Security Token](https://help.salesforce.com/s/articleView?id=xcloud.user_security_token.htm&type=5) in the Salesforce documentation. 
 
       3. In the **Domain** field, enter your Salesforce domain.
       
@@ -327,7 +331,7 @@ Select your method of authenticating to Salesforce: **OAuth**, **JWT Bearer**, *
 
       7. **Optional.** Check the box if you want the connector to sync users on non-standard licenses, such as external users. 
 
-      8. **Optional.** Create a map of the Salesforce license types used by your organization and the profile associated with each license type that has the fewest permissions. C1 will use this information when deprovisioning user profiles to automatically reassign the user to the least-privilege profile associated with their license type. 
+      8. **Optional.** Create a map of the Salesforce license types used by your organization and the profile associated with each license type that has the fewest permissions. C1 will use this information when deprovisioning user profiles to automatically reassign the user to the least-privilege profile associated with their license type. Each key is a Salesforce User License name and each value is a Profile name, not their IDs. Revoking a profile from a user whose license is not in the map fails. 
 
       9. Click **Save**.
   </Step>
@@ -404,7 +408,19 @@ stringData:
   BATON_INSTANCE_URL: <Salesforce domain>
   BATON_SALESFORCE_PASSWORD: <Password to the Salesforce account>
   BATON_SALESFORCE_USERNAME: <Username for the Salesforce account>
-  BATON_SECURITY_TOKEN: <Salesforce security token (optional if trusted IP is configured)>
+  BATON_SECURITY_TOKEN: <Salesforce security token (optional only when this host is inside a trusted IP range)>
+
+  # Salesforce credentials, JWT Bearer. Use these instead of the username and password above.
+  # BATON_AUTH_METHOD: jwt-bearer-group
+  # BATON_SALESFORCE_CLIENT_ID: <Consumer Key from your External Client App>
+  # BATON_SALESFORCE_PRIVATE_KEY: <path to your private.pem, mounted into the container>
+  # BATON_SALESFORCE_JWT_SUBJECT: <Salesforce username of the connector user>
+  # BATON_SALESFORCE_LOGIN_URL: <defaults to https://login.salesforce.com; use https://test.salesforce.com for sandbox orgs>
+
+  # Salesforce credentials, Client Credentials. Use these instead of the username and password above.
+  # BATON_AUTH_METHOD: client-credentials-group
+  # BATON_SALESFORCE_CLIENT_ID: <Consumer Key from your External Client App>
+  # BATON_SALESFORCE_CLIENT_SECRET: <Consumer Secret from your External Client App>
 
   # Optional: include if you want C1 to provision access using this connector
   BATON_PROVISIONING: true
@@ -485,7 +501,23 @@ Salesforce returns this error if the user who is logging in with OAuth does not 
 {"code":2, "message":"error getting info from connectorClient: [simpleforce] Error. http code: 403 Error Message:  This feature is not currently enabled for this user. Error Code: FUNCTIONALITY_NOT_ENABLED"}
 ```
 
-If you see this message, follow the instructions to [Enable API access for your Salesforce user](/baton/salesforce#enable-api-access-for-your-salesforce-user) and then try logging in again.
+If you see this message, follow the instructions to [Enable API access and permissions for your Salesforce user](/baton/salesforce#enable-api-access-and-permissions-for-your-salesforce-user) and then try logging in again.
+
+### When I log in with a username and password, I see an "Invalid username, password, security token" error
+
+Salesforce returns the same message for three different causes, and it names the credential in all three:
+
+```bash
+INVALID_LOGIN: Invalid username, password, security token; or user locked out
+```
+
+The credential is often not the problem. Check **Setup** > **Login History** for the failed attempt, which names the real cause:
+
+| Login History status | What to do |
+| :--- | :--- |
+| `Failed: SOAP Login Disabled` | `login()` is disabled in the org. Check **Enable SOAP API login()** under **Setup** > **User Interface**, and the SOAP `login()` retirement test run under **Setup** > **Release Updates** |
+| `Failed: API security token required` | Add the connector account's security token to the **Security token** field |
+| `Invalid Password` | The password is wrong or has been reset |
 
 ### When I try to sync, I see an "insufficient access rights on cross-reference id" error
 
@@ -502,15 +534,15 @@ Create a Permission Set with the following system permissions and assign it to t
 | Permission | Purpose |
 | :--- | :--- |
 | API Enabled | Access Salesforce APIs |
-| Manage Users | Read users and setup objects |
+| Manage Users | Read users and setup objects, and add and remove users from public groups |
 | Customize Application | Required only if syncing connected apps |
+| Use Any API Auth | Required only if authenticating with a username and password. Allows authentication via SOAP API `login()` when SOAP login access is restricted by the org |
 
 **Additional permissions required for provisioning:**
 
 | Permission | Purpose |
 | :--- | :--- |
-| Manage Roles and Role Hierarchy | Assign and revoke role assignments |
-| Manage Groups | Add and remove users from public groups |
+| Manage Roles | Assign and revoke role assignments |
 | Manage Territories | Add and remove users from territories (only required if Enterprise Territory Management 2.0 is enabled) |
 
 To fix this error, follow the instructions to [Enable API access and permissions for your Salesforce user](/baton/salesforce#enable-api-access-and-permissions-for-your-salesforce-user) to create a Permission Set with the required permissions and assign it to the connector user. 
